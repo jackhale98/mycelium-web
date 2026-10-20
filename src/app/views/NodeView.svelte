@@ -2,6 +2,7 @@
 	import type { OrgNode, Section } from 'uniorg';
 	import { startOf } from '$lib/org';
 	import Backlinks from '../components/Backlinks.svelte';
+	import OrgEditor from '../editor/OrgEditor.svelte';
 	import Icon from '../components/Icon.svelte';
 	import Blocks from '../org/OrgBlocks.svelte';
 	import TodoChip from '../org/TodoChip.svelte';
@@ -49,12 +50,43 @@
 	$effect(() => {
 		document.title = node ? `${node.title} · Mycelium` : 'Not found · Mycelium';
 	});
+
+	function onkeydown(e: KeyboardEvent) {
+		// The editor lives in a shadow root, so look at the real target.
+		const target = e.composedPath()[0];
+		if (
+			target instanceof HTMLElement &&
+			target.closest('input, textarea, select, [contenteditable="true"], dialog')
+		) {
+			if (e.key === 'Escape' && app.editing && target.closest('.cm-editor')) app.editing = false;
+			return;
+		}
+		if (e.key === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+			e.preventDefault();
+			app.editing = true;
+		}
+	}
 </script>
+
+<svelte:window {onkeydown} />
 
 {#if node}
 	<div class="node-layout" class:with-panel={app.panelOpen}>
 		<article class="node" aria-labelledby="node-title">
 			<header class="node-header">
+				<div class="toolbar">
+					<button
+						type="button"
+						class="btn small"
+						class:primary={app.editing}
+						aria-pressed={app.editing}
+						title={app.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
+						onclick={() => (app.editing = !app.editing)}
+						><Icon name={app.editing ? 'eye' : 'edit'} size={14} />{app.editing
+							? 'Read'
+							: 'Edit'}</button
+					>
+				</div>
 				<nav class="crumbs" aria-label="Location">
 					{#if eyebrow}
 						<span class="path">{eyebrow}</span>
@@ -66,7 +98,7 @@
 						<span class="path">{node.file}</span>
 					{/if}
 				</nav>
-				<h1 id="node-title" class:done>
+				<h1 id="node-title" class:done class:sr-only={app.editing && node.level === 0}>
 					{#if node.todo}
 						<TodoChip
 							keyword={node.todo}
@@ -76,7 +108,7 @@
 					{/if}
 					{displayTitle ?? node.title}
 				</h1>
-				{#if node.aliases.length}
+				{#if node.aliases.length && !app.editing}
 					<p class="aliases">
 						Also known as {#each node.aliases as alias, i (alias)}<em>{alias}</em>{i <
 							node.aliases.length - 1
@@ -84,7 +116,7 @@
 								: ''}{/each}
 					</p>
 				{/if}
-				<div class="meta">
+				<div class="meta" hidden={app.editing}>
 					{#each node.tags as tag (tag)}<a class="chip tag" href={href.tags(tag)}>#{tag}</a>{/each}
 					{#if node.deadline}<span class="chip deadline"
 							><Icon name="alert" size={13} />Due {tsLabel(node.deadline)}</span
@@ -110,12 +142,22 @@
 				</div>
 			</header>
 
-			<div class="prose node-body">
-				<Blocks
-					nodes={body}
-					ctx={{ path: node.file, levelOffset: node.level, interactive: true }}
-				/>
-			</div>
+			{#if app.editing}
+				{#key node.file}
+					<OrgEditor
+						path={node.file}
+						focusAt={node.level > 0 ? node.pos : null}
+						label={`Org source of ${node.title}`}
+					/>
+				{/key}
+			{:else}
+				<div class="prose node-body">
+					<Blocks
+						nodes={body}
+						ctx={{ path: node.file, levelOffset: node.level, interactive: true }}
+					/>
+				</div>
+			{/if}
 
 			<div class="inline-links">
 				<Backlinks {id} />
@@ -149,7 +191,15 @@
 		padding: 3.25rem 3rem 6rem;
 	}
 	.node-header {
+		position: relative;
 		margin-bottom: 2rem;
+	}
+	.toolbar {
+		position: absolute;
+		top: -0.35rem;
+		right: 0;
+		display: flex;
+		gap: 0.4rem;
 	}
 	.crumbs {
 		display: flex;
@@ -195,6 +245,9 @@
 		color: var(--text-muted);
 		font-family: var(--font-read);
 		font-size: 1.05rem;
+	}
+	.meta[hidden] {
+		display: none;
 	}
 	.meta {
 		display: flex;

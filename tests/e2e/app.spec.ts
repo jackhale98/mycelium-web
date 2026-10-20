@@ -107,3 +107,21 @@ test.describe('dark theme', () => {
 		});
 	}
 });
+
+test('the editor saves edits and links to new notes', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit' }).click();
+	const editor = page.locator('.cm-content');
+	await expect(editor).toBeVisible();
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.type('\nEvery edit saves. See [[Zettelk');
+	await page.getByRole('option', { name: 'Zettelkasten' }).click();
+	await page.keyboard.type(' and [[Fungal computing');
+	await page.getByRole('option', { name: /Create “Fungal computing”/ }).click();
+	await page.getByRole('button', { name: 'Read' }).click();
+	await expect(page.getByText('Every edit saves.')).toBeVisible();
+	await page.locator('.node-body').getByRole('link', { name: 'Fungal computing' }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Fungal computing' })).toBeVisible();
+	await expect(page.locator('a:visible', { hasText: 'Mycelium Web' }).first()).toBeVisible();
+});

@@ -137,6 +137,8 @@ class AppState {
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
+	/** Notes open in the source editor instead of the reading view. */
+	editing = $state(false);
 	/** Open the new-note dialog, optionally with a title. */
 	newNote = $state<{ title: string } | null>(null);
 
