@@ -5,6 +5,49 @@
 
 	const route = $derived(router.route);
 	const today = localNow().date;
+
+	// The search button: tap to search, swipe up (or long-press) to capture.
+	const SWIPE = 28;
+	let startY: number | null = null;
+	let lift = $state(0);
+	let opened = false;
+	let hold: ReturnType<typeof setTimeout> | null = null;
+
+	function capture() {
+		opened = true;
+		lift = 0;
+		startY = null;
+		if (hold) clearTimeout(hold);
+		navigator.vibrate?.(10);
+		app.captureSheet = {};
+	}
+	function down(e: PointerEvent) {
+		opened = false;
+		startY = e.clientY;
+		hold = setTimeout(capture, 550);
+	}
+	function move(e: PointerEvent) {
+		if (startY === null) return;
+		const dy = startY - e.clientY;
+		if (Math.abs(dy) > 6 && hold) {
+			clearTimeout(hold);
+			hold = null;
+		}
+		lift = Math.max(0, Math.min(dy, 40));
+		if (dy > SWIPE) capture();
+	}
+	function up() {
+		startY = null;
+		lift = 0;
+		if (hold) clearTimeout(hold);
+	}
+	function click() {
+		if (opened) {
+			opened = false;
+			return;
+		}
+		app.paletteOpen = true;
+	}
 </script>
 
 <nav class="bar" aria-label="Quick navigation">
@@ -14,9 +57,25 @@
 	<a href={href.daily(today)} aria-current={route.name === 'daily' ? 'page' : undefined}
 		><Icon name="calendar" size={20} /><span>Today</span></a
 	>
-	<button type="button" class="search" onclick={() => (app.paletteOpen = true)} aria-label="Search"
-		><Icon name="search" size={22} /></button
+	<button
+		type="button"
+		class="search"
+		aria-label="Search"
+		aria-describedby="search-capture-hint"
+		style:transform={lift ? `translateY(${-lift}px)` : undefined}
+		onpointerdown={down}
+		onpointermove={move}
+		onpointerup={up}
+		onpointercancel={up}
+		onpointerleave={up}
+		oncontextmenu={(e) => e.preventDefault()}
+		onclick={click}
+		><span class="lift" aria-hidden="true"><Icon name="chevronUp" size={12} /></span><Icon
+			name="search"
+			size={22}
+		/></button
 	>
+	<span id="search-capture-hint" class="sr-only">Swipe up or hold to capture</span>
 	<a href={href.agenda()} aria-current={route.name === 'agenda' ? 'page' : undefined}
 		><Icon name="agenda" size={20} /><span>Agenda</span></a
 	>
@@ -67,8 +126,14 @@
 		color: var(--accent);
 	}
 	.search {
+		position: relative;
 		display: grid;
 		place-items: center;
+		touch-action: none;
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-touch-callout: none;
+		transition: transform 0.15s var(--ease);
 		width: 3rem;
 		min-width: 3rem;
 		height: 3rem;
@@ -76,6 +141,18 @@
 		background: var(--accent);
 		color: var(--on-accent);
 		box-shadow: var(--shadow-md);
+	}
+	/* A hint that the button also swipes up. */
+	.lift {
+		position: absolute;
+		top: 0.15rem;
+		left: 50%;
+		display: grid;
+		opacity: 0.75;
+		transform: translateX(-50%);
+	}
+	.search > :global(svg:last-child) {
+		margin-top: 0.3rem;
 	}
 	.menu-icon {
 		position: relative;

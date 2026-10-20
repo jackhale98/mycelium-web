@@ -2,6 +2,7 @@
 	import type { CommitSummary } from '$lib/git/repo';
 	import { PROVIDERS } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
+	import CaptureTemplatesEditor from '../components/CaptureTemplatesEditor.svelte';
 	import KeywordEditor from '../components/KeywordEditor.svelte';
 	import { href, router } from '../router.svelte';
 	import { app, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
@@ -112,6 +113,11 @@
 	<section class="panel stack" aria-labelledby="workflow-h">
 		<h2 id="workflow-h">Workflow: TODO keywords</h2>
 		{#key app.activeId}<KeywordEditor />{/key}
+	</section>
+
+	<section class="panel stack" aria-labelledby="capture-h">
+		<h2 id="capture-h">Capture templates</h2>
+		{#key app.activeId}<CaptureTemplatesEditor />{/key}
 	</section>
 
 	<section class="panel stack" aria-labelledby="logging-h">

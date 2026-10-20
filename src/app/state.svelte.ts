@@ -8,7 +8,11 @@
 
 import {
 	applyChanges,
-	captureItem,
+	applyTemplate,
+	DEFAULT_CAPTURE_TEMPLATES,
+	expandTemplate,
+	shapeCapture,
+	type CaptureTemplate,
 	changeTodoState,
 	detectLogSettings,
 	newNodeSource,
@@ -100,6 +104,13 @@ export function localNow(): { date: string; time: string } {
 	};
 }
 
+/** Where a capture landed. */
+export interface CaptureResult {
+	path: string;
+	id: string | null;
+	label: string;
+}
+
 export type SyncState =
 	| { kind: 'idle' }
 	| { kind: 'busy'; phase: string }
@@ -165,6 +176,10 @@ class AppState {
 	editAt = $state<number | null>(null);
 	/** The heading open in the heading sheet, if any. */
 	headingSheet = $state<{ path: string; pos: number } | null>(null);
+	/** The quick capture sheet: open with a template chosen, and text to start from. */
+	captureSheet = $state<{ templateId?: string; text?: string } | null>(null);
+	/** "Saved to …" after a capture, with the note to open. */
+	captureNotice = $state<{ label: string; id: string | null } | null>(null);
 	/** Open the new-note dialog, optionally with a title. */
 	newNote = $state<{ title: string } | null>(null);
 
@@ -735,19 +750,68 @@ class AppState {
 		return id;
 	}
 
-	/** Add a timestamped item under today's daily note's `* Captured` heading. */
-	capture(text: string): string | null {
-		if (!text.trim()) return null;
-		const { date } = localNow();
-		const id = this.ensureDaily(date);
-		const path = this.dailyPath(date);
-		const file = this.vault.file(path)!;
-		this.#write(
-			path,
-			applyChanges(file.source, captureItem(file.source, text, localNow())),
-			`Capture to ${date}`,
+	/** This vault's capture templates (Mycelium's defaults until it has its own). */
+	get captureTemplates(): CaptureTemplate[] {
+		return this.activeVault?.captureTemplates ?? DEFAULT_CAPTURE_TEMPLATES;
+	}
+
+	async saveCaptureTemplates(templates: CaptureTemplate[] | null) {
+		await this.updateVault({
+			captureTemplates: templates ? ($state.snapshot(templates) as CaptureTemplate[]) : undefined,
+		});
+	}
+
+	/** Quick capture with the first template (the home page's box). */
+	capture(text: string): CaptureResult | null {
+		const template = this.captureTemplates[0];
+		return template ? this.captureWith(template, { text }) : null;
+	}
+
+	/**
+	 * Capture with a template: expand it, then add it to today's daily note, a
+	 * file under a heading (created if missing), or a new note.
+	 */
+	captureWith(
+		template: CaptureTemplate,
+		input: { text: string; values?: Record<string, string>; title?: string; link?: string },
+	): CaptureResult | null {
+		const now = localNow();
+		const ctx = { now, text: input.text.trim(), values: input.values, link: input.link };
+		const target = template.target;
+		if (target.kind === 'node') {
+			const body = shapeCapture(expandTemplate(template.template, ctx), template.type);
+			const title = (input.title ?? '').replace(/\s+/g, ' ').trim() || body.split('\n')[0]!.trim();
+			if (!title) return null;
+			const id = crypto.randomUUID();
+			const path = nodePath(this.layout, roamFileName(slugify(title) || 'note', new Date()));
+			const text = newNodeSource(title, id) + (body.trim() ? `\n${body}\n` : '');
+			this.#write(path, text, `Capture ${template.name}: ${title}`);
+			return { path, id, label: title };
+		}
+		let path: string;
+		if (target.kind === 'daily') {
+			this.ensureDaily(now.date);
+			path = this.dailyPath(now.date);
+		} else {
+			path = nodePath(this.layout, target.path.replace(/^\/+/, ''));
+			if (!this.vault.file(path)) {
+				const name = path
+					.split('/')
+					.pop()!
+					.replace(/\.org$/i, '');
+				this.#write(path, `#+title: ${name}\n`, `Create ${path}`);
+			}
+		}
+		const file = this.vault.file(path);
+		if (!file) return null;
+		const next = applyChanges(
+			file.source,
+			applyTemplate(file.source, template, ctx, target.heading),
 		);
-		return id;
+		if (next === file.source) return null;
+		const label = target.kind === 'daily' ? "today's note" : (file.index.title ?? path);
+		this.#write(path, next, `Capture ${template.name} to ${label}`);
+		return { path, id: this.vault.fileNode(path)?.id ?? null, label };
 	}
 
 	toggleCheckbox(path: string, offset: number) {

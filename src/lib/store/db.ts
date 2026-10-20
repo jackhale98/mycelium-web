@@ -3,7 +3,7 @@
 /// re-indexes files whose git blob changed.
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { FileIndex, KeywordConfig, LogSettings } from '$lib/org';
+import type { CaptureTemplate, FileIndex, KeywordConfig, LogSettings } from '$lib/org';
 import type { Credentials, ProviderId } from '$lib/git/providers';
 import type { Author } from '$lib/git/repo';
 import type { VaultLayout } from '$lib/vault/layout';
@@ -34,6 +34,8 @@ export interface VaultRecord {
 	autoCommit?: boolean;
 	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */
 	keywordTones?: Record<string, KeywordTone>;
+	/** Quick capture templates (org-capture style); the defaults apply when unset. */
+	captureTemplates?: CaptureTemplate[] | undefined;
 	/** Named agenda filters (an encoded filter query each), shown as chips on the agenda. */
 	agendaViews?: SavedAgendaView[];
 	/** `folder`: a directory on this computer opened with the File System Access API (no git here). */

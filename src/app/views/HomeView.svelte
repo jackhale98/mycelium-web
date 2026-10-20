@@ -3,12 +3,12 @@
 	import Icon from '../components/Icon.svelte';
 	import { groupAgenda } from '../agenda';
 	import { href } from '../router.svelte';
+	import { describeTarget, templatePrompts } from '$lib/org';
 	import { app, localNow } from '../state.svelte';
 	import { longDate } from '../util';
 
 	const today = localNow().date;
 	let draft = $state('');
-	let captured = $state(false);
 
 	const agenda = $derived.by(() => {
 		void app.rev;
@@ -57,13 +57,25 @@
 					? 'Good afternoon'
 					: 'Good evening';
 
+	const first = $derived(app.captureTemplates[0]);
+	/** The first template opens the sheet when it needs more than the text (prompts, a title). */
+	const quick = $derived(
+		!!first && first.target.kind !== 'node' && templatePrompts(first.template).length === 0,
+	);
+
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
 		if (!draft.trim()) return;
-		app.capture(draft);
+		if (!quick) return more();
+		const result = app.capture(draft);
+		if (!result) return;
 		draft = '';
-		captured = true;
-		setTimeout(() => (captured = false), 2400);
+		app.captureNotice = { label: result.label, id: result.id };
+	}
+
+	function more() {
+		app.captureSheet = { text: draft };
+		draft = '';
 	}
 
 	$effect(() => {
@@ -94,14 +106,16 @@
 			autocomplete="off"
 			enterkeyhint="send"
 		/>
-		<span class="hint" aria-hidden="true">to today's note <kbd>↵</kbd></span>
+		<span class="hint" aria-hidden="true"
+			>{first ? `${first.name} → ${describeTarget(first.target)}` : ''} <kbd>↵</kbd></span
+		>
+		<button type="button" class="more" aria-label="Capture with a template" onclick={more}
+			><Icon name="chevronDown" size={16} /></button
+		>
 		<button type="submit" class="send" aria-label="Capture" disabled={!draft.trim()}
 			><Icon name="arrowRight" size={16} /></button
 		>
 	</form>
-	<p class="captured" role="status" aria-live="polite">
-		{#if captured}Saved to <a href={href.daily(today)}>today's note</a>.{/if}
-	</p>
 
 	<div class="grid">
 		<section class="card focus" aria-labelledby="focus-h">
@@ -237,6 +251,19 @@
 		font-size: 0.78rem;
 		white-space: nowrap;
 	}
+	.more {
+		display: grid;
+		place-items: center;
+		width: 2.2rem;
+		height: 2.6rem;
+		border: 0;
+		border-radius: 10px;
+		background: none;
+		color: var(--text-muted);
+	}
+	.more:hover {
+		background: var(--surface-2);
+	}
 	.send {
 		display: grid;
 		place-items: center;
@@ -251,16 +278,6 @@
 	.send:disabled {
 		opacity: 0.35;
 		cursor: default;
-	}
-	.captured {
-		min-height: 1.4rem;
-		margin: 0.5rem 0 0 0.25rem;
-		color: var(--accent);
-		font-size: 0.82rem;
-	}
-	.captured a {
-		color: inherit;
-		font-weight: 600;
 	}
 	.grid {
 		display: grid;

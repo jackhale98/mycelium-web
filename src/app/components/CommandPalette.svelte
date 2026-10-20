@@ -62,6 +62,21 @@
 		},
 	];
 
+	const captureCommands = $derived([
+		{
+			key: 'cmd:capture',
+			label: 'Capture…',
+			sub: 'Ctrl/⌘ + Alt + C',
+			icon: 'feather' as const,
+			run: () => (app.captureSheet = {}),
+		},
+		...app.captureTemplates.map((t): Item => ({
+			key: `capture:${t.id}`,
+			label: `Capture: ${t.name}`,
+			icon: 'feather',
+			run: () => (app.captureSheet = { templateId: t.id }),
+		})),
+	]);
 	const viewCommands = $derived(
 		(app.activeVault?.agendaViews ?? []).map((v): Item => ({
 			key: `view:${v.id}`,
@@ -87,6 +102,7 @@
 					icon: 'file' as const,
 					run: () => router.go(href.node(n.id)),
 				})),
+				...captureCommands.slice(0, 1),
 				...commands,
 				...viewCommands,
 			];
@@ -106,7 +122,7 @@
 				run: () => router.go(href.node(hit.id)),
 			};
 		});
-		const cmds = [...commands, ...viewCommands].filter((c) =>
+		const cmds = [...captureCommands, ...commands, ...viewCommands].filter((c) =>
 			c.label.toLowerCase().includes(q.toLowerCase()),
 		);
 		const exists = app.vault.titles.has(q.toLowerCase());

@@ -84,14 +84,114 @@ test("capture adds a timestamped item to today's daily note", async ({ page }) =
 	for (const text of ['First capture from Playwright', 'Second capture from Playwright']) {
 		await page.getByLabel(/Capture a thought/).fill(text);
 		await page.getByRole('button', { name: 'Capture', exact: true }).click();
+		await expect(
+			page.getByRole('status').filter({ hasText: "Saved to today's note" }),
+		).toBeVisible();
 	}
-	await page.getByRole('status').getByRole('link', { name: "today's note" }).click();
+	await page.getByRole('status').getByRole('link', { name: 'Open' }).click();
 	// Both land as list items under one "Captured" heading, not as headings of their own.
 	await expect(page.getByRole('heading', { name: 'Captured' })).toHaveCount(1);
 	await expect(page.getByRole('heading', { name: /capture from Playwright/ })).toHaveCount(0);
 	const items = page.getByRole('listitem').filter({ hasText: /capture from Playwright/ });
 	await expect(items).toHaveCount(2);
 	await expect(items.first()).toContainText(/\d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}/);
+});
+
+test('the capture sheet picks templates by key and writes a task', async ({ page }) => {
+	await open(page, 'app#/');
+	await page.keyboard.press('ControlOrMeta+Alt+KeyC');
+	const sheet = page.getByRole('dialog', { name: 'Capture' });
+	await expect(sheet).toBeVisible();
+	// org-capture's menu keys: "t" picks Task when not typing in a field.
+	await sheet.getByRole('radio', { name: /Note/ }).focus();
+	await page.keyboard.press('t');
+	await expect(sheet.getByRole('radio', { name: /Task/ })).toHaveAttribute('aria-checked', 'true');
+	await expect(sheet.getByText(/today's daily note → Tasks/)).toBeVisible();
+	await sheet.getByRole('textbox', { name: 'Text' }).fill('Prune the apple tree');
+	await sheet.getByText('Preview').click();
+	await expect(sheet.locator('pre')).toContainText('* TODO Prune the apple tree');
+	await expect(sheet.locator('pre')).toContainText('SCHEDULED: <');
+	await page.keyboard.press('ControlOrMeta+Enter');
+	await expect(sheet).toBeHidden();
+	await page.getByRole('status').getByRole('link', { name: 'Open' }).click();
+	const tasks = page.locator('.org-section', { hasText: 'Tasks' }).first();
+	await expect(tasks.getByText('Prune the apple tree')).toBeVisible();
+	await expectAccessible(page);
+});
+
+test('a custom template with prompts writes into a file under a heading', async ({ page }) => {
+	await open(page, 'app#/settings');
+	await page.getByRole('button', { name: 'Add template' }).click();
+	const tpl = page.locator('.tpl').last();
+	await tpl.getByLabel('Name').fill('Call');
+	await tpl.getByLabel('Key').fill('c');
+	await tpl.getByLabel('Into').selectOption('file');
+	await tpl.getByLabel(/File/).fill('inbox.org');
+	await tpl.getByLabel('Under heading').fill('Calls');
+	await tpl.getByLabel('Template').fill('* TODO Call %^{Who|Sam|Alex} %^g\n%?');
+	await expect(tpl.locator('pre')).toContainText('* TODO Call Sam :tag:');
+	await page.getByRole('button', { name: 'Save templates' }).click();
+	await expect(page.getByText('Capture templates saved')).toBeVisible();
+
+	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.type('Capture: Call');
+	await page.keyboard.press('Enter');
+	const sheet = page.getByRole('dialog', { name: 'Capture' });
+	await expect(sheet.getByLabel('Who')).toHaveValue('Sam');
+	await sheet.getByLabel('Who').fill('Alex');
+	await sheet.getByLabel('Tags').fill('phone, errands');
+	await sheet.getByRole('textbox', { name: 'Text' }).fill('About the budget');
+	await sheet.getByRole('button', { name: 'Capture', exact: true }).click();
+	await expect(page.getByRole('status').filter({ hasText: 'Saved to' })).toBeVisible();
+
+	// The task shows on the agenda, and the diff shows exactly what was written.
+	await page.goto('app#/agenda');
+	await expect(page.getByText('Call Alex').first()).toBeVisible();
+	await page.goto('app#/changes');
+	const row = page.getByRole('button', { name: /inbox\.org/ }).first();
+	if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
+	const diff = page.getByRole('region', { name: 'Diff of inbox.org' });
+	await expect(diff).toContainText('* Calls');
+	await expect(diff).toContainText('** TODO Call Alex :phone:errands:');
+	await expect(diff).toContainText('About the budget');
+});
+
+test('on phones, swiping up on the search button opens capture; a tap still searches', async ({
+	page,
+}) => {
+	test.skip((page.viewportSize()?.width ?? 0) > 960, 'phone layout only');
+	await open(page, 'app#/');
+	const button = page.getByRole('button', { name: 'Search', exact: true });
+	const box = (await button.boundingBox())!;
+	const x = box.x + box.width / 2;
+	const y = box.y + box.height / 2;
+	await button.dispatchEvent('pointerdown', {
+		clientX: x,
+		clientY: y,
+		pointerId: 1,
+		isPrimary: true,
+	});
+	for (const dy of [10, 25, 45])
+		await button.dispatchEvent('pointermove', {
+			clientX: x,
+			clientY: y - dy,
+			pointerId: 1,
+			isPrimary: true,
+		});
+	await button.dispatchEvent('pointerup', {
+		clientX: x,
+		clientY: y - 45,
+		pointerId: 1,
+		isPrimary: true,
+	});
+	await button.dispatchEvent('click');
+	await expect(page.getByRole('dialog', { name: 'Capture' })).toBeVisible();
+	await expect(
+		page.getByRole('dialog', { name: 'Capture' }).getByRole('textbox', { name: 'Text' }),
+	).toBeFocused();
+	await page.keyboard.press('Escape');
+	await button.click();
+	await expect(page.getByRole('combobox').first()).toBeVisible();
 });
 
 test('agenda lists open tasks', async ({ page }) => {

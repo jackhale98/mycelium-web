@@ -20,3 +20,4 @@ export * from './roam';
 export * from './scan';
 export { scanFile as indexFile } from './scan';
 export * from './capture';
+export * from './capture-template';

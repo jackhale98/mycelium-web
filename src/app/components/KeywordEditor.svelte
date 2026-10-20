@@ -379,6 +379,8 @@
 		text-transform: uppercase;
 	}
 	.seq {
+		/* Fieldsets default to min-content width, which overflows narrow phones. */
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -412,8 +414,13 @@
 		padding: 0.4rem 0;
 		border-bottom: 1px solid var(--border);
 	}
+	.state > label {
+		min-width: 0;
+		max-width: 100%;
+	}
 	.state .input {
 		width: auto;
+		max-width: 100%;
 		height: 2.1rem;
 		font-size: 0.84rem;
 	}
@@ -551,5 +558,9 @@
 	.msg {
 		color: var(--text-muted);
 		font-size: 0.84rem;
+	}
+	.state :global(select),
+	.state :global(input) {
+		max-width: 100%;
 	}
 </style>

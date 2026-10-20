@@ -2,6 +2,7 @@
 	import '../styles/prose.css';
 	import '../styles/ui.css';
 	import BrandLoader from './components/BrandLoader.svelte';
+	import CaptureSheet from './components/CaptureSheet.svelte';
 	import CommandPalette from './components/CommandPalette.svelte';
 	import Icon from './components/Icon.svelte';
 	import MobileBar from './components/MobileBar.svelte';
@@ -41,6 +42,12 @@
 	};
 
 	$effect(() => router.start());
+	// The capture notice goes away on its own.
+	$effect(() => {
+		if (!app.captureNotice) return;
+		const t = setTimeout(() => (app.captureNotice = null), 5000);
+		return () => clearTimeout(t);
+	});
 	// Vite reports a failed preload of a lazy page's dependencies the same way.
 	$effect(() => {
 		const onPreloadError = () => reloadForUpdate();
@@ -103,6 +110,10 @@
 		} else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
 			e.preventDefault();
 			router.go(href.search());
+		} else if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyC') {
+			// Quick capture (org's C-c c). By physical key: Option changes e.key on macOS.
+			e.preventDefault();
+			app.captureSheet = {};
 		} else if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 'n') {
 			e.preventDefault();
 			app.newNote = { title: '' };
@@ -220,8 +231,21 @@
 <SyncDialog />
 <NewNoteDialog />
 <HeadingSheet />
+<CaptureSheet />
 
-{#if app.sync.kind === 'done' || app.sync.kind === 'error'}
+{#if app.captureNotice}
+	<div class="toast" role="status">
+		<Icon name="check" size={16} />
+		<span
+			>Saved to {app.captureNotice.label}.{#if app.captureNotice.id}
+				<a href={href.node(app.captureNotice.id)} onclick={() => (app.captureNotice = null)}>Open</a
+				>{/if}</span
+		>
+		<button type="button" aria-label="Dismiss" onclick={() => (app.captureNotice = null)}
+			><Icon name="close" size={14} /></button
+		>
+	</div>
+{:else if app.sync.kind === 'done' || app.sync.kind === 'error'}
 	<div
 		class="toast"
 		class:error={app.sync.kind === 'error'}
@@ -392,6 +416,10 @@
 	}
 	.toast.error :global(svg:first-child) {
 		color: var(--danger);
+	}
+	.toast a {
+		color: inherit;
+		font-weight: 650;
 	}
 	.toast button {
 		display: grid;

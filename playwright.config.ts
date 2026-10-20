@@ -24,7 +24,7 @@ export default defineConfig({
 		{ name: 'mobile', use: { ...devices['Pixel 7'], launchOptions } },
 	],
 	webServer: {
-		command: 'npm run preview -- --port 4321',
+		command: 'npm run preview -- --port 4321 --ignore-lock',
 		url: `http://localhost:4321${BASE}`,
 		reuseExistingServer: !process.env.CI,
 	},
