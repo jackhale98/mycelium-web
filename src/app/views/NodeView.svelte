@@ -249,6 +249,8 @@
 		gap: 0.4rem;
 	}
 	.crumbs {
+		padding-right: 7.5rem;
+		overflow-wrap: anywhere;
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
