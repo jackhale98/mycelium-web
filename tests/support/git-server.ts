@@ -28,11 +28,17 @@ const sh = (cwd: string, ...args: string[]) =>
 export async function startGitServer(
 	name: string,
 	files: Record<string, string>,
+	options: {
+		/** Default branch of the seeded repository. */
+		branch?: string;
+		/** Require HTTP Basic auth (`user:password`), answering 401 like a private GitHub repo. */
+		auth?: string;
+	} = {},
 ): Promise<GitServer> {
 	const root = fs.mkdtempSync(join(tmpdir(), 'mycelium-srv-'));
 	const seed = join(root, 'seed');
 	fs.mkdirSync(seed);
-	sh(seed, 'init', '-q', '-b', 'main');
+	sh(seed, 'init', '-q', '-b', options.branch ?? 'main');
 	for (const [path, content] of Object.entries(files)) {
 		fs.mkdirSync(join(seed, path, '..'), { recursive: true });
 		fs.writeFileSync(join(seed, path), content);
@@ -51,6 +57,12 @@ export async function startGitServer(
 		);
 		res.setHeader('Access-Control-Expose-Headers', 'Content-Type');
 		if (req.method === 'OPTIONS') return void res.writeHead(204).end();
+		if (options.auth) {
+			const given = req.headers.authorization ?? '';
+			const want = `Basic ${Buffer.from(options.auth).toString('base64')}`;
+			// Like GitHub behind a CORS proxy: 401, with WWW-Authenticate not exposed to the page.
+			if (given !== want) return void res.writeHead(401).end('Repository not found.');
+		}
 		const url = new URL(req.url ?? '/', 'http://localhost');
 		const cgi = spawn('git', ['http-backend'], {
 			env: {

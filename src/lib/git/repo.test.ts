@@ -59,6 +59,38 @@ describe('GitRepo', () => {
 		expect(server.git('blank.git', 'log', '-1', '--format=%s', 'main')).toBe('First note');
 	});
 
+	it('clones a private repository with a token, defaulting to its master branch', async () => {
+		const secret = await startGitServer(
+			'private',
+			{ 'p.org': '#+title: P\n' },
+			{
+				branch: 'master',
+				auth: 'x-access-token:ghp_token',
+			},
+		);
+		try {
+			const make = (token: string | null) =>
+				new GitRepo(
+					{ promises: fs.promises },
+					http,
+					join(root, `private-${token ?? 'none'}`),
+					{ ...config(), provider: 'github', url: `${secret.url}/private.git` },
+					() => (token ? { token } : null),
+				);
+			await expect(make(null).clone()).rejects.toThrow();
+			await expect(make('wrong').clone()).rejects.toThrow();
+			const repo = make('ghp_token');
+			await repo.clone();
+			expect(await repo.branch()).toBe('master');
+			expect([...(await repo.files(() => true)).keys()]).toEqual(['p.org']);
+			await repo.commit([{ path: 'p.org', content: '#+title: P2\n' }], 'Edit');
+			expect(await repo.push()).toEqual({ status: 'pushed', commits: 1 });
+			expect(secret.git('private.git', 'log', '-1', '--format=%s', 'master')).toBe('Edit');
+		} finally {
+			secret.close();
+		}
+	});
+
 	it('explains a branch that does not exist', async () => {
 		const repo = new GitRepo(
 			{ promises: fs.promises },

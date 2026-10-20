@@ -1,20 +1,10 @@
 <script lang="ts">
 	import { drag } from 'd3-drag';
-	import {
-		forceCenter,
-		forceCollide,
-		forceLink,
-		forceManyBody,
-		forceSimulation,
-		forceX,
-		forceY,
-		type Simulation,
-		type SimulationLinkDatum,
-		type SimulationNodeDatum,
-	} from 'd3-force';
+	import type { Simulation, SimulationLinkDatum, SimulationNodeDatum } from 'd3-force';
 	import { select } from 'd3-selection';
 	import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
 	import { buildGraph, type GraphNode } from '$lib/vault/graph';
+	import { createLayout, seedPositions, warmupTicks } from '$lib/vault/graph-layout';
 	import Icon from '../components/Icon.svelte';
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
@@ -217,6 +207,17 @@
 		ctx.globalAlpha = 1;
 	}
 
+	// Layout probe for tests (enabled with localStorage 'mycelium:debug-graph').
+	try {
+		if (localStorage.getItem('mycelium:debug-graph'))
+			(window as unknown as { __graph: () => unknown }).__graph = () => ({
+				pos: Object.fromEntries(nodes.map((n) => [n.id, [n.x, n.y]])),
+				links: links.map((l) => [(l.source as SimNode).id, (l.target as SimNode).id]),
+			});
+	} catch {
+		/* no storage */
+	}
+
 	const redraw = () => {
 		if (!frame) frame = requestAnimationFrame(draw);
 	};
@@ -269,39 +270,22 @@
 		}
 
 		sim?.stop();
-		const n = nodes.length;
-		sim = forceSimulation<SimNode, SimLink>(nodes)
-			.force(
-				'link',
-				forceLink<SimNode, SimLink>(links)
-					.distance((l) => 34 + ((l.source as SimNode).r + (l.target as SimNode).r) * 1.6)
-					.strength((l) => Math.min(1, 0.25 + l.weight * 0.12)),
-			)
-			.force(
-				'charge',
-				forceManyBody<SimNode>()
-					.strength(n > 1500 ? -40 : n > 400 ? -80 : -170)
-					.distanceMax(600),
-			)
-			.force(
-				'collide',
-				forceCollide<SimNode>((d) => d.r + 3),
-			)
-			.force('center', forceCenter(0, 0))
-			.force('x', forceX<SimNode>(0).strength(0.04))
-			.force('y', forceY<SimNode>(0).strength(0.04))
+		// Settle most of the layout before the first frame, so it appears untangled.
+		const fresh = nodes.some((d) => d.x === undefined);
+		seedPositions(nodes, links);
+		sim = createLayout(nodes, links)
 			.on('tick', redraw)
 			.on('end', () => {
 				if (!userMoved) fit();
 			});
+		if (fresh) sim.tick(warmupTicks(nodes.length));
+		else sim.alpha(0.3);
+		if (!matchMedia('(prefers-reduced-motion: reduce)').matches) sim.restart();
+		else sim.tick(300);
+		redraw();
 		setTimeout(() => {
 			if (!userMoved) fit();
 		}, 700);
-		if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-			sim.stop();
-			sim.tick(300);
-			redraw();
-		}
 		setTimeout(() => {
 			if (focusSim) {
 				focusSim.fx = null;
