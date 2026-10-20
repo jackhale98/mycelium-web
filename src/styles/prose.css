@@ -160,6 +160,28 @@
 	opacity: 1;
 }
 
+/* Touch screens have no hover to reveal the fold button: keep it visible. */
+@media (hover: none) {
+	.prose .fold {
+		opacity: 0.6;
+	}
+}
+
+/* Narrow screens have no left margin to hang it in: put it inline, first in the row. */
+@media (max-width: 720px) {
+	.prose .heading-row {
+		gap: 0.35em;
+	}
+	.prose .fold {
+		position: static;
+		align-self: center;
+		flex: none;
+		width: 1.75rem;
+		height: 1.75rem;
+		margin-left: -0.4rem;
+	}
+}
+
 .prose .fold:hover {
 	background: var(--surface-2);
 	color: var(--text);

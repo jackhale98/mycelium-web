@@ -331,3 +331,18 @@ test('org tables render with caption, header, groups and alignment', async ({ pa
 	);
 	await expectAccessible(page);
 });
+
+test('heading fold buttons stay on screen and work', async ({ page, isMobile }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	const fold = page.getByRole('button', { name: 'Collapse section' }).first();
+	await expect(fold).toBeVisible();
+	const box = (await fold.boundingBox())!;
+	expect(box.x).toBeGreaterThanOrEqual(0);
+	expect(box.width).toBeGreaterThanOrEqual(24);
+	// Desktop reveals it on hover; touch screens always show it.
+	if (isMobile)
+		expect(await fold.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.5);
+	else await fold.hover();
+	await fold.click();
+	await expect(page.getByRole('button', { name: 'Expand section' }).first()).toBeVisible();
+});
