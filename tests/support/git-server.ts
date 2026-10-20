@@ -11,6 +11,8 @@ export interface GitServer {
 	url: string;
 	root: string;
 	git: (repo: string, ...args: string[]) => string;
+	/** Add an empty bare repository `name.git` (no commits), pushable. */
+	empty: (name: string, branch?: string) => void;
 	close: () => void;
 }
 
@@ -89,6 +91,10 @@ export async function startGitServer(
 		url: `http://localhost:${port}`,
 		root,
 		git: (repo, ...args) => sh(join(root, repo), ...args),
+		empty: (name, branch = 'main') => {
+			sh(root, 'init', '-q', '--bare', '-b', branch, `${name}.git`);
+			sh(join(root, `${name}.git`), 'config', 'http.receivepack', 'true');
+		},
 		close: () => {
 			server.close();
 			fs.rmSync(root, { recursive: true, force: true });

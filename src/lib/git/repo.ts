@@ -127,13 +127,53 @@ export class GitRepo {
 		);
 	}
 
-	/** Clone the repository. Full history is kept so it can be browsed later. */
+	/**
+	 * Clone the repository. Full history is kept so it can be browsed later.
+	 * An empty remote (no commits yet) becomes an empty local repository on
+	 * the requested branch (or `main`), ready for a first commit and push.
+	 */
 	async clone(onProgress?: (p: Progress) => void): Promise<void> {
 		if (!this.config.url) throw new Error('This vault has no remote to clone from');
+		onProgress?.({ phase: 'Contacting the git host', loaded: 0, total: 0 });
+		const info = await git.getRemoteInfo2({
+			http: this.http,
+			url: this.config.url,
+			...(this.config.corsProxy ? { corsProxy: this.config.corsProxy } : {}),
+			...this.#auth(),
+			protocolVersion: 1,
+		});
+		const heads = (info.refs ?? [])
+			.filter((r) => r.ref.startsWith('refs/heads/'))
+			.map((r) => r.ref.slice('refs/heads/'.length));
+		if (heads.length === 0) {
+			const branch = this.config.branch ?? 'main';
+			await git.init({ ...this.#local(), defaultBranch: branch });
+			await git.addRemote({ ...this.#local(), remote: REMOTE, url: this.config.url });
+			await git.setConfig({ ...this.#local(), path: `branch.${branch}.remote`, value: REMOTE });
+			await git.setConfig({
+				...this.#local(),
+				path: `branch.${branch}.merge`,
+				value: `refs/heads/${branch}`,
+			});
+			this.config.branch = branch;
+			await this.flush();
+			return;
+		}
+		if (this.config.branch && !heads.includes(this.config.branch)) {
+			throw new Error(
+				`The branch “${this.config.branch}” isn't in this repository. It has: ${heads.slice(0, 8).join(', ')}${heads.length > 8 ? '…' : ''}.`,
+			);
+		}
+		// The remote's default branch, from HEAD's symref (falls back to the only/first branch).
+		const target = (info.refs ?? []).find((r) => r.ref === 'HEAD')?.target;
+		const branch =
+			this.config.branch ??
+			(target?.startsWith('refs/heads/') ? target.slice('refs/heads/'.length) : null) ??
+			(heads.includes('main') ? 'main' : heads.includes('master') ? 'master' : heads[0]!);
 		await git.clone({
 			...this.#net(),
 			url: this.config.url,
-			...(this.config.branch ? { ref: this.config.branch } : {}),
+			ref: branch,
 			singleBranch: true,
 			noTags: true,
 			onProgress: (e) => onProgress?.({ phase: e.phase, loaded: e.loaded, total: e.total }),
@@ -165,6 +205,8 @@ export class GitRepo {
 	/** Paths and blob ids of every file under HEAD matching `filter`. */
 	async files(filter: (path: string) => boolean, ref = 'HEAD'): Promise<Map<string, string>> {
 		const out = new Map<string, string>();
+		// No commits yet (a new, empty repository): nothing is committed.
+		if (ref === 'HEAD' && !(await this.head().catch(() => null))) return out;
 		await git.walk({
 			...this.#local(),
 			trees: [TREE({ ref })],
@@ -348,14 +390,19 @@ export class GitRepo {
 	async fetch(onProgress?: (p: Progress) => void): Promise<{ ahead: number; behind: number }> {
 		if (!this.hasRemote()) return { ahead: 0, behind: 0 };
 		const branch = await this.branch();
-		await git.fetch({
-			...this.#net(),
-			remote: REMOTE,
-			ref: branch,
-			singleBranch: true,
-			tags: false,
-			onProgress: (e) => onProgress?.({ phase: e.phase, loaded: e.loaded, total: e.total }),
-		});
+		try {
+			await git.fetch({
+				...this.#net(),
+				remote: REMOTE,
+				ref: branch,
+				singleBranch: true,
+				tags: false,
+				onProgress: (e) => onProgress?.({ phase: e.phase, loaded: e.loaded, total: e.total }),
+			});
+		} catch (e) {
+			// The branch isn't on the remote yet (e.g. a new, empty repository): nothing to fetch.
+			if (!(e instanceof Errors.NotFoundError)) throw e;
+		}
 		await this.flush();
 		return this.aheadBehind();
 	}
@@ -377,9 +424,23 @@ export class GitRepo {
 			await this.fetch(onProgress);
 			const branch = await this.branch();
 			const remoteRef = `refs/remotes/${REMOTE}/${branch}`;
-			const local = await this.head();
+			const local = await this.head().catch(() => null);
 			const remote = await this.#remoteHead(branch);
 			if (remote === null || local === remote) return { status: 'up-to-date' };
+			if (local === null) {
+				// Nothing committed here yet: take the remote branch as it is.
+				const incoming = [...(await this.files(() => true, remote)).keys()];
+				const blocked = incoming.filter((p) => dirty.has(p));
+				if (blocked.length) return { status: 'blocked', paths: blocked };
+				await git.writeRef({
+					...this.#local(),
+					ref: `refs/heads/${branch}`,
+					value: remote,
+					force: true,
+				});
+				await this.#checkout(branch, incoming);
+				return { status: 'pulled', changed: incoming };
+			}
 			const [base] = await git.findMergeBase({ ...this.#local(), oids: [local, remote] });
 			if (base === remote) return { status: 'up-to-date' };
 

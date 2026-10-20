@@ -40,6 +40,38 @@ afterAll(() => {
 });
 
 describe('GitRepo', () => {
+	it('clones an empty repository, then makes and pushes the first commit', async () => {
+		server.empty('blank');
+		const repo = new GitRepo(
+			{ promises: fs.promises },
+			http,
+			join(root, 'blank'),
+			{ ...config(), url: `${base}/blank.git` },
+			() => null,
+		);
+		await repo.clone();
+		expect(await repo.branch()).toBe('main');
+		expect((await repo.files(() => true)).size).toBe(0);
+		expect(await repo.aheadBehind()).toEqual({ ahead: 0, behind: 0 });
+		expect(await repo.pull()).toEqual({ status: 'up-to-date' });
+		await repo.commit([{ path: 'first.org', content: '#+title: First\n' }], 'First note');
+		expect(await repo.push()).toEqual({ status: 'pushed', commits: 1 });
+		expect(server.git('blank.git', 'log', '-1', '--format=%s', 'main')).toBe('First note');
+	});
+
+	it('explains a branch that does not exist', async () => {
+		const repo = new GitRepo(
+			{ promises: fs.promises },
+			http,
+			join(root, 'nobranch'),
+			{ ...config(), branch: 'master' },
+			() => null,
+		);
+		await expect(repo.clone()).rejects.toThrow(
+			"The branch “master” isn't in this repository. It has: main.",
+		);
+	});
+
 	it('clones, lists org files and reads them byte for byte', async () => {
 		const repo = open('clone-a');
 		await repo.clone();

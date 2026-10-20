@@ -102,3 +102,36 @@ test('clone, edit, commit, push and pull a git vault', async ({ page }) => {
 		timeout: 30_000,
 	});
 });
+
+test('open an empty repository, write the first note and push it', async ({ page }) => {
+	test.setTimeout(90_000);
+	server.empty('fresh');
+	await page.goto('app#/vaults');
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await page.getByRole('radio', { name: 'Other' }).click();
+	await page.getByRole('textbox', { name: 'Repository' }).fill(`${server.url}/fresh.git`);
+	await page.getByLabel('Username').fill('tester');
+	await page.getByLabel(/Access token/).fill('secret');
+	await page.getByText('Advanced').click();
+	await page.getByLabel('Sync proxy').fill('');
+	await page.getByLabel('Commit name').fill('Playwright');
+	await page.getByLabel('Commit email').fill('pw@example.com');
+	await page.getByRole('button', { name: 'Clone and open' }).click();
+	await expect(
+		page.getByRole('heading', { level: 1, name: /Good (morning|afternoon|evening|night)/ }),
+	).toBeVisible({ timeout: 60_000 });
+
+	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.type('First note');
+	await page.getByRole('option', { name: /Create note “First note”/ }).click();
+	await page.getByRole('button', { name: 'Create and edit' }).click();
+	await expect(page.locator('.cm-content')).toContainText('#+title: First note');
+
+	await page.goto('app#/changes');
+	await page.getByLabel('Commit message').fill('Start my notes');
+	await page.getByRole('button', { name: 'Commit', exact: true }).click();
+	await expect(page.getByText('Nothing to commit')).toBeVisible();
+	await page.getByRole('button', { name: 'Push', exact: true }).click();
+	await expect(page.getByText(/Pushed 1 commit/)).toBeVisible({ timeout: 30_000 });
+	expect(server.git('fresh.git', 'log', '-1', '--format=%s', 'main')).toBe('Start my notes');
+});
