@@ -36,12 +36,44 @@ The client secret never leaves the worker, and tokens never leave the browser
 except to reach the git host.
 
 Every provider gets the same callback URL:
-`https://jackhale98.github.io/mycelium-web/auth/callback/`. If you later move
-the site to a custom domain, update it in all three providers and in the
-worker's `ALLOWED_ORIGINS`.
+`https://my-celium.org/auth/callback/`. If the site moves to another domain,
+update it in all three providers and in the worker's `ALLOWED_ORIGINS`. (A
+copy also builds to `https://jackhale98.github.io/mycelium-web/`; sign-in is
+set up for my-celium.org only, while pasted access tokens work on both.)
 
 Until these are registered the site still works: people paste an access token
 on the Vaults page, as described in Step 6.
+
+## Step 0 — Host the site at my-celium.org
+
+The site is a static build served by Cloudflare as a Worker with static
+assets; `wrangler.jsonc` at the repository root tells Cloudflare to upload
+`dist/`. On Cloudflare the build serves from the domain's root automatically.
+
+1. In the Cloudflare dashboard, **Workers & Pages → Create application →
+   Import a repository**, and pick `jackhale98/mycelium-web`.
+2. Fill in:
+
+   | Field          | Value                                                  |
+   | -------------- | ------------------------------------------------------ |
+   | Project name   | `mycelium-web` (must match `name` in `wrangler.jsonc`) |
+   | Build command  | `npm run build`                                        |
+   | Deploy command | `npx wrangler deploy`                                  |
+   | Root directory | Leave empty (the repository root)                      |
+
+3. Select **Deploy**. The site appears at
+   `https://mycelium-web.<your-subdomain>.workers.dev`.
+4. Attach the domain: open the worker → **Settings → Domains & Routes → Add →
+   Custom domain**, enter `my-celium.org`, and repeat for `www.my-celium.org`
+   if you want it. Cloudflare creates the DNS records and certificate.
+5. Keep Cloudflare features that inject scripts turned off for the domain
+   (Rocket Loader, Email Address Obfuscation, Web Analytics auto-injection,
+   Zaraz): the site's Content Security Policy blocks scripts it didn't ship.
+6. Later, once the sign-in values exist (Steps 2–4), add them as **build**
+   variables: worker → **Settings → Build → Variables and secrets**, with the
+   names from Step 5 (`PUBLIC_GIT_PROXY`, `PUBLIC_GITHUB_CLIENT_ID`, …), then
+   retry the latest build. These are build-time values, unlike the sync
+   worker's secrets.
 
 ## Step 1 — Deploy the Cloudflare worker
 
@@ -87,8 +119,9 @@ repository and redeploys it whenever that folder changes on `main`.
 **Allowed origins live in the repository, not the dashboard.**
 `ALLOWED_ORIGINS` is set in `worker/wrangler.toml`, and every build applies the
 file's value, so a variable edited in the dashboard would be overwritten on the
-next deploy. It should list `https://jackhale98.github.io` (the site's origin,
-no path) and `http://localhost:4321` for local development. To change it, edit
+next deploy. It lists `https://my-celium.org`, `https://www.my-celium.org`,
+`https://jackhale98.github.io` (origins, no path) and `http://localhost:4321`
+for local development. To change it, edit
 the file on GitHub (open it, select the pencil icon, commit to `main`) and
 Cloudflare redeploys by itself.
 
@@ -110,6 +143,14 @@ repository secret (Cloudflare token template "Edit Cloudflare Workers") and run
 the **Deploy worker** workflow in the Actions tab. Use only one of Option A or
 the Actions workflow, so two deploy paths don't race each other.
 
+### Optional: give the worker its own subdomain
+
+Open the `mycelium-sync` worker → **Settings → Domains & Routes → Add →
+Custom domain** and enter `sync.my-celium.org`. Use that as the worker URL in
+Step 5. With the worker on your own zone you can also add a rate-limiting rule
+(**Security → WAF → Rate limiting rules**, for example 300 requests per minute
+per IP on `sync.my-celium.org`).
+
 ### Check it
 
 Open
@@ -117,10 +158,8 @@ Open
 a browser tab. You should see "Origin not allowed": the worker refuses
 anything that isn't the site, which is what you want.
 
-Recommended: add a rate-limiting rule, for example 300 requests per minute per
-IP. With the worker on a `workers.dev` address, Cloudflare's WAF rules need a
-custom domain or route on a zone you own; on the free plan without one, skip
-this step.
+Rate-limiting rules need the worker on your own domain (see above); on a
+`workers.dev` address, skip them.
 
 ## Step 2 — Register the GitHub App
 
@@ -134,8 +173,8 @@ refresh automatically for about 6 months.
    | Field                                                  | Value                                                       |
    | ------------------------------------------------------ | ----------------------------------------------------------- |
    | GitHub App name                                        | `Mycelium Notes` (must be unique on GitHub; any name works) |
-   | Homepage URL                                           | `https://jackhale98.github.io/mycelium-web/`                |
-   | Callback URL                                           | `https://jackhale98.github.io/mycelium-web/auth/callback/`  |
+   | Homepage URL                                           | `https://my-celium.org/`                                    |
+   | Callback URL                                           | `https://my-celium.org/auth/callback/`                      |
    | Expire user authorization tokens                       | Checked                                                     |
    | Request user authorization (OAuth) during installation | Checked                                                     |
    | Enable Device Flow                                     | Unchecked                                                   |
@@ -171,7 +210,7 @@ created as non-confidential and no secret goes into the worker.
    | Field        | Value                                                          |
    | ------------ | -------------------------------------------------------------- |
    | Name         | `Mycelium`                                                     |
-   | Redirect URI | `https://jackhale98.github.io/mycelium-web/auth/callback/`     |
+   | Redirect URI | `https://my-celium.org/auth/callback/`                         |
    | Confidential | Unchecked                                                      |
    | Scopes       | `read_user`, `read_api`, `read_repository`, `write_repository` |
 
@@ -191,13 +230,13 @@ lives in the worker.
    **Settings → Apps and features → OAuth consumers → Add consumer**.
 2. Fill in the form:
 
-   | Field                      | Value                                                      |
-   | -------------------------- | ---------------------------------------------------------- |
-   | Name                       | `Mycelium`                                                 |
-   | Callback URL               | `https://jackhale98.github.io/mycelium-web/auth/callback/` |
-   | This is a private consumer | Unchecked (so other people can sign in)                    |
-   | Permissions → Account      | Read                                                       |
-   | Permissions → Repositories | Read and Write                                             |
+   | Field                      | Value                                   |
+   | -------------------------- | --------------------------------------- |
+   | Name                       | `Mycelium`                              |
+   | Callback URL               | `https://my-celium.org/auth/callback/`  |
+   | This is a private consumer | Unchecked (so other people can sign in) |
+   | Permissions → Account      | Read                                    |
+   | Permissions → Repositories | Read and Write                          |
 
 3. Click **Save**, then expand the consumer to see its **Key** (the client ID) and **Secret**.
 
@@ -240,7 +279,8 @@ npx wrangler secret put BITBUCKET_CLIENT_SECRET
 
 Either way, secrets take effect right away; no rebuild is needed.
 
-**Site build variables.** In `jackhale98/mycelium-web` on GitHub, open
+**Site build variables.** For my-celium.org, add them in Cloudflare as in
+Step 0 item 6. For the GitHub Pages copy, in `jackhale98/mycelium-web` on GitHub, open
 **Settings → Secrets and variables → Actions → Variables** and add:
 
 | Variable                     | Value                      |
@@ -254,8 +294,9 @@ Either way, secrets take effect right away; no rebuild is needed.
 Use **Variables**, not Secrets: these values end up in the published
 JavaScript anyway, and the build reads them as variables.
 
-**Redeploy.** Open **Actions → Deploy to GitHub Pages → Run workflow** on
-`main`. Vaults you've already added keep their old proxy; change it under
+**Redeploy.** On Cloudflare, retry the latest build of `mycelium-web` (its
+**Deployments** tab); for the GitHub Pages copy, open **Actions → Deploy to
+GitHub Pages → Run workflow** on `main`. Vaults you've already added keep their old proxy; change it under
 Settings → Sync proxy in the app.
 
 ## Step 6 — Verify, troubleshoot and fall back
@@ -272,7 +313,7 @@ Settings → Sync proxy in the app.
 | Symptom                                    | Likely cause                                                 | Fix                                                                                                               |
 | ------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5 and re-run the Pages deploy                                                    |
-| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://jackhale98.github.io/mycelium-web/auth/callback/`                                            |
+| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://my-celium.org/auth/callback/`                                                                |
 | "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.toml` on `main` (Option A rebuilds by itself; with Option B run `npx wrangler deploy`) |
 | "sign-in is not configured on this worker" | A worker secret is missing                                   | Add it under the worker's **Settings → Variables and Secrets**, or `npx wrangler secret put …`                    |
 | Dashboard build fails: name mismatch       | Project name isn't `mycelium-sync`                           | Rename the worker to match `name` in `worker/wrangler.toml`, or change the file                                   |
