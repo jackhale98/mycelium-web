@@ -85,6 +85,7 @@
 		void router.route;
 		app.navOpen = false;
 		main?.scrollTo({ top: 0 });
+		window.scrollTo({ top: 0 });
 	});
 
 	function onkeydown(e: KeyboardEvent) {
@@ -419,8 +420,22 @@
 			opacity: 1;
 			pointer-events: auto;
 		}
+		/* Phones and tablets scroll the page itself, not a nested scroller: iOS
+		   Safari can leave a 100dvh scroller too short (after the keyboard
+		   closes) and paints nested scrollers lazily, cutting pages off. */
+		.shell {
+			height: auto;
+			min-height: 100dvh;
+		}
 		main {
+			height: auto;
+			overflow: visible;
 			padding-bottom: 4.5rem;
+		}
+	}
+	@media (max-width: 960px) {
+		:global(html) {
+			scroll-padding-top: 4rem;
 		}
 	}
 </style>

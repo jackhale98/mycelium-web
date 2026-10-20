@@ -403,6 +403,24 @@ test('a page whose code vanished in a deploy reloads, then explains instead of g
 	});
 });
 
+test('phones scroll the page itself, so long pages reach the bottom', async ({ page }) => {
+	test.skip((page.viewportSize()?.width ?? 0) > 960, 'phone layout only');
+	await open(page, 'app#/settings');
+	await page.getByRole('button', { name: 'Remove vault' }).scrollIntoViewIfNeeded();
+	const state = await page.evaluate(() => ({
+		page: window.scrollY,
+		main: document.querySelector('main')!.scrollTop,
+		overflow: getComputedStyle(document.querySelector('main')!).overflowY,
+	}));
+	expect(state.page).toBeGreaterThan(0);
+	expect(state.main).toBe(0);
+	expect(state.overflow).toBe('visible');
+	await expect(page.getByRole('button', { name: 'Remove vault' })).toBeInViewport();
+	// A new page starts at the top.
+	await page.goto('app#/agenda');
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test('org tables render with caption, header, groups and alignment', async ({ page }) => {
 	await open(page, 'app#/node/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d13');
 	const table = page.locator('table#reading-log');
