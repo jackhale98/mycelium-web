@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fitKeyboard } from '../actions/fit-keyboard';
 	import Icon from '../components/Icon.svelte';
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
@@ -58,6 +59,7 @@
 </script>
 
 <dialog
+	use:fitKeyboard
 	bind:this={dialog}
 	class="sheet"
 	aria-labelledby="hs-title"
@@ -202,8 +204,9 @@
 		.sheet {
 			width: 100%;
 			max-width: 100%;
-			max-height: 88dvh;
-			margin: auto 0 0;
+			/* --kb and --vvh come from fitKeyboard: stay above the on-screen keyboard. */
+			max-height: min(88dvh, calc(var(--vvh, 100dvh) - 0.75rem));
+			margin: auto 0 var(--kb, 0px);
 			border-width: 1px 0 0;
 			border-radius: 20px 20px 0 0;
 			animation: up 0.22s var(--ease);

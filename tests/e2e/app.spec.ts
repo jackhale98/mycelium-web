@@ -166,6 +166,31 @@ test('home card links fit on one line inside their cards', async ({ page }) => {
 	}
 });
 
+test('on phones the capture sheet stays above the on-screen keyboard', async ({ page }) => {
+	test.skip((page.viewportSize()?.width ?? 0) > 720, 'phone layout only');
+	await open(page, 'app#/');
+	await page.keyboard.press('ControlOrMeta+Alt+KeyC');
+	const sheet = page.getByRole('dialog', { name: 'Capture' });
+	await expect(sheet).toBeVisible();
+	// Simulate iOS: a keyboard covers the bottom 45% and the page isn't resized.
+	const visible = await page.evaluate(() => {
+		const vv = window.visualViewport!;
+		const h = Math.round(window.innerHeight * 0.55);
+		Object.defineProperty(vv, 'height', { configurable: true, get: () => h });
+		Object.defineProperty(vv, 'offsetTop', { configurable: true, get: () => 0 });
+		vv.dispatchEvent(new Event('resize'));
+		return h;
+	});
+	await expect
+		.poll(async () => {
+			const box = (await sheet.boundingBox())!;
+			return box.y >= 0 && box.y + box.height <= visible + 1;
+		})
+		.toBe(true);
+	await expect(sheet.getByRole('heading', { name: 'Capture' })).toBeInViewport();
+	await expect(sheet.getByRole('button', { name: 'Capture', exact: true })).toBeInViewport();
+});
+
 test('the cursor starts in the first empty field of a template', async ({ page }) => {
 	await open(page, 'app#/');
 	await page.keyboard.press('ControlOrMeta+Alt+KeyC');

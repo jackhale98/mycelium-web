@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fitKeyboard } from '../actions/fit-keyboard';
 	import {
 		describeTarget,
 		expandTemplate,
@@ -116,6 +117,7 @@
 </script>
 
 <dialog
+	use:fitKeyboard
 	bind:this={dialog}
 	class="sheet"
 	aria-labelledby="cs-title"
@@ -191,7 +193,7 @@
 				<textarea
 					bind:this={textArea}
 					bind:value={text}
-					rows="4"
+					rows="3"
 					placeholder={isNode ? 'Body (optional)' : 'What do you want to capture?'}
 					enterkeyhint="enter"></textarea>
 			</label>
@@ -362,8 +364,9 @@
 		.sheet {
 			width: 100%;
 			max-width: 100%;
-			max-height: 92dvh;
-			margin: auto 0 0;
+			/* --kb and --vvh come from fitKeyboard: stay above the on-screen keyboard. */
+			max-height: min(92dvh, calc(var(--vvh, 100dvh) - 0.75rem));
+			margin: auto 0 var(--kb, 0px);
 			border-width: 1px 0 0;
 			border-radius: 20px 20px 0 0;
 			animation: up 0.22s var(--ease);
@@ -381,6 +384,20 @@
 		}
 		.hint {
 			display: none;
+		}
+		/* One scrolling row of templates, and a text box that fits the space left. */
+		.templates {
+			flex-wrap: nowrap;
+			margin: 0 -1rem;
+			padding: 0 1rem 0.15rem;
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+		.templates button {
+			flex: none;
+		}
+		textarea {
+			min-height: 4.5rem;
 		}
 		footer .btn {
 			flex: 1;
