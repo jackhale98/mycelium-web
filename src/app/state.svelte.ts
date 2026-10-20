@@ -179,7 +179,7 @@ class AppState {
 	/** The quick capture sheet: open with a template chosen, and text to start from. */
 	captureSheet = $state<{ templateId?: string; text?: string } | null>(null);
 	/** "Saved to …" after a capture, with the note to open. */
-	captureNotice = $state<{ label: string; id: string | null } | null>(null);
+	captureNotice = $state<{ label: string; id: string | null; path: string } | null>(null);
 	/** Open the new-note dialog, optionally with a title. */
 	newNote = $state<{ title: string } | null>(null);
 
@@ -973,6 +973,21 @@ class AppState {
 			path,
 			(s) => setProperty(s, offset, 'ID', id, file.index.keywords),
 			`Make a node in ${this.#title(path)}`,
+		);
+		return id;
+	}
+
+	/** Give a whole file an `:ID:` (a drawer at the top, as org-roam writes it), making it a note. */
+	makeFileNode(path: string): string | null {
+		const file = this.vault.file(path);
+		if (!file) return null;
+		const existing = getProperty(file.source, null, 'ID', file.index.keywords);
+		if (existing) return existing;
+		const id = crypto.randomUUID();
+		this.#edit(
+			path,
+			(s) => setProperty(s, null, 'ID', id, file.index.keywords),
+			`Make ${this.#title(path)} a note`,
 		);
 		return id;
 	}

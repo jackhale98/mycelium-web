@@ -122,6 +122,19 @@
 				run: () => router.go(href.node(hit.id)),
 			};
 		});
+		// Org files without an ID aren't nodes, so search them by name and title.
+		const lower = q.toLowerCase();
+		const files: Item[] = [...app.vault.files.values()]
+			.filter((f) => !app.vault.fileNode(f.path))
+			.filter((f) => `${f.path} ${f.index.title ?? ''}`.toLowerCase().includes(lower))
+			.slice(0, 5)
+			.map((f) => ({
+				key: `file:${f.path}`,
+				label: f.index.title ?? f.path.split('/').pop()!,
+				sub: f.path,
+				icon: 'file' as const,
+				run: () => router.go(href.file(f.path)),
+			}));
 		const cmds = [...captureCommands, ...commands, ...viewCommands].filter((c) =>
 			c.label.toLowerCase().includes(q.toLowerCase()),
 		);
@@ -144,7 +157,7 @@
 						},
 					]),
 		];
-		return [...hits, ...cmds, ...extra];
+		return [...hits, ...files, ...cmds, ...extra];
 	});
 
 	$effect(() => {

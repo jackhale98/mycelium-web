@@ -14,6 +14,7 @@
 	import { app } from './state.svelte';
 	import AgendaView from './views/AgendaView.svelte';
 	import DailyView from './views/DailyView.svelte';
+	import FileView from './views/FileView.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
 	import TagsView from './views/TagsView.svelte';
@@ -188,6 +189,8 @@
 			<HomeView />
 		{:else if router.route.name === 'node'}
 			{#key router.route.id}<NodeView id={router.route.id} />{/key}
+		{:else if router.route.name === 'file'}
+			{#key router.route.path}<FileView path={router.route.path} />{/key}
 		{:else if router.route.name === 'daily'}
 			<DailyView date={router.route.date} />
 		{:else if router.route.name === 'agenda'}
@@ -237,9 +240,13 @@
 	<div class="toast" role="status">
 		<Icon name="check" size={16} />
 		<span
-			>Saved to {app.captureNotice.label}.{#if app.captureNotice.id}
-				<a href={href.node(app.captureNotice.id)} onclick={() => (app.captureNotice = null)}>Open</a
-				>{/if}</span
+			>Saved to {app.captureNotice.label}.
+			<a
+				href={app.captureNotice.id
+					? href.node(app.captureNotice.id)
+					: href.file(app.captureNotice.path)}
+				onclick={() => (app.captureNotice = null)}>Open</a
+			></span
 		>
 		<button type="button" aria-label="Dismiss" onclick={() => (app.captureNotice = null)}
 			><Icon name="close" size={14} /></button

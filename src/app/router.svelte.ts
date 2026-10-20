@@ -3,6 +3,8 @@
 export type Route =
 	| { name: 'home' }
 	| { name: 'node'; id: string }
+	/** An org file with no `:ID:` (not an org-roam node), by vault path. */
+	| { name: 'file'; path: string }
 	| { name: 'daily'; date: string | null }
 	| { name: 'agenda'; query: string }
 	| { name: 'tags'; tag: string | null }
@@ -27,6 +29,8 @@ export function parseHash(hash: string): Route {
 			return { name: 'home' };
 		case 'node':
 			return tail ? { name: 'node', id: tail } : { name: 'notfound', path };
+		case 'file':
+			return tail ? { name: 'file', path: tail } : { name: 'notfound', path };
 		case 'daily':
 			return { name: 'daily', date: /^\d{4}-\d{2}-\d{2}$/.test(tail) ? tail : null };
 		case 'agenda':
@@ -53,6 +57,7 @@ export function parseHash(hash: string): Route {
 export const href = {
 	home: () => '#/',
 	node: (id: string) => `#/node/${encodeURIComponent(id)}`,
+	file: (path: string) => `#/file/${path.split('/').map(encodeURIComponent).join('/')}`,
 	daily: (date?: string) => (date ? `#/daily/${date}` : '#/daily'),
 	agenda: (query = '') => (query ? `#/agenda?${query}` : '#/agenda'),
 	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),

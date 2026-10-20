@@ -75,7 +75,12 @@
 					{/if}
 				</div>
 				<div class="main">
-					<a class="title" href={href.node(item.id ?? item.node?.id ?? '')}>
+					<a
+						class="title"
+						href={item.id || item.node?.id
+							? href.node((item.id ?? item.node?.id)!)
+							: href.file(item.file)}
+					>
 						{#if item.priority}<span class="prio">{item.priority}</span>{/if}{item.title}
 					</a>
 					<span class="where">

@@ -143,6 +143,9 @@ test('a custom template with prompts writes into a file under a heading', async 
 	await sheet.getByRole('textbox', { name: 'Text' }).fill('About the budget');
 	await sheet.getByRole('button', { name: 'Capture', exact: true }).click();
 	await expect(page.getByRole('status').filter({ hasText: 'Saved to' })).toBeVisible();
+	await page.getByRole('status').getByRole('link', { name: 'Open' }).click();
+	await expect(page).toHaveURL(/#\/file\/inbox\.org$/);
+	await expect(page.getByText('Call Alex').first()).toBeVisible();
 
 	// The task shows on the agenda, and the diff shows exactly what was written.
 	await page.goto('app#/agenda');
@@ -189,6 +192,40 @@ test('on phones the capture sheet stays above the on-screen keyboard', async ({ 
 		.toBe(true);
 	await expect(sheet.getByRole('heading', { name: 'Capture' })).toBeInViewport();
 	await expect(sheet.getByRole('button', { name: 'Capture', exact: true })).toBeInViewport();
+});
+
+test('files without an ID open on their own page and can become notes', async ({ page }) => {
+	// From the agenda: a task in inbox.org (which has no :ID:).
+	await open(page, 'app#/agenda');
+	await page
+		.getByRole('link', { name: /Email Sam about the reading group/ })
+		.first()
+		.click();
+	await expect(page).toHaveURL(/#\/file\/inbox\.org$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
+	await expect(page.getByText('Email Sam about the reading group').first()).toBeVisible();
+	await expectAccessible(page);
+
+	// From the palette, by name.
+	await open(page, 'app#/');
+	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.type('inbox');
+	await page.getByRole('option', { name: /Inbox.*inbox\.org/ }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
+
+	// Editing works as on a note.
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await expect(page.locator('.cm-content')).toContainText('#+title: Inbox');
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+
+	// Make it a note: an :ID: drawer goes at the top, and its note page opens.
+	await page.getByRole('button', { name: 'Make this a note' }).click();
+	await expect(page).toHaveURL(/#\/node\//);
+	await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
+	await page.goto('app#/changes');
+	const row = page.getByRole('button', { name: /inbox\.org/ }).first();
+	if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
+	await expect(page.getByRole('region', { name: 'Diff of inbox.org' })).toContainText(':ID:');
 });
 
 test('the cursor starts in the first empty field of a template', async ({ page }) => {

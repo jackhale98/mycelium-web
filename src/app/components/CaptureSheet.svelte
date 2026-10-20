@@ -99,7 +99,7 @@
 			...(link ? { link } : {}),
 		});
 		if (!result) return;
-		app.captureNotice = { label: result.label, id: result.id };
+		app.captureNotice = { label: result.label, id: result.id, path: result.path };
 		close();
 	}
 

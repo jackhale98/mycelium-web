@@ -70,7 +70,7 @@
 		const result = app.capture(draft);
 		if (!result) return;
 		draft = '';
-		app.captureNotice = { label: result.label, id: result.id };
+		app.captureNotice = { label: result.label, id: result.id, path: result.path };
 	}
 
 	function more() {
