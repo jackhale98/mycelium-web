@@ -45,20 +45,7 @@ const features = [
 	</a>
 	<header class="top">
 		<a class="brand" href={`${base}/`} aria-label="Mycelium home">
-			<svg class="mark" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
-				<rect class="mark-bg" width="64" height="64" rx="16"></rect>
-				<path
-					class="mark-lines"
-					d="M32 50V30M32 30c0-8 6-12 12-14M32 30c0-8-6-12-12-14M32 38c4-3 9-3 13 0M32 38c-4-3-9-3-13 0"
-				></path>
-				<g class="mark-dots">
-					<circle cx="44" cy="16" r="3.6"></circle>
-					<circle cx="20" cy="16" r="3.6"></circle>
-					<circle cx="45" cy="38" r="3"></circle>
-					<circle cx="19" cy="38" r="3"></circle>
-					<circle cx="32" cy="50" r="3.6"></circle>
-				</g>
-			</svg>
+			<img class="mark" src={`${base}/mycelium-icon.svg`} width="34" height="34" alt="" />
 			<span>Mycelium</span>
 		</a>
 		<nav aria-label="Site">
@@ -257,17 +244,8 @@ const features = [
 		letter-spacing: -0.015em;
 		text-decoration: none;
 	}
-	.mark-bg {
-		fill: var(--accent);
-	}
-	.mark-lines {
-		fill: none;
-		stroke: var(--on-accent);
-		stroke-width: 3.2;
-		stroke-linecap: round;
-	}
-	.mark-dots {
-		fill: var(--on-accent);
+	.mark {
+		border-radius: 22%;
 	}
 	.top nav {
 		display: flex;

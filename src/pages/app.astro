@@ -1,11 +1,58 @@
 ---
 import Base from '../layouts/Base.astro';
 import App from '../app/App.svelte';
+import BrandLoader from '../app/components/BrandLoader.svelte';
 ---
 
 <Base title="Mycelium" description="Your org-roam notes, anywhere.">
+	<!-- Rendered as static HTML so it shows before the app's JavaScript boots. -->
+	<BrandLoader mode="screen" />
 	<App client:only="svelte" />
 	<noscript>
 		<p class="noscript">Mycelium runs entirely in your browser and needs JavaScript enabled.</p>
 	</noscript>
 </Base>
+
+<script>
+	// Rotate the loading lines until the app reports it is ready, then fade out.
+	const root = document.getElementById('myc-loader');
+	const span = root?.querySelector('.msg span');
+	const lines = [
+		'Linking backlinks…',
+		'Untangling the graph…',
+		'Composting stale TODOs…',
+		'Germinating ideas…',
+		'Folding headlines…',
+		'Feeding the zettelkasten…',
+		'Indexing the underground…',
+		'Fruiting your notes…',
+		'Tending the forest floor…',
+		'Whispering to the roots…',
+		'Refiling the leaf litter…',
+		'Counting spores…',
+	].sort(() => Math.random() - 0.5);
+	let k = 0;
+	const timer = setInterval(() => {
+		if (span) span.textContent = lines[k++ % lines.length] ?? '';
+	}, 2600);
+	const start = performance.now();
+	const INTRO_MS = 2664;
+	(window as unknown as { MyceliumLoader: unknown }).MyceliumLoader = {
+		/** Fade out; by default first let the cap finish linking up. */
+		done(opts?: { immediate?: boolean }) {
+			if (!root || !root.isConnected || root.classList.contains('myc-done')) return;
+			const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+			const wait = opts?.immediate || reduce ? 0 : INTRO_MS - (performance.now() - start);
+			setTimeout(
+				() => {
+					root.classList.add('myc-done');
+					setTimeout(() => {
+						clearInterval(timer);
+						root.remove();
+					}, 750);
+				},
+				Math.max(0, wait),
+			);
+		},
+	};
+</script>

@@ -28,6 +28,9 @@ export default defineConfig({
 				"form-action 'self'",
 				'upgrade-insecure-requests',
 			],
+			// Inline style *attributes* (CSS custom properties components set, e.g. the
+			// loader's per-thread timings). Scripts and <style> elements stay hash-locked.
+			styleDirective: { resources: ["'self'", { resource: "'unsafe-inline'", kind: 'attribute' }] },
 		},
 	},
 	markdown: { syntaxHighlight: false },

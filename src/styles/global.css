@@ -1,5 +1,5 @@
-/* Mycelium design tokens.
- * Warm paper and moss in light; deep forest charcoal in dark.
+/* Mycelium design tokens, from the brand: forest green and spore gold.
+ * Warm paper with a forest accent in light; deep forest with gold in dark.
  * Every colour is a token so themes only redefine variables. */
 
 @import '@fontsource-variable/inter/wght.css';
@@ -14,24 +14,24 @@
 	--font-read: 'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 	--font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-	--bg: #f8f6f1;
-	--bg-raised: #fdfcf9;
+	--bg: #f7f5ee;
+	--bg-raised: #fbfaf5;
 	--surface: #ffffff;
-	--surface-2: #f2efe8;
-	--surface-3: #e9e5dc;
-	--border: #e3ded3;
-	--border-strong: #cfc8b9;
-	--text: #1d1c19;
-	--text-2: #4a463f;
-	--text-muted: #5d584f;
-	--text-faint: #716b60;
+	--surface-2: #f1eee5;
+	--surface-3: #e8e4d8;
+	--border: #e4dfd2;
+	--border-strong: #cec7b6;
+	--text: #1b1f18;
+	--text-2: #44473d;
+	--text-muted: #5d5a4f;
+	--text-faint: #6f6a5e;
 
-	--accent: #3d6a4c;
-	--accent-strong: #2c5139;
-	--accent-soft: #e3ece4;
-	--accent-softer: #eef3ee;
+	--accent: #2e4a2b;
+	--accent-strong: #213a1f;
+	--accent-soft: #e4ebdf;
+	--accent-softer: #eef2ea;
 	--on-accent: #ffffff;
-	--link: #2f6345;
+	--link: #2f5a2b;
 	--link-underline: color-mix(in oklab, var(--link) 35%, transparent);
 
 	--todo: #a14a12;
@@ -69,24 +69,24 @@
 /* Dark tokens are repeated for the system preference and the explicit choice. */
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--bg: #111311;
-	--bg-raised: #151815;
-	--surface: #181b18;
-	--surface-2: #1e221f;
-	--surface-3: #262b27;
-	--border: #2a2f2b;
-	--border-strong: #3a413b;
-	--text: #e9e7e1;
-	--text-2: #cdc9c0;
-	--text-muted: #b1aca1;
-	--text-faint: #949085;
+	--bg: #0e150d;
+	--bg-raised: #111a10;
+	--surface: #152014;
+	--surface-2: #1b271a;
+	--surface-3: #233122;
+	--border: #253322;
+	--border-strong: #34452f;
+	--text: #f1ead6;
+	--text-2: #d6cdb3;
+	--text-muted: #b3aa8a;
+	--text-faint: #9c9478;
 
-	--accent: #8cc29d;
-	--accent-strong: #a8d6b5;
-	--accent-soft: #1f2e24;
-	--accent-softer: #19221c;
-	--on-accent: #0f1a12;
-	--link: #9ccdaa;
+	--accent: #e0b050;
+	--accent-strong: #f4d58d;
+	--accent-soft: #2b2c17;
+	--accent-softer: #1f2414;
+	--on-accent: #1a1408;
+	--link: #e8c266;
 
 	--todo: #f0a46a;
 	--todo-soft: #3a2616;
@@ -101,7 +101,7 @@
 	--warn: #e8c070;
 	--warn-soft: #352a14;
 
-	--code-bg: #1b1f1c;
+	--code-bg: #18221a;
 	--focus: #7fb0ec;
 
 	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
@@ -112,24 +112,24 @@
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--bg: #111311;
-		--bg-raised: #151815;
-		--surface: #181b18;
-		--surface-2: #1e221f;
-		--surface-3: #262b27;
-		--border: #2a2f2b;
-		--border-strong: #3a413b;
-		--text: #e9e7e1;
-		--text-2: #cdc9c0;
-		--text-muted: #b1aca1;
-		--text-faint: #949085;
+		--bg: #0e150d;
+		--bg-raised: #111a10;
+		--surface: #152014;
+		--surface-2: #1b271a;
+		--surface-3: #233122;
+		--border: #253322;
+		--border-strong: #34452f;
+		--text: #f1ead6;
+		--text-2: #d6cdb3;
+		--text-muted: #b3aa8a;
+		--text-faint: #9c9478;
 
-		--accent: #8cc29d;
-		--accent-strong: #a8d6b5;
-		--accent-soft: #1f2e24;
-		--accent-softer: #19221c;
-		--on-accent: #0f1a12;
-		--link: #9ccdaa;
+		--accent: #e0b050;
+		--accent-strong: #f4d58d;
+		--accent-soft: #2b2c17;
+		--accent-softer: #1f2414;
+		--on-accent: #1a1408;
+		--link: #e8c266;
 
 		--todo: #f0a46a;
 		--todo-soft: #3a2616;
@@ -144,7 +144,7 @@
 		--warn: #e8c070;
 		--warn-soft: #352a14;
 
-		--code-bg: #1b1f1c;
+		--code-bg: #18221a;
 		--focus: #7fb0ec;
 
 		--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);

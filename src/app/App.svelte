@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../styles/prose.css';
 	import '../styles/ui.css';
+	import BrandLoader from './components/BrandLoader.svelte';
 	import CommandPalette from './components/CommandPalette.svelte';
 	import Icon from './components/Icon.svelte';
 	import MobileBar from './components/MobileBar.svelte';
@@ -20,7 +21,14 @@
 
 	$effect(() => router.start());
 	$effect(() => {
-		void app.init();
+		const started = performance.now();
+		void app.init().then(() => {
+			// A quick start skips the rest of the intro; a slow one lets the cap finish.
+			const loader = (
+				window as unknown as { MyceliumLoader?: { done(o?: { immediate?: boolean }): void } }
+			).MyceliumLoader;
+			loader?.done({ immediate: performance.now() - started < 1200 });
+		});
 	});
 
 	// Persist pending commits when the tab is hidden or closed.
@@ -94,7 +102,7 @@
 		{#if app.loading}
 			<div class="loading" role="status" aria-live="polite">
 				<div class="loading-card">
-					<span class="spinner" aria-hidden="true"></span>
+					<BrandLoader label={app.loading.phase} />
 					<p class="loading-phase">{app.loading.phase}</p>
 					<div class="bar" class:indeterminate={app.loading.ratio === null}>
 						<span
