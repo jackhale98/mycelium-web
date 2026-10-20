@@ -54,12 +54,12 @@ assets; `wrangler.jsonc` at the repository root tells Cloudflare to upload
    Import a repository**, and pick `jackhale98/mycelium-web`.
 2. Fill in:
 
-   | Field          | Value                                                  |
-   | -------------- | ------------------------------------------------------ |
-   | Project name   | `mycelium-web` (must match `name` in `wrangler.jsonc`) |
-   | Build command  | `npm run build`                                        |
-   | Deploy command | `npx wrangler deploy`                                  |
-   | Root directory | Leave empty (the repository root)                      |
+   | Field          | Value                                               |
+   | -------------- | --------------------------------------------------- |
+   | Project name   | `my-celium` (must match `name` in `wrangler.jsonc`) |
+   | Build command  | `npm run build`                                     |
+   | Deploy command | `npx wrangler deploy`                               |
+   | Root directory | Leave empty (the repository root)                   |
 
 3. Select **Deploy**. The site appears at
    `https://my-celium.<your-subdomain>.workers.dev`.
