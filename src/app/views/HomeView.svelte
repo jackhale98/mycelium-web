@@ -109,7 +109,7 @@
 		<span class="hint" aria-hidden="true"
 			>{first ? `${first.name} → ${describeTarget(first.target)}` : ''} <kbd>↵</kbd></span
 		>
-		<button type="button" class="more" aria-label="Capture with a template" onclick={more}
+		<button type="button" class="pick" aria-label="Capture with a template" onclick={more}
 			><Icon name="chevronDown" size={16} /></button
 		>
 		<button type="submit" class="send" aria-label="Capture" disabled={!draft.trim()}
@@ -251,7 +251,7 @@
 		font-size: 0.78rem;
 		white-space: nowrap;
 	}
-	.more {
+	.pick {
 		display: grid;
 		place-items: center;
 		width: 2.2rem;
@@ -261,7 +261,7 @@
 		background: none;
 		color: var(--text-muted);
 	}
-	.more:hover {
+	.pick:hover {
 		background: var(--surface-2);
 	}
 	.send {

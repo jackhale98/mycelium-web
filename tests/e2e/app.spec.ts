@@ -156,6 +156,16 @@ test('a custom template with prompts writes into a file under a heading', async 
 	await expect(diff).toContainText('About the budget');
 });
 
+test('home card links fit on one line inside their cards', async ({ page }) => {
+	await open(page, 'app#/');
+	for (const link of await page.locator('.card-head a.more').all()) {
+		const box = (await link.boundingBox())!;
+		const card = (await link.locator('xpath=ancestor::section[1]').boundingBox())!;
+		expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
+		expect(box.height).toBeLessThan(30);
+	}
+});
+
 test('the cursor starts in the first empty field of a template', async ({ page }) => {
 	await open(page, 'app#/');
 	await page.keyboard.press('ControlOrMeta+Alt+KeyC');
