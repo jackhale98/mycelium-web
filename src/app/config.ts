@@ -22,6 +22,9 @@ export const DEMO_REPO = {
 /** The deployed sync worker, if this build has one (it also does OAuth). */
 export const WORKER_URL: string = import.meta.env.PUBLIC_GIT_PROXY || SYNC_WORKER;
 
+/** my-celium.org's own GitHub App; its slug is public (github.com/apps/<slug>). */
+const MYCELIUM_GITHUB_APP = { clientId: 'Iv23livyZDLKDjrxbAOX', slug: 'mycelium-notes' };
+
 /** OAuth sign-in: enabled per provider by setting its public client id at build time. */
 export const OAUTH_CONFIG = {
 	worker: WORKER_URL,
@@ -30,7 +33,11 @@ export const OAUTH_CONFIG = {
 		gitlab: import.meta.env.PUBLIC_GITLAB_CLIENT_ID || undefined,
 		bitbucket: import.meta.env.PUBLIC_BITBUCKET_CLIENT_ID || undefined,
 	},
-	githubAppSlug: import.meta.env.PUBLIC_GITHUB_APP_SLUG || undefined,
+	githubAppSlug:
+		import.meta.env.PUBLIC_GITHUB_APP_SLUG ||
+		(import.meta.env.PUBLIC_GITHUB_CLIENT_ID === MYCELIUM_GITHUB_APP.clientId
+			? MYCELIUM_GITHUB_APP.slug
+			: undefined),
 };
 
 /** Absolute URL of a page on this site (e.g. the OAuth callback). */
