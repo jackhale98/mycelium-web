@@ -1,0 +1,55 @@
+---
+import Base from '../../layouts/Base.astro';
+import BrandLoader from '../../app/components/BrandLoader.svelte';
+---
+
+<Base title="Signing in · Mycelium" description="Finishing sign-in.">
+	<main class="cb">
+		<BrandLoader label="Signing in" />
+		<p id="cb-status" role="status">
+			Finishing sign-in…
+		</p>
+		<p id="cb-error" class="err" role="alert" hidden></p>
+		<a id="cb-back" href="../../app#/vaults" hidden>
+			Back to Mycelium
+		</a>
+	</main>
+</Base>
+
+<script>
+	import { completeSignIn } from '$lib/auth/oauth';
+	import { OAUTH_CONFIG, siteUrl } from '../../app/config';
+
+	const params = new URLSearchParams(location.search);
+	// Drop the code from the address bar and history straight away.
+	history.replaceState(null, '', location.pathname);
+	completeSignIn(params, OAUTH_CONFIG)
+		.then((next) => location.replace(siteUrl(next)))
+		.catch((e: unknown) => {
+			document.getElementById('cb-status')!.hidden = true;
+			const err = document.getElementById('cb-error')!;
+			err.textContent = e instanceof Error ? e.message : String(e);
+			err.hidden = false;
+			document.getElementById('cb-back')!.hidden = false;
+		});
+</script>
+
+<style>
+	.cb {
+		display: grid;
+		place-items: center;
+		align-content: center;
+		gap: 1rem;
+		min-height: 100dvh;
+		padding: 1rem;
+		text-align: center;
+	}
+	.err {
+		max-width: 28rem;
+		color: var(--danger);
+	}
+	a {
+		color: var(--accent);
+		font-weight: 600;
+	}
+</style>

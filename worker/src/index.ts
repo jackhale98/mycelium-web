@@ -137,7 +137,8 @@ async function oauth(request: Request, env: Env, url: URL, origin: string): Prom
 	const prefix = provider!.toUpperCase() as 'GITHUB' | 'GITLAB' | 'BITBUCKET';
 	const clientId = env[`${prefix}_CLIENT_ID`];
 	const secret = env[`${prefix}_CLIENT_SECRET`];
-	if (!clientId || !secret)
+	// GitLab apps can be public (PKCE, no secret); GitHub and Bitbucket need one.
+	if (!clientId || (!secret && provider !== 'gitlab'))
 		return deny(501, `${provider} sign-in is not configured on this worker`, origin);
 
 	let input: Record<string, unknown>;
@@ -160,6 +161,7 @@ async function oauth(request: Request, env: Env, url: URL, origin: string): Prom
 		if (!refresh) return deny(400, 'Missing refresh_token', origin);
 		form.set('grant_type', 'refresh_token');
 		form.set('refresh_token', refresh);
+		if (str('redirect_uri')) form.set('redirect_uri', str('redirect_uri')!);
 	}
 	const headers: Record<string, string> = {
 		Accept: 'application/json',
@@ -168,7 +170,7 @@ async function oauth(request: Request, env: Env, url: URL, origin: string): Prom
 	if (config.basicAuth) headers['Authorization'] = `Basic ${btoa(`${clientId}:${secret}`)}`;
 	else {
 		form.set('client_id', clientId);
-		form.set('client_secret', secret);
+		if (secret) form.set('client_secret', secret);
 	}
 	const upstream = await fetch(config.token, { method: 'POST', headers, body: form });
 	return new Response(upstream.body, {

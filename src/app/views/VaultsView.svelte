@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { parseRepo, PROVIDERS, type ProviderId } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
+	import SignIn from '../components/SignIn.svelte';
 	import { DEFAULT_GIT_PROXY, DEMO_REPO, PUBLIC_TEST_PROXY } from '../config';
 	import { href, router } from '../router.svelte';
 	import { app, DEMO_ID } from '../state.svelte';
@@ -167,6 +168,8 @@
 			</li>
 		{/each}
 	</ul>
+
+	<SignIn />
 
 	<section class="panel stack" aria-labelledby="folder-h">
 		<h2 id="folder-h">Open a folder on this computer</h2>

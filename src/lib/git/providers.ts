@@ -7,6 +7,12 @@ export interface Credentials {
 	token: string;
 	/** Needed by Bitbucket app passwords and generic hosts. */
 	username?: string | undefined;
+	/** Set when the token came from signing in (OAuth) rather than being pasted. */
+	oauth?: {
+		refreshToken: string | null;
+		/** Epoch ms when the access token expires, if it does. */
+		expiresAt: number | null;
+	};
 }
 
 export interface Provider {

@@ -678,6 +678,7 @@ class AppState {
 		this.sync = { kind: 'busy', phase };
 		try {
 			await this.flush();
+			await this.#freshCredentials(ws);
 			return await task(ws);
 		} catch (e) {
 			const readOnly =
@@ -693,6 +694,21 @@ class AppState {
 			if (this.sync.kind === 'busy') this.sync = { kind: 'idle' };
 			await this.refreshGit().catch(() => undefined);
 			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
+		}
+	}
+
+	/** Renew a signed-in vault's access token shortly before it expires. */
+	async #freshCredentials(ws: Workspace) {
+		const creds = ws.record.credentials;
+		const provider = ws.record.provider;
+		const { needsRefresh, refreshCredentials } = await import('$lib/auth/oauth');
+		if (provider === 'other' || !needsRefresh(creds)) return;
+		const { OAUTH_CONFIG, OAUTH_REDIRECT } = await import('./config');
+		try {
+			const next = await refreshCredentials(provider, creds!, OAUTH_CONFIG, OAUTH_REDIRECT());
+			await ws.updateRecord({ credentials: next });
+		} catch {
+			throw new Error('Your sign-in has expired. Sign in again from Vaults to keep syncing.');
 		}
 	}
 

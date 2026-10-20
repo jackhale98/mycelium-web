@@ -109,9 +109,34 @@ describe('oauth', () => {
 		});
 	});
 
+	it('exchanges codes for public GitLab apps without a secret', async () => {
+		const upstream = vi.fn(async () => new Response('{"access_token":"g"}'));
+		vi.stubGlobal('fetch', upstream);
+		const res = await worker.fetch(
+			new Request('https://proxy.example/oauth/gitlab/refresh', {
+				method: 'POST',
+				headers: { Origin: ORIGIN },
+				body: JSON.stringify({ refresh_token: 'r', redirect_uri: 'https://app.example/cb' }),
+			}),
+			{ ...env, GITLAB_CLIENT_ID: 'gl' },
+		);
+		expect(res.status).toBe(200);
+		const [target, init] = upstream.mock.calls[0] as unknown as [string, RequestInit];
+		expect(target).toBe('https://gitlab.com/oauth/token');
+		expect(Object.fromEntries(new URLSearchParams(String(init.body)))).toEqual({
+			grant_type: 'refresh_token',
+			refresh_token: 'r',
+			redirect_uri: 'https://app.example/cb',
+			client_id: 'gl',
+		});
+	});
+
 	it('reports unconfigured providers', async () => {
 		expect(
 			(await call('/oauth/gitlab/token', { method: 'POST', body: '{"code":"c"}' })).status,
+		).toBe(501);
+		expect(
+			(await call('/oauth/bitbucket/token', { method: 'POST', body: '{"code":"c"}' })).status,
 		).toBe(501);
 		expect((await call('/oauth/nope/token', { method: 'POST', body: '{}' })).status).toBe(404);
 	});
