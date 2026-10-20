@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { href, router } from '../router.svelte';
-	import { app, localNow, type ThemeChoice } from '../state.svelte';
+	import { app, localNow, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
 	import Logo from './Logo.svelte';
 	import GitControl from './GitControl.svelte';
@@ -122,6 +122,28 @@
 				aria-current={route.name === 'settings' ? 'page' : undefined}
 				><Icon name="settings" size={15} />Settings</a
 			>
+			<button
+				type="button"
+				class="aa"
+				popovertarget="text-size-pop"
+				aria-label="Text size"
+				title="Text size">Aa</button
+			>
+			<div id="text-size-pop" class="text-pop" popover>
+				<p class="pop-title" id="tsp-label">Text size</p>
+				<div class="sizes" role="radiogroup" aria-labelledby="tsp-label">
+					{#each TEXT_SIZES as s (s.value)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={app.textSize === s.value}
+							onclick={() => app.setTextSize(s.value)}
+							><span style:font-size={`${0.7 + (s.value - 90) / 100}rem`}>A</span>
+							<span class="sr-only">{s.label}</span></button
+						>
+					{/each}
+				</div>
+			</div>
 			<div class="theme" role="radiogroup" aria-label="Theme">
 				{#each themes as t (t.value)}
 					<button
@@ -141,6 +163,66 @@
 </div>
 
 <style>
+	.aa {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 1.9rem;
+		margin-left: auto;
+		border: 0;
+		border-radius: 7px;
+		background: none;
+		color: var(--text-muted);
+		font-family: var(--font-read);
+		font-size: 0.95rem;
+		font-weight: 600;
+	}
+	.aa:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+	.text-pop {
+		position: fixed;
+		inset: auto auto 4.5rem 1rem;
+		margin: 0;
+		padding: 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+		color: var(--text);
+		box-shadow: var(--shadow-lg);
+	}
+	.pop-title {
+		margin: 0 0 0.5rem;
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 650;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.sizes {
+		display: flex;
+		align-items: flex-end;
+		gap: 0.25rem;
+	}
+	.sizes button {
+		display: grid;
+		place-items: end center;
+		width: 2.4rem;
+		height: 2.6rem;
+		padding-bottom: 0.3rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text);
+		font-family: var(--font-read);
+		line-height: 1;
+	}
+	.sizes button[aria-checked='true'] {
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--on-accent);
+	}
 	.notes-head {
 		display: flex;
 		align-items: center;

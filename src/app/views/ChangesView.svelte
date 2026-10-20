@@ -8,8 +8,11 @@
 
 	let message = $state('');
 	let excluded = $state<Set<string>>(new Set());
-	let open = $state<string | null>(null);
-	let diff = $state<DiffHunk[] | null>(null);
+	/** Diffs the person opened or closed; others follow the default (open for ≤3 files). */
+	let toggled = $state<Map<string, boolean>>(new Map());
+	let diffs = $state<
+		Map<string, { hunks: DiffHunk[]; headings: (string | null)[]; added: number; removed: number }>
+	>(new Map());
 	let history = $state<CommitSummary[]>([]);
 	let branches = $state<{ current: string; local: string[]; remote: string[] }>({
 		current: '',
@@ -38,15 +41,46 @@
 		void ws.branches().then((b) => (branches = b));
 	});
 
-	// Re-render the open diff when its file changes.
+	const isOpen = (path: string) => toggled.get(path) ?? changes.length <= 3;
+	const allOpen = $derived(changes.length > 0 && changes.every((c) => isOpen(c.path)));
+
+	/** The nearest org heading at or above a 1-based line, for hunk context. */
+	function headingAbove(lines: string[], line: number): string | null {
+		for (let i = Math.min(line, lines.length) - 1; i >= 0; i--) {
+			const m = /^(\*+)[ \t]+(.*)$/.exec(lines[i]!);
+			if (m) return `${m[1]} ${m[2]!.replace(/[ \t]+:[\w@#%:]+:[ \t]*$/, '').trim()}`;
+		}
+		return null;
+	}
+
+	// Load (and refresh, as files change) the diff and +/- counts of every changed file.
 	$effect(() => {
 		void app.rev;
-		const path = open;
 		const ws = app.workspace;
-		if (!path || !ws) return;
-		void ws.diff(path).then(({ before, after }) => {
-			if (open === path) diff = diffLines(before ?? '', after ?? '');
+		const paths = changes.map((c) => c.path);
+		if (!ws) return;
+		let cancelled = false;
+		void Promise.all(
+			paths.map(async (path) => {
+				const { before, after } = await ws.diff(path);
+				const hunks = diffLines(before ?? '', after ?? '');
+				const lines = (after ?? before ?? '').split('\n');
+				const headings = hunks.map((h) =>
+					headingAbove(lines, after === null ? h.oldStart : h.newStart),
+				);
+				let added = 0;
+				let removed = 0;
+				for (const h of hunks)
+					for (const l of h.lines) {
+						if (l.kind === 'add') added++;
+						else if (l.kind === 'remove') removed++;
+					}
+				return [path, { hunks, headings, added, removed }] as const;
+			}),
+		).then((entries) => {
+			if (!cancelled) diffs = new Map(entries);
 		});
+		return () => (cancelled = true);
 	});
 
 	function toggle(path: string) {
@@ -57,13 +91,11 @@
 	}
 
 	function show(path: string) {
-		if (open === path) {
-			open = null;
-			diff = null;
-		} else {
-			open = path;
-			diff = null;
-		}
+		toggled = new Map(toggled).set(path, !isOpen(path));
+	}
+
+	function setAll(value: boolean) {
+		toggled = new Map(changes.map((c) => [c.path, value]));
 	}
 
 	async function commit(e?: Event) {
@@ -74,7 +106,7 @@
 			if (await app.commit(selected, message)) {
 				message = '';
 				excluded = new Set();
-				open = null;
+				toggled = new Map();
 			}
 		} finally {
 			committing = false;
@@ -87,7 +119,6 @@
 
 	async function discard(path: string) {
 		if (!confirm(`Discard your uncommitted changes to ${path}? This can't be undone.`)) return;
-		if (open === path) open = null;
 		await app.discard(path);
 	}
 
@@ -195,17 +226,26 @@
 		</section>
 
 		<section class="panel" aria-labelledby="wt-h">
-			<h2 id="wt-h">
-				Working tree <span class="muted"
-					>{changes.length ? `${changes.length} changed` : 'clean'}</span
-				>
-			</h2>
+			<div class="wt-head">
+				<h2 id="wt-h">
+					Working tree <span class="muted"
+						>{changes.length ? `${changes.length} changed` : 'clean'}</span
+					>
+				</h2>
+				{#if changes.length > 1}
+					<button type="button" class="btn small" onclick={() => setAll(!allOpen)}
+						>{allOpen ? 'Collapse all' : 'Expand all'}</button
+					>
+				{/if}
+			</div>
 			{#if changes.length === 0}
 				<p class="empty">Nothing to commit. Edit a note and it shows up here.</p>
 			{:else}
 				<ul class="files">
 					{#each changes as c (c.path)}
-						<li class:open={open === c.path}>
+						{@const d = diffs.get(c.path)}
+						{@const opened = isOpen(c.path)}
+						<li class:open={opened}>
 							<div class="file-row">
 								<input
 									type="checkbox"
@@ -213,34 +253,50 @@
 									onchange={() => toggle(c.path)}
 									aria-label={`Include ${c.path} in commit`}
 								/>
-								<span class={`st ${c.status}`} title={c.status}>{STATUS[c.status]}</span>
 								<button
 									type="button"
-									class="path"
+									class="toggle"
 									onclick={() => show(c.path)}
-									aria-expanded={open === c.path}>{c.path}</button
+									aria-expanded={opened}
+									aria-controls={`diff-${c.path}`}
 								>
+									<span class={`st ${c.status}`} title={c.status}>{STATUS[c.status]}</span>
+									<span class="path">{c.path}</span>
+									{#if d}<span class="counts"
+											><span class="plus">+{d.added}</span><span class="minus">−{d.removed}</span
+											></span
+										>{/if}
+									<span class="chev" class:up={opened}><Icon name="chevronDown" size={16} /></span>
+								</button>
 								<button
 									type="button"
 									class="icon-btn"
 									aria-label={`Discard changes to ${c.path}`}
 									title="Discard changes"
-									onclick={() => discard(c.path)}><Icon name="undo" size={14} /></button
+									onclick={() => discard(c.path)}><Icon name="undo" size={15} /></button
 								>
 							</div>
-							{#if open === c.path}
-								<div class="diff" role="region" aria-label={`Diff of ${c.path}`}>
-									{#if !diff}
+							{#if opened}
+								<div
+									class="diff"
+									id={`diff-${c.path}`}
+									role="region"
+									aria-label={`Diff of ${c.path}`}
+								>
+									{#if !d}
 										<p class="empty">Loading…</p>
-									{:else if diff.length === 0}
+									{:else if d.hunks.length === 0}
 										<p class="empty">No textual changes.</p>
 									{:else}
-										{#each diff as hunk, i (i)}
-											<div class="hunk-head">@@ -{hunk.oldStart} +{hunk.newStart} @@</div>
+										{#each d.hunks as hunk, i (i)}
+											<div class="hunk-head">
+												<span>@@ −{hunk.oldStart} +{hunk.newStart} @@</span>
+												{#if d.headings[i]}<span class="in">{d.headings[i]}</span>{/if}
+											</div>
 											{#each hunk.lines as line, j (j)}
 												<div class={`ln ${line.kind}`}>
-													<span class="no">{line.oldNo ?? ''}</span><span class="no"
-														>{line.newNo ?? ''}</span
+													<span class="no old">{line.oldNo ?? ''}</span><span class="no"
+														>{line.newNo ?? line.oldNo ?? ''}</span
 													><span class="sign"
 														>{line.kind === 'add' ? '+' : line.kind === 'remove' ? '−' : ' '}</span
 													><code>{line.text || ' '}</code>
@@ -373,11 +429,60 @@
 	.files li + li {
 		border-top: 1px solid var(--border);
 	}
+	.wt-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+	.wt-head h2 {
+		margin: 0;
+	}
 	.file-row {
 		display: flex;
 		align-items: center;
+		gap: 0.35rem;
+		padding: 0 0.35rem 0 0.7rem;
+	}
+	.toggle {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		align-items: center;
 		gap: 0.6rem;
-		padding: 0.45rem 0.6rem;
+		min-height: 2.75rem;
+		padding: 0.4rem 0.3rem;
+		border: 0;
+		background: none;
+		color: var(--text);
+		text-align: left;
+		cursor: pointer;
+	}
+	.toggle:hover .path {
+		color: var(--accent);
+	}
+	.counts {
+		display: flex;
+		gap: 0.4rem;
+		margin-left: auto;
+		font-family: var(--font-mono);
+		font-size: 0.74rem;
+		font-weight: 600;
+	}
+	.plus {
+		color: var(--accent);
+	}
+	.minus {
+		color: var(--danger);
+	}
+	.chev {
+		display: grid;
+		color: var(--text-muted);
+		transition: transform 0.15s var(--ease);
+	}
+	.chev.up {
+		transform: rotate(180deg);
 	}
 	.st {
 		display: grid;
@@ -402,12 +507,8 @@
 		color: var(--danger);
 	}
 	.path {
-		flex: 1;
 		min-width: 0;
 		overflow: hidden;
-		padding: 0.2rem 0;
-		border: 0;
-		background: none;
 		color: var(--text);
 		font-family: var(--font-mono);
 		font-size: 0.82rem;
@@ -415,14 +516,11 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.path:hover {
-		color: var(--accent);
-	}
 	.icon-btn {
 		display: grid;
 		place-items: center;
-		width: 1.8rem;
-		height: 1.8rem;
+		width: 2.4rem;
+		height: 2.4rem;
 		border: 0;
 		border-radius: 6px;
 		background: none;
@@ -433,7 +531,7 @@
 		color: var(--danger);
 	}
 	.diff {
-		max-height: 28rem;
+		max-height: 60vh;
 		overflow: auto;
 		border-top: 1px solid var(--border);
 		background: var(--bg);
@@ -445,9 +543,16 @@
 		padding: 0.8rem;
 	}
 	.hunk-head {
-		padding: 0.2rem 0.6rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.2rem 0.8rem;
+		padding: 0.25rem 0.6rem;
 		background: var(--surface-2);
 		color: var(--text-muted);
+	}
+	.hunk-head .in {
+		color: var(--text-2);
+		font-weight: 600;
 	}
 	.ln {
 		display: grid;
@@ -541,7 +646,13 @@
 			margin-left: 0;
 		}
 		.ln {
-			grid-template-columns: 0 2.2rem 1rem 1fr;
+			grid-template-columns: 2.2rem 1rem 1fr;
+		}
+		.no.old {
+			display: none;
+		}
+		.files {
+			margin-inline: -0.4rem;
 		}
 	}
 </style>

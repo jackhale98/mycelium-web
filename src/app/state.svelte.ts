@@ -47,6 +47,20 @@ import { slugify } from './util';
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
 const THEME_KEY = 'mycelium:theme';
+const TEXT_SIZE_KEY = 'mycelium:text-size';
+/** Text-size steps, in percent of the browser's default size. */
+export const TEXT_SIZES = [
+	{ value: 90, label: 'Small' },
+	{ value: 100, label: 'Default' },
+	{ value: 112.5, label: 'Large' },
+	{ value: 125, label: 'Larger' },
+	{ value: 150, label: 'Largest' },
+] as const;
+
+function readTextSize(): number {
+	const n = Number(readLocal(TEXT_SIZE_KEY));
+	return TEXT_SIZES.some((s) => s.value === n) ? n : 100;
+}
 const ACTIVE_KEY = 'mycelium:active-vault';
 export const DEMO_ID = 'demo';
 const DEMO_KEYWORDS: KeywordConfig = { todoKeywords: ['TODO', 'NEXT'], doneKeywords: ['DONE'] };
@@ -135,6 +149,7 @@ class AppState {
 	/** Bumped on every vault change. */
 	rev = $state(0);
 	theme = $state<ThemeChoice>(readTheme());
+	textSize = $state<number>(readTextSize());
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
@@ -215,6 +230,21 @@ class AppState {
 		const tree = parseOrg(file.source, file.index.keywords);
 		this.#trees.set(path, { source: file.source, tree });
 		return tree;
+	}
+
+	setTextSize(size: number) {
+		this.textSize = size;
+		writeLocal(TEXT_SIZE_KEY, size === 100 ? null : String(size));
+		if (size === 100) document.documentElement.style.removeProperty('--text-scale');
+		else document.documentElement.style.setProperty('--text-scale', `${size}%`);
+	}
+
+	/** Step the text size up or down (`0` resets). */
+	stepTextSize(direction: -1 | 0 | 1) {
+		if (direction === 0) return this.setTextSize(100);
+		const i = TEXT_SIZES.findIndex((s) => s.value === this.textSize);
+		const next = TEXT_SIZES[Math.min(TEXT_SIZES.length - 1, Math.max(0, i + direction))]!;
+		this.setTextSize(next.value);
 	}
 
 	setTheme(choice: ThemeChoice) {

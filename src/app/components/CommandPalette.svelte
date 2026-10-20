@@ -45,6 +45,9 @@
 			icon: 'commit',
 			run: () => router.go(href.changes()),
 		},
+		{ key: 'cmd:text+', label: 'Larger text', icon: 'plus', run: () => app.stepTextSize(1) },
+		{ key: 'cmd:text-', label: 'Smaller text', icon: 'feather', run: () => app.stepTextSize(-1) },
+		{ key: 'cmd:text0', label: 'Reset text size', icon: 'feather', run: () => app.stepTextSize(0) },
 		{
 			key: 'cmd:theme',
 			label: 'Toggle dark mode',

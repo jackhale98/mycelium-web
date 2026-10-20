@@ -48,7 +48,10 @@ test('toggling a checkbox updates the progress cookie', async ({ page, isMobile 
 	await expect(page.locator('.cookie').first()).toHaveText('3/5');
 	// The edit autosaves to the working tree and waits to be committed.
 	await open(page, 'app#/changes');
-	await expect(page.getByRole('button', { name: /^[^ ]*mycelium_web\.org$/ })).toBeVisible();
+	// One changed file: its diff opens without a tap.
+	await expect(page.getByRole('region', { name: /Diff of .*mycelium_web\.org$/ })).toContainText(
+		'[X] Git sync through a stateless worker',
+	);
 	if (!isMobile) await expect(page.getByLabel('1 uncommitted')).toBeVisible();
 });
 
@@ -176,4 +179,39 @@ test('dailies page lists every daily note; home shows three', async ({ page }) =
 	await page.getByRole('searchbox', { name: 'Filter dailies' }).fill('zzzz-no-match');
 	await expect(page.getByText('No daily note matches.')).toBeVisible();
 	await expectAccessible(page);
+});
+
+test('fields stay at 16px or more on touch screens (no zoom on focus)', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(!isMobile, 'touch-only rule');
+	await open(page, `app#/node/${PROJECT}`);
+	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
+	await section.getByRole('button', { name: /Edit heading/ }).click();
+	for (const field of [
+		page.getByRole('combobox', { name: 'Tags', exact: true }),
+		page.locator('.actions input[type="date"]').first(),
+	]) {
+		const size = await field.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+		expect(size).toBeGreaterThanOrEqual(16);
+	}
+});
+
+test('text size setting scales the app and persists', async ({ page }) => {
+	await open(page, 'app#/settings');
+	await page.getByRole('radio', { name: 'Largest' }).click();
+	const root = () =>
+		page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+	expect(await root()).toBe(24);
+	await page.reload();
+	// Applied by the inline head script, before the app boots.
+	expect(await root()).toBe(24);
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	const overflow = await page.evaluate(
+		() => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+	);
+	expect(overflow).toBeLessThanOrEqual(0);
+	await page.getByRole('radio', { name: 'Default' }).click();
+	expect(await root()).toBe(16);
 });

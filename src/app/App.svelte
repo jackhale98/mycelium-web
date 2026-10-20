@@ -73,6 +73,14 @@
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			app.paletteOpen = !app.paletteOpen;
+		} else if (
+			(e.metaKey || e.ctrlKey) &&
+			e.altKey &&
+			['Equal', 'Minus', 'Digit0', 'NumpadAdd', 'NumpadSubtract'].includes(e.code)
+		) {
+			// By physical key: Option changes e.key on macOS.
+			e.preventDefault();
+			app.stepTextSize(e.code === 'Digit0' ? 0 : /Minus|Subtract/.test(e.code) ? -1 : 1);
 		} else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
 			e.preventDefault();
 			router.go(href.search());

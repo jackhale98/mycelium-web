@@ -164,6 +164,8 @@
 html {
 	-webkit-text-size-adjust: 100%;
 	text-size-adjust: 100%;
+	/* The reader's text-size setting (90–150%); rem units follow it. */
+	font-size: var(--text-scale, 100%);
 	background: var(--bg);
 }
 
@@ -173,7 +175,7 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font-ui);
-	font-size: 15px;
+	font-size: 0.9375rem;
 	line-height: 1.5;
 	font-feature-settings: 'cv11', 'ss01';
 	-webkit-font-smoothing: antialiased;
@@ -254,7 +256,7 @@ kbd {
 	border-radius: 5px;
 	background: var(--surface);
 	color: var(--text-muted);
-	font: 500 11px/1.6 var(--font-ui);
+	font: 500 0.6875rem/1.6 var(--font-ui);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -199,3 +199,13 @@ select.input {
 .btn.small.icon-only {
 	width: 2rem;
 }
+
+/* Phones zoom the page when a field under 16px gets focus; keep fields at 16px+
+   on touch screens (and larger when the reader picks a bigger text size). */
+@media (pointer: coarse) {
+	input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+	select,
+	textarea {
+		font-size: max(16px, 1rem) !important;
+	}
+}

@@ -3,7 +3,7 @@
 	import { PROVIDERS } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
 	import { href, router } from '../router.svelte';
-	import { app, type ThemeChoice } from '../state.svelte';
+	import { app, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
 
 	const vault = $derived(app.activeVault);
 
@@ -91,6 +91,24 @@
 					onclick={() => app.setTheme(t.value)}>{t.label}</button
 				>
 			{/each}
+		</div>
+		<div class="field">
+			<span class="label" id="ts-label">Text size</span>
+			<div class="segmented" role="radiogroup" aria-labelledby="ts-label">
+				{#each TEXT_SIZES as s (s.value)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={app.textSize === s.value}
+						onclick={() => app.setTextSize(s.value)}>{s.label}</button
+					>
+				{/each}
+			</div>
+			<p class="preview">
+				The quick brown fox links two notes. <span class="hint"
+					>Ctrl/⌘ + Alt + = / − / 0 also change it.</span
+				>
+			</p>
 		</div>
 	</section>
 
@@ -271,6 +289,16 @@
 </div>
 
 <style>
+	.preview {
+		margin: 0.4rem 0 0;
+		font-family: var(--font-read);
+		font-size: 1.1rem;
+	}
+	.preview .hint {
+		display: block;
+		font-family: var(--font-ui);
+		font-size: 0.78rem;
+	}
 	.lede a {
 		color: var(--link);
 	}

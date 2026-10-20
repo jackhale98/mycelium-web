@@ -51,8 +51,12 @@ test('clone, edit, commit, push and pull a git vault', async ({ page }) => {
 	// The edit autosaves to the working tree; nothing is committed yet.
 	await changes();
 	const file = 'notes/20261007111100-mycelium_web.org';
-	await expect(page.getByRole('button', { name: file, exact: true })).toBeVisible();
-	await page.getByRole('button', { name: file, exact: true }).click();
+	const row = page.getByRole('button', { name: new RegExp(file.replace(/[.]/g, '\\.')) }).first();
+	await expect(row).toHaveAttribute('aria-expanded', 'true');
+	// The whole row toggles the diff.
+	await row.click();
+	await expect(row).toHaveAttribute('aria-expanded', 'false');
+	await row.click();
 	await expect(page.getByRole('region', { name: `Diff of ${file}` })).toContainText(
 		'- [X] Git sync through a stateless worker',
 	);
