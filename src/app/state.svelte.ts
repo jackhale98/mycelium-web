@@ -7,9 +7,8 @@
 /// git code loads on demand so the first paint stays light.
 
 import {
-	appendToFile,
 	applyChanges,
-	captureEntry,
+	captureItem,
 	changeTodoState,
 	detectLogSettings,
 	newNodeSource,
@@ -708,7 +707,7 @@ class AppState {
 		return id;
 	}
 
-	/** Append a capture to today's daily note. */
+	/** Add a timestamped item under today's daily note's `* Captured` heading. */
 	capture(text: string): string | null {
 		if (!text.trim()) return null;
 		const { date } = localNow();
@@ -717,7 +716,7 @@ class AppState {
 		const file = this.vault.file(path)!;
 		this.#write(
 			path,
-			applyChanges(file.source, appendToFile(file.source, captureEntry(text))),
+			applyChanges(file.source, captureItem(file.source, text, localNow())),
 			`Capture to ${date}`,
 		);
 		return id;

@@ -79,12 +79,19 @@ test('search finds notes by alias', async ({ page, isMobile }) => {
 	await expect(page.getByRole('heading', { level: 1, name: 'The wood wide web' })).toBeVisible();
 });
 
-test("capture appends to today's daily note", async ({ page }) => {
+test("capture adds a timestamped item to today's daily note", async ({ page }) => {
 	await open(page, 'app#/');
-	await page.getByLabel(/Capture a thought/).fill('Test capture from Playwright');
-	await page.getByRole('button', { name: 'Capture', exact: true }).click();
+	for (const text of ['First capture from Playwright', 'Second capture from Playwright']) {
+		await page.getByLabel(/Capture a thought/).fill(text);
+		await page.getByRole('button', { name: 'Capture', exact: true }).click();
+	}
 	await page.getByRole('status').getByRole('link', { name: "today's note" }).click();
-	await expect(page.getByRole('heading', { name: 'Test capture from Playwright' })).toBeVisible();
+	// Both land as list items under one "Captured" heading, not as headings of their own.
+	await expect(page.getByRole('heading', { name: 'Captured' })).toHaveCount(1);
+	await expect(page.getByRole('heading', { name: /capture from Playwright/ })).toHaveCount(0);
+	const items = page.getByRole('listitem').filter({ hasText: /capture from Playwright/ });
+	await expect(items).toHaveCount(2);
+	await expect(items.first()).toContainText(/\d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}/);
 });
 
 test('agenda lists open tasks', async ({ page }) => {
