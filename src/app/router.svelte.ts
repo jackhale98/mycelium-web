@@ -6,6 +6,8 @@ export type Route =
 	| { name: 'daily'; date: string | null }
 	| { name: 'agenda' }
 	| { name: 'tags'; tag: string | null }
+	| { name: 'vaults' }
+	| { name: 'settings' }
 	| { name: 'notfound'; path: string };
 
 export function parseHash(hash: string): Route {
@@ -23,6 +25,10 @@ export function parseHash(hash: string): Route {
 			return { name: 'agenda' };
 		case 'tags':
 			return { name: 'tags', tag: tail || null };
+		case 'vaults':
+			return { name: 'vaults' };
+		case 'settings':
+			return { name: 'settings' };
 		default:
 			return { name: 'notfound', path };
 	}
@@ -34,6 +40,8 @@ export const href = {
 	daily: (date?: string) => (date ? `#/daily/${date}` : '#/daily'),
 	agenda: () => '#/agenda',
 	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),
+	vaults: () => '#/vaults',
+	settings: () => '#/settings',
 };
 
 class Router {

@@ -3,6 +3,7 @@
 	import { app, localNow, type ThemeChoice } from '../state.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
 	import Logo from './Logo.svelte';
+	import SyncControl from './SyncControl.svelte';
 
 	const today = localNow().date;
 	const route = $derived(router.route);
@@ -22,7 +23,7 @@
 	const notes = $derived.by(() => {
 		void app.rev;
 		return [...app.vault.nodes.values()]
-			.filter((n) => n.level === 0 && !n.file.startsWith(`${app.dailyDir}/`))
+			.filter((n) => n.level === 0 && !app.isDaily(n.file))
 			.sort((a, b) => a.title.localeCompare(b.title));
 	});
 
@@ -47,13 +48,21 @@
 		>
 	</div>
 
-	<button type="button" class="vault" aria-label="Current vault: demo vault">
-		<span class="vault-icon"><Icon name="git" size={15} /></span>
+	<a
+		class="vault"
+		href={href.vaults()}
+		aria-label={`Current vault: ${app.activeVault?.name ?? 'demo vault'}. Switch vault`}
+	>
+		<span class="vault-icon"><Icon name={app.demo ? 'zap' : 'git'} size={15} /></span>
 		<span class="vault-text">
-			<span class="vault-name">Demo vault</span>
-			<span class="vault-sub">{app.vault.files.size} files · in this tab only</span>
+			<span class="vault-name">{app.activeVault?.name ?? 'Demo vault'}</span>
+			<span class="vault-sub">
+				{#if app.activeVault}{app.activeVault.branch ?? 'default branch'} · {app.vault.files.size} files{:else}{app
+						.vault.files.size} files · in this tab only{/if}
+			</span>
 		</span>
-	</button>
+		<span class="vault-go"><Icon name="chevronRight" size={15} /></span>
+	</a>
 
 	<button type="button" class="search" onclick={() => (app.paletteOpen = true)}>
 		<Icon name="search" size={16} />
@@ -87,27 +96,28 @@
 	</div>
 
 	<footer class="foot">
-		<div class="sync" role="status">
-			<span class="sync-dot" class:pending={app.dirty.length > 0}></span>
-			{#if app.dirty.length}
-				{app.dirty.length} unsynced {app.dirty.length === 1 ? 'change' : 'changes'}
-			{:else}
-				Nothing to sync
-			{/if}
-		</div>
-		<div class="theme" role="radiogroup" aria-label="Theme">
-			{#each themes as t (t.value)}
-				<button
-					type="button"
-					role="radio"
-					aria-checked={app.theme === t.value}
-					aria-label={t.label}
-					title={t.label}
-					onclick={() => app.setTheme(t.value)}
-				>
-					<Icon name={t.icon} size={15} />
-				</button>
-			{/each}
+		<SyncControl />
+		<div class="foot-row">
+			<a
+				class="settings"
+				href={href.settings()}
+				aria-current={route.name === 'settings' ? 'page' : undefined}
+				><Icon name="settings" size={15} />Settings</a
+			>
+			<div class="theme" role="radiogroup" aria-label="Theme">
+				{#each themes as t (t.value)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={app.theme === t.value}
+						aria-label={t.label}
+						title={t.label}
+						onclick={() => app.setTheme(t.value)}
+					>
+						<Icon name={t.icon} size={15} />
+					</button>
+				{/each}
+			</div>
 		</div>
 	</footer>
 </div>
@@ -251,28 +261,44 @@
 	}
 	.foot {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
+		flex-direction: column;
+		gap: 0.6rem;
 		padding: 0.75rem 0.4rem 0;
 		border-top: 1px solid var(--border);
 	}
-	.sync {
+	.foot-row {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
+		justify-content: space-between;
+	}
+	.settings {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.4rem;
+		margin-left: -0.4rem;
+		border-radius: 7px;
 		color: var(--text-muted);
-		font-size: 0.75rem;
+		font-size: 0.8rem;
+		font-weight: 550;
+		text-decoration: none;
 	}
-	.sync-dot {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--accent);
+	.settings:hover,
+	.settings[aria-current='page'] {
+		background: var(--surface-2);
+		color: var(--text);
 	}
-	.sync-dot.pending {
-		background: var(--todo);
-		box-shadow: 0 0 0 3px var(--todo-soft);
+	.vault-go {
+		display: grid;
+		margin-left: auto;
+		color: var(--text-faint);
+	}
+	.vault {
+		color: inherit;
+		text-decoration: none;
+	}
+	.vault:hover {
+		border-color: var(--border-strong);
 	}
 	.theme {
 		display: flex;

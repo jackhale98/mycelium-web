@@ -1,0 +1,194 @@
+/* Shared controls for app forms and dialogs. */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.45rem;
+	height: 2.4rem;
+	padding: 0 1rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 10px;
+	background: var(--surface);
+	color: var(--text);
+	font-size: 0.88rem;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+	transition:
+		background-color 0.15s var(--ease),
+		border-color 0.15s var(--ease),
+		opacity 0.15s var(--ease);
+}
+.btn:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+.btn:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+.btn.primary {
+	border-color: transparent;
+	background: var(--accent);
+	color: var(--on-accent);
+}
+.btn.primary:hover:not(:disabled) {
+	background: var(--accent-strong);
+}
+.btn.danger {
+	border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
+	color: var(--danger);
+}
+.btn.danger:hover:not(:disabled) {
+	background: var(--danger-soft);
+}
+.btn.small {
+	height: 2rem;
+	padding: 0 0.75rem;
+	font-size: 0.8rem;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+.field > label,
+.field > .label {
+	font-size: 0.82rem;
+	font-weight: 600;
+}
+.field .hint {
+	color: var(--text-muted);
+	font-size: 0.78rem;
+	line-height: 1.45;
+}
+.field .hint a {
+	color: var(--link);
+}
+.input {
+	width: 100%;
+	height: 2.5rem;
+	padding: 0 0.8rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 10px;
+	background: var(--surface);
+	color: var(--text);
+	font-size: 0.92rem;
+	transition:
+		border-color 0.15s var(--ease),
+		box-shadow 0.15s var(--ease);
+}
+.input:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+.input::placeholder {
+	color: var(--text-faint);
+}
+select.input {
+	padding-right: 2rem;
+}
+
+.segmented {
+	display: inline-flex;
+	padding: 3px;
+	border-radius: 11px;
+	background: var(--surface-2);
+}
+.segmented button,
+.segmented label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	height: 2rem;
+	padding: 0 0.85rem;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	color: var(--text-muted);
+	font-size: 0.84rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+.segmented [aria-checked='true'],
+.segmented [aria-pressed='true'] {
+	background: var(--surface);
+	color: var(--text);
+	box-shadow: var(--shadow-sm);
+}
+
+.notice {
+	display: flex;
+	gap: 0.6rem;
+	padding: 0.75rem 0.9rem;
+	border-radius: var(--radius);
+	font-size: 0.84rem;
+	line-height: 1.5;
+}
+.notice.info {
+	background: var(--next-soft);
+	color: var(--text-2);
+}
+.notice.warn {
+	background: var(--warn-soft);
+	color: var(--text-2);
+}
+.notice.error {
+	background: var(--danger-soft);
+	color: var(--text);
+}
+.notice :global(svg),
+.notice svg {
+	flex: none;
+	margin-top: 0.12rem;
+}
+
+.page {
+	max-width: 46rem;
+	margin: 0 auto;
+	padding: 3.25rem 3rem 6rem;
+}
+.page > h1 {
+	margin: 0 0 0.4rem;
+	font-family: var(--font-read);
+	font-size: 2.4rem;
+	font-weight: 600;
+	letter-spacing: -0.022em;
+}
+.page > .lede {
+	margin: 0 0 2rem;
+	color: var(--text-muted);
+}
+@media (max-width: 720px) {
+	.page {
+		padding: 1.75rem 1rem 6rem;
+	}
+}
+.panel {
+	padding: 1.4rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow-sm);
+}
+.panel + .panel {
+	margin-top: 1.25rem;
+}
+.panel > h2 {
+	margin: 0 0 1rem;
+	font-size: 1rem;
+	font-weight: 650;
+}
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6rem;
+}

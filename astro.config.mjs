@@ -20,7 +20,9 @@ export default defineConfig({
 				"default-src 'self'",
 				"img-src 'self' data: blob:",
 				"font-src 'self'",
-				"connect-src 'self'",
+				// Git hosts, the user's sync proxy and provider APIs are all HTTPS; plain
+				// HTTP is only allowed to a local git server during development.
+				"connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
 				"object-src 'none'",
 				"base-uri 'self'",
 				"form-action 'self'",

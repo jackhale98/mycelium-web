@@ -24,7 +24,13 @@
 		type="button"
 		onclick={() => (app.navOpen = true)}
 		aria-expanded={app.navOpen}
-		aria-controls="app-sidebar"><Icon name="menu" size={20} /><span>Menu</span></button
+		aria-controls="app-sidebar"
+		><span class="menu-icon"
+			><Icon name="menu" size={20} />{#if app.unsynced > 0}<span
+					class="badge"
+					aria-label={`${app.unsynced} unsynced`}
+				></span>{/if}</span
+		><span>Menu</span></button
 	>
 </nav>
 
@@ -70,6 +76,20 @@
 		background: var(--accent);
 		color: var(--on-accent);
 		box-shadow: var(--shadow-md);
+	}
+	.menu-icon {
+		position: relative;
+		display: grid;
+	}
+	.badge {
+		position: absolute;
+		top: -2px;
+		right: -4px;
+		width: 9px;
+		height: 9px;
+		border: 2px solid var(--bg-raised);
+		border-radius: 50%;
+		background: var(--todo);
 	}
 	@media (max-width: 960px) {
 		.bar {

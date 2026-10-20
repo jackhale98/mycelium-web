@@ -21,7 +21,7 @@
 	const recent = $derived.by(() => {
 		void app.rev;
 		return [...app.vault.files.values()]
-			.filter((f) => !f.path.startsWith(`${app.dailyDir}/`))
+			.filter((f) => !app.isDaily(f.path))
 			.sort((a, b) => b.path.localeCompare(a.path))
 			.map((f) => app.vault.fileNode(f.path))
 			.filter((n) => n !== undefined)

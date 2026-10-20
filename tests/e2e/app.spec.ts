@@ -42,8 +42,8 @@ test('toggling a checkbox updates the progress cookie', async ({ page, isMobile 
 	await expect(page.locator('.cookie').first()).toHaveText('3/5');
 	// The sync status lives in the sidebar, which is a closed drawer on phones.
 	if (!isMobile)
-		await expect(page.getByRole('status').filter({ hasText: 'unsynced' })).toContainText(
-			'1 unsynced change',
+		await expect(page.getByRole('status').filter({ hasText: 'in this tab' })).toContainText(
+			'1 edit in this tab',
 		);
 });
 

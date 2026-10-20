@@ -41,6 +41,17 @@ export class Vault {
 
 	constructor(readonly keywords: KeywordConfig = DEFAULT_KEYWORD_CONFIG) {}
 
+	/** Build from already-indexed files (e.g. the IndexedDB cache) without re-parsing. */
+	static fromIndexed(
+		files: Iterable<VaultFile>,
+		keywords: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+	): Vault {
+		const vault = new Vault(keywords);
+		for (const file of files) vault.files.set(file.path, file);
+		vault.rebuild();
+		return vault;
+	}
+
 	static fromSources(
 		sources: Record<string, string>,
 		keywords: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
@@ -52,10 +63,27 @@ export class Vault {
 		return vault;
 	}
 
-	/** Replace one file and recompute derived maps. */
-	update(path: string, source: string) {
-		this.files.set(path, { path, source, index: indexFile(path, source, this.keywords) });
+	/** Replace one file and recompute derived maps. Returns the new file record. */
+	update(path: string, source: string): VaultFile {
+		const file = { path, source, index: indexFile(path, source, this.keywords) };
+		this.files.set(path, file);
 		this.rebuild();
+		return file;
+	}
+
+	/** Apply several additions, updates and removals with one rebuild. */
+	apply(changes: { path: string; source: string | null }[]): VaultFile[] {
+		const updated: VaultFile[] = [];
+		for (const { path, source } of changes) {
+			if (source === null) this.files.delete(path);
+			else {
+				const file = { path, source, index: indexFile(path, source, this.keywords) };
+				this.files.set(path, file);
+				updated.push(file);
+			}
+		}
+		this.rebuild();
+		return updated;
 	}
 
 	private rebuild() {

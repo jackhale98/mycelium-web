@@ -41,13 +41,13 @@
 
 	{#if node}
 		{#key node.id}
-			<NodeView id={node.id} eyebrow={`${app.dailyDir}/${day}.org`} displayTitle={longDate(day)} />
+			<NodeView id={node.id} eyebrow={app.dailyPath(day)} displayTitle={longDate(day)} />
 		{/key}
 	{:else}
 		<div class="blank">
 			<Icon name="calendar" size={28} />
 			<h1>No note for {longDate(day)}</h1>
-			<p>Daily notes live in <code>{app.dailyDir}/</code> as <code>{day}.org</code>.</p>
+			<p>This day's note would be <code>{app.dailyPath(day)}</code>.</p>
 			<button type="button" class="primary" onclick={create}
 				><Icon name="plus" size={16} />Create daily note</button
 			>
