@@ -4,6 +4,9 @@
 	import { DEFAULT_GIT_PROXY, DEMO_REPO, PUBLIC_TEST_PROXY } from '../config';
 	import { href, router } from '../router.svelte';
 	import { app, DEMO_ID } from '../state.svelte';
+	import { foldersSupported } from '$lib/vault/folder';
+
+	const canOpenFolders = foldersSupported();
 
 	let provider = $state<ProviderId>('github');
 	let repo = $state('');
@@ -135,13 +138,16 @@
 		</li>
 		{#each app.vaults.filter((v) => v.id !== DEMO_ID) as vault (vault.id)}
 			<li class="vault" class:active={app.activeId === vault.id}>
-				<span class="v-icon"><Icon name="git" size={16} /></span>
+				<span class="v-icon"
+					><Icon name={vault.kind === 'folder' ? 'folder' : 'git'} size={16} /></span
+				>
 				<span class="v-text">
 					<span class="v-name">{vault.name}</span>
 					<span class="v-sub"
-						>{PROVIDERS[vault.provider].name} · {vault.branch ?? 'default branch'}{vault.credentials
-							? ''
-							: ' · read-only'}</span
+						>{#if vault.kind === 'folder'}Folder on this computer{:else}{PROVIDERS[vault.provider]
+								.name} · {vault.branch ?? 'default branch'}{vault.credentials
+								? ''
+								: ' · read-only'}{/if}</span
 					>
 				</span>
 				{#if app.activeId === vault.id}<span class="badge">Open</span>{:else}<button
@@ -161,6 +167,34 @@
 			</li>
 		{/each}
 	</ul>
+
+	<section class="panel stack" aria-labelledby="folder-h">
+		<h2 id="folder-h">Open a folder on this computer</h2>
+		<p class="muted">
+			Edit an org-roam directory in place — changes are written straight to the files, and you
+			commit with your own git tools. Nothing is uploaded anywhere.
+		</p>
+		{#if canOpenFolders}
+			<div class="row">
+				<button
+					type="button"
+					class="btn"
+					onclick={async () => {
+						if (await app.openFolder()) router.go(href.home());
+					}}><Icon name="folder" size={16} />Choose folder…</button
+				>
+			</div>
+		{:else}
+			<p class="notice info">
+				<Icon name="info" size={16} />
+				<span
+					>This browser can't open folders. It works in Chrome, Edge, Brave, Opera and Arc on
+					desktop; Firefox, Safari and all iOS browsers don't let websites open local folders. Use a
+					git repository instead.</span
+				>
+			</p>
+		{/if}
+	</section>
 
 	<form class="panel stack" onsubmit={submit} aria-labelledby="connect-h">
 		<div class="row between">
@@ -312,6 +346,11 @@
 </div>
 
 <style>
+	.muted {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 0.9rem;
+	}
 	.vaults {
 		display: flex;
 		flex-direction: column;

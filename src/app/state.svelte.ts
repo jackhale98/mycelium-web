@@ -31,6 +31,7 @@ import {
 } from '$lib/org';
 import type { FileConflict, FileStatus, LoadProgress, Workspace } from '$lib/git/workspace';
 import type { VaultRecord } from '$lib/store/db';
+import type { FolderWorkspace } from '$lib/vault/folder';
 import {
 	dailyDate,
 	dailyPath,
@@ -142,7 +143,12 @@ class AppState {
 	/** Open the new-note dialog, optionally with a title. */
 	newNote = $state<{ title: string } | null>(null);
 
+	/** The open git vault (also the demo), if any. */
 	workspace: Workspace | null = $state.raw(null);
+	/** The open local-folder vault, if any. */
+	folder: FolderWorkspace | null = $state.raw(null);
+	/** A folder vault waiting for the person to grant access again (needs a click). */
+	folderAccess = $state<{ id: string; name: string } | null>(null);
 	vaults = $state<VaultRecord[]>([]);
 	activeId = $state<string>(DEMO_ID);
 	layout = $state<VaultLayout>(DEFAULT_LAYOUT);
@@ -191,6 +197,11 @@ class AppState {
 		if (active && active !== DEMO_ID && this.vaults.some((v) => v.id === active))
 			await this.openVault(active);
 		else await this.openDemo();
+		// A folder waiting for access: show the demo meanwhile, but reopen the folder next time.
+		if (this.folderAccess) {
+			await this.openDemo();
+			writeLocal(ACTIVE_KEY, this.folderAccess.id);
+		}
 		this.ready = true;
 	}
 
@@ -250,8 +261,20 @@ class AppState {
 		const record = this.vaults.find((v) => v.id === id);
 		if (!record) return;
 		this.loadError = null;
+		this.folderAccess = null;
 		this.loading = { phase: 'Opening vault', ratio: null };
 		try {
+			if (record.kind === 'folder') {
+				const { FolderWorkspace } = await import('$lib/vault/folder');
+				const ws = await FolderWorkspace.open($state.snapshot(record) as VaultRecord);
+				if ((await ws.permission()) !== 'granted') {
+					// Browsers only re-grant folder access from a click.
+					this.folderAccess = { id, name: record.name };
+					return;
+				}
+				await this.#activate(ws);
+				return;
+			}
 			const { Workspace } = await import('$lib/git/workspace');
 			await this.#activate(Workspace.open($state.snapshot(record) as VaultRecord));
 		} catch (e) {
@@ -300,9 +323,88 @@ class AppState {
 		}
 	}
 
-	async #activate(ws: Workspace) {
+	/** Ask again for access to a folder vault (call from a click). */
+	async grantFolder() {
+		const pending = this.folderAccess;
+		const record = pending && this.vaults.find((v) => v.id === pending.id);
+		if (!record) return;
+		const { FolderWorkspace } = await import('$lib/vault/folder');
+		const ws = await FolderWorkspace.open($state.snapshot(record) as VaultRecord);
+		if (!(await ws.requestAccess())) return;
+		this.folderAccess = null;
+		this.loading = { phase: 'Opening folder', ratio: null };
+		try {
+			await this.#activate(ws);
+		} catch (e) {
+			this.loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			this.loading = null;
+		}
+	}
+
+	/** Pick a folder on this computer and open it as a vault. */
+	async openFolder(): Promise<boolean> {
+		const { FolderWorkspace, pickFolder } = await import('$lib/vault/folder');
+		const handle = await pickFolder();
+		if (!handle) return false;
+		this.loadError = null;
+		this.loading = { phase: 'Reading folder', ratio: null };
+		try {
+			const record: VaultRecord = {
+				id: crypto.randomUUID(),
+				name: handle.name,
+				kind: 'folder',
+				provider: 'other',
+				url: null,
+				branch: null,
+				corsProxy: null,
+				author: { name: '', email: '' },
+				credentials: null,
+				layout: DEFAULT_LAYOUT,
+				keywords: DEMO_KEYWORDS,
+				log: {},
+				createdAt: Date.now(),
+				lastSync: null,
+			};
+			const ws = await FolderWorkspace.create(record, handle);
+			this.vaults = [...this.vaults, ws.record];
+			await this.#activate(ws);
+			return true;
+		} catch (e) {
+			this.loadError = e instanceof Error ? e.message : String(e);
+			return false;
+		} finally {
+			this.loading = null;
+		}
+	}
+
+	/** Pick up edits made to a folder vault outside the app (on returning to the tab). */
+	async refreshFolder() {
+		const ws = this.folder;
+		if (!ws || (await ws.permission()) !== 'granted') return;
+		await this.flush();
+		const files = await ws.load();
+		const seen = new Set(files.map((f) => f.path));
+		const changes: { path: string; source: string | null }[] = files
+			.filter((f) => this.vault.file(f.path)?.source !== f.source)
+			.map((f) => ({ path: f.path, source: f.source }));
+		for (const path of this.vault.files.keys())
+			if (!seen.has(path)) changes.push({ path, source: null });
+		if (changes.length) {
+			this.vault.apply(changes);
+			this.rev += 1;
+		}
+	}
+
+	async #activate(ws: Workspace | FolderWorkspace) {
 		const files = await ws.load((p) => (this.loading = p));
-		this.workspace = ws;
+		if (ws.kind === 'folder') {
+			this.folder = ws;
+			this.workspace = null;
+		} else {
+			this.workspace = ws;
+			this.folder = null;
+		}
 		this.activeId = ws.record.id;
 		this.layout = ws.record.layout;
 		this.vault = Vault.fromIndexed(files, ws.record.keywords);
@@ -315,7 +417,7 @@ class AppState {
 	}
 
 	async updateVault(patch: Partial<VaultRecord>) {
-		const ws = this.workspace;
+		const ws = this.workspace ?? this.folder;
 		if (!ws) return;
 		await ws.updateRecord(patch);
 		this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
@@ -328,12 +430,27 @@ class AppState {
 	async removeVault(id: string, reopen = true) {
 		const record = this.vaults.find((v) => v.id === id);
 		if (!record) return;
-		const { Workspace } = await import('$lib/git/workspace');
-		const ws =
-			this.workspace?.record.id === id
-				? this.workspace
-				: Workspace.open($state.snapshot(record) as VaultRecord);
-		await ws.destroy();
+		if (record.kind === 'folder') {
+			const { FolderWorkspace } = await import('$lib/vault/folder');
+			const ws =
+				this.folder?.record.id === id
+					? this.folder
+					: await FolderWorkspace.open($state.snapshot(record) as VaultRecord).catch(() => null);
+			if (ws) await ws.destroy();
+			else {
+				const { db } = await import('$lib/store/db');
+				await db().vaults.delete(id);
+			}
+			if (this.folder?.record.id === id) this.folder = null;
+		} else {
+			const { Workspace } = await import('$lib/git/workspace');
+			const ws =
+				this.workspace?.record.id === id
+					? this.workspace
+					: Workspace.open($state.snapshot(record) as VaultRecord);
+			await ws.destroy();
+		}
+		if (this.folderAccess?.id === id) this.folderAccess = null;
 		this.vaults = this.vaults.filter((v) => v.id !== id);
 		if (this.activeId === id && reopen) await this.openDemo();
 	}
@@ -347,12 +464,12 @@ class AppState {
 	#write(path: string, text: string | null, message: string) {
 		const [file] = this.vault.apply([{ path, source: text }]);
 		this.rev += 1;
-		const ws = this.workspace;
+		const ws = this.workspace ?? this.folder;
 		if (!ws) return;
 		this.#saving = this.#saving
 			.then(async () => {
 				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);
-				if (ws.record.autoCommit) await ws.commit([path], message);
+				if (ws.kind !== 'folder' && ws.record.autoCommit) await ws.commit([path], message);
 				this.#scheduleStatus();
 			})
 			.catch((e) => {
@@ -519,7 +636,10 @@ class AppState {
 	/** Re-read branch, uncommitted changes and ahead/behind (no network). */
 	async refreshGit() {
 		const ws = this.workspace;
-		if (!ws) return;
+		if (!ws) {
+			this.git = { branch: '', changes: [], ahead: 0, behind: 0, hasRemote: false };
+			return;
+		}
 		const [changes, counts, branch] = await Promise.all([
 			ws.status(),
 			ws.aheadBehind(),

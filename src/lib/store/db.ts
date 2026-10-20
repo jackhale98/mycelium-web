@@ -30,6 +30,14 @@ export interface VaultRecord {
 	dirty?: string[];
 	/** Commit every edit immediately with a generated message (off: you write each commit). */
 	autoCommit?: boolean;
+	/** `folder`: a directory on this computer opened with the File System Access API (no git here). */
+	kind?: 'git' | 'folder';
+}
+
+/** A local folder's directory handle (kept apart so vault records stay plain data). */
+export interface FolderHandle {
+	id: string;
+	handle: FileSystemDirectoryHandle;
 }
 
 export interface CachedFile {
@@ -37,7 +45,7 @@ export interface CachedFile {
 	key: string;
 	vaultId: string;
 	path: string;
-	/** Git blob id of `source`. */
+	/** Git blob id of `source` (for folders: the file's size and modification time). */
 	oid: string;
 	source: string;
 	index: FileIndex;
@@ -46,6 +54,7 @@ export interface CachedFile {
 class MyceliumDB extends Dexie {
 	vaults!: EntityTable<VaultRecord, 'id'>;
 	files!: EntityTable<CachedFile, 'key'>;
+	handles!: EntityTable<FolderHandle, 'id'>;
 
 	constructor() {
 		super('mycelium');
@@ -53,6 +62,7 @@ class MyceliumDB extends Dexie {
 			vaults: 'id',
 			files: 'key, vaultId',
 		});
+		this.version(2).stores({ handles: 'id' });
 	}
 }
 

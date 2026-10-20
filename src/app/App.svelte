@@ -40,6 +40,7 @@
 		const flush = () => {
 			if (document.visibilityState === 'hidden')
 				void app.flush().then(() => app.workspace?.repo.flush());
+			else void app.refreshFolder();
 		};
 		document.addEventListener('visibilitychange', flush);
 		addEventListener('pagehide', flush);
@@ -204,6 +205,24 @@
 		font-size: 0.78rem;
 		font-weight: 550;
 		text-align: center;
+	}
+	.access {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem;
+		margin: 1rem auto 0;
+		padding: 0.7rem 1rem;
+		max-width: 46rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
+		font-size: 0.88rem;
+	}
+	.access span {
+		flex: 1;
+		min-width: 12rem;
 	}
 	.demo-banner a {
 		color: inherit;

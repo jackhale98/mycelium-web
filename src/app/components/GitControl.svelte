@@ -7,41 +7,50 @@
 	const changes = $derived(app.git.changes.length);
 </script>
 
-<div class="git">
-	<a class="branch" href={href.changes()} title="Review changes and commit">
-		<Icon name="branch" size={14} />
-		<span class="name">{app.git.branch}</span>
-		{#if changes}<span class="pill dirty" aria-label={`${changes} uncommitted`}>{changes}</span
-			>{/if}
-	</a>
-	{#if app.git.hasRemote}
-		<span class="counts" role="status" aria-live="polite">
-			{#if busy}{app.sync.kind === 'busy' ? app.sync.phase : ''}…{:else}
-				<span title="Commits to pull">↓{app.git.behind}</span>
-				<span title="Commits to push">↑{app.git.ahead}</span>
-			{/if}
-		</span>
-		<button
-			type="button"
-			class="icon-btn"
-			aria-label="Pull from origin"
-			title="Pull (fetch and merge)"
-			disabled={busy}
-			onclick={() => app.pull()}><Icon name="download" size={15} /></button
+{#if app.folder}
+	<div class="git">
+		<span class="branch"
+			><Icon name="folder" size={14} /><span class="name">{app.folder.record.name}</span></span
 		>
-		<button
-			type="button"
-			class="icon-btn"
-			class:ready={app.git.ahead > 0}
-			aria-label="Push to origin"
-			title="Push commits"
-			disabled={busy}
-			onclick={() => app.push()}><Icon name="upload" size={15} /></button
-		>
-	{:else}
-		<span class="counts">local only</span>
-	{/if}
-</div>
+		<span class="counts">saved to disk</span>
+	</div>
+{:else}
+	<div class="git">
+		<a class="branch" href={href.changes()} title="Review changes and commit">
+			<Icon name="branch" size={14} />
+			<span class="name">{app.git.branch}</span>
+			{#if changes}<span class="pill dirty" aria-label={`${changes} uncommitted`}>{changes}</span
+				>{/if}
+		</a>
+		{#if app.git.hasRemote}
+			<span class="counts" role="status" aria-live="polite">
+				{#if busy}{app.sync.kind === 'busy' ? app.sync.phase : ''}…{:else}
+					<span title="Commits to pull">↓{app.git.behind}</span>
+					<span title="Commits to push">↑{app.git.ahead}</span>
+				{/if}
+			</span>
+			<button
+				type="button"
+				class="icon-btn"
+				aria-label="Pull from origin"
+				title="Pull (fetch and merge)"
+				disabled={busy}
+				onclick={() => app.pull()}><Icon name="download" size={15} /></button
+			>
+			<button
+				type="button"
+				class="icon-btn"
+				class:ready={app.git.ahead > 0}
+				aria-label="Push to origin"
+				title="Push commits"
+				disabled={busy}
+				onclick={() => app.push()}><Icon name="upload" size={15} /></button
+			>
+		{:else}
+			<span class="counts">local only</span>
+		{/if}
+	</div>
+{/if}
 
 <style>
 	.git {

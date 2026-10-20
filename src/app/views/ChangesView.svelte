@@ -120,7 +120,16 @@
 		you're ready.
 	</p>
 
-	{#if !app.workspace}
+	{#if app.folder}
+		<div class="notice info">
+			<Icon name="folder" size={16} />
+			<span
+				>This vault is the folder <strong>{app.folder.record.name}</strong> on your computer. Edits are
+				saved straight to its files — review and commit them with git (or anything else) as you normally
+				would.</span
+			>
+		</div>
+	{:else if !app.workspace}
 		<div class="notice">
 			<Icon name="info" size={16} />
 			<span

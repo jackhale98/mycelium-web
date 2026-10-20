@@ -46,6 +46,7 @@ const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
 const hash = async (text: string) => (await git.hashBlob({ object: text })).oid;
 
 export class Workspace {
+	readonly kind = 'git';
 	readonly repo: GitRepo;
 	/** Uncommitted paths (persisted with the vault record). */
 	#dirty: Set<string>;
