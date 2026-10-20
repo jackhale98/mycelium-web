@@ -269,3 +269,23 @@ kbd {
 		scroll-behavior: auto !important;
 	}
 }
+
+/* Artwork with a light and a dark version (the logo mark): show the one
+   matching the theme, whether it comes from the system or from Settings. */
+.only-dark {
+	display: none;
+}
+:root[data-theme='dark'] .only-light {
+	display: none;
+}
+:root[data-theme='dark'] .only-dark {
+	display: revert;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .only-light {
+		display: none;
+	}
+	:root:not([data-theme='light']) .only-dark {
+		display: revert;
+	}
+}

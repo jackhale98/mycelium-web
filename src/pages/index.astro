@@ -45,7 +45,20 @@ const features = [
 	</a>
 	<header class="top">
 		<a class="brand" href={`${base}/`} aria-label="Mycelium home">
-			<img class="mark" src={`${base}/mycelium-icon.svg`} width="34" height="34" alt="" />
+			<img
+				class="mark only-light"
+				src={`${base}/mycelium-mark-light.svg`}
+				width="30"
+				height="34"
+				alt=""
+			/>
+			<img
+				class="mark only-dark"
+				src={`${base}/mycelium-mark-dark.svg`}
+				width="30"
+				height="34"
+				alt=""
+			/>
 			<span>Mycelium</span>
 		</a>
 		<nav aria-label="Site">
@@ -243,9 +256,6 @@ const features = [
 		font-weight: 600;
 		letter-spacing: -0.015em;
 		text-decoration: none;
-	}
-	.mark {
-		border-radius: 22%;
 	}
 	.top nav {
 		display: flex;

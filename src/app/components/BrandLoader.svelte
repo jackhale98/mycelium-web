@@ -12,6 +12,23 @@
 	}: { mode?: 'screen' | 'inline'; message?: string | null; label?: string } = $props();
 
 	const uid = $props.id();
+
+	/** Node colours on light backgrounds: deeper golds and greens (the light logo's palette). */
+	const LIGHT: Record<string, string> = {
+		'#F4D58D': '#C4882A',
+		'#F0C858': '#C08020',
+		'#E8B84B': '#B87A1E',
+		'#E0B050': '#B8801E',
+		'#E0A040': '#B8701C',
+		'#D4952A': '#A86E1A',
+		'#D4782E': '#B05A1E',
+		'#C4882A': '#9A6A1C',
+		'#B8802A': '#8E621A',
+		'#A8742A': '#805816',
+		'#D9E08A': '#5E7A28',
+		'#C8D478': '#4F6B24',
+		'#B8CF6E': '#4A6624',
+	};
 	let line = $state(data.lines[0] ?? '');
 
 	$effect(() => {
@@ -43,10 +60,10 @@
 					x2="390"
 					y2="100"
 				>
-					<stop offset="0" stop-color="#C4882A" /><stop offset="0.45" stop-color="#E0B050" /><stop
-						offset="1"
-						stop-color="#F4D58D"
-					/>
+					<stop offset="0" style="stop-color: var(--myc-w0)" /><stop
+						offset="0.45"
+						style="stop-color: var(--myc-w1)"
+					/><stop offset="1" style="stop-color: var(--myc-w2)" />
 				</linearGradient>
 				<filter id="{uid}-glow" x="-50%" y="-50%" width="200%" height="200%">
 					<feGaussianBlur stdDeviation="3" result="b" /><feMerge
@@ -89,7 +106,8 @@
 						cx={n.cx}
 						cy={n.cy}
 						r={n.r}
-						fill={n.fill}
+						style:--fd={n.fill}
+						style:--fl={LIGHT[n.fill] ?? n.fill}
 						style:--d={n.delay}
 						style:--tw={n.tw}
 						style:--twd={n.twd}
@@ -103,11 +121,18 @@
 </div>
 
 <style>
+	/* Light theme by default; the dark palette follows below. No card or backdrop:
+	   the mark draws straight onto the page. */
 	.myc {
-		--myc-bg: #0f1a0e;
-		--myc-bg-2: #1c2a1a;
-		--myc-fg: #f4e7c6;
-		--myc-muted: #b3aa8a;
+		--myc-w0: #1f3a1e;
+		--myc-w1: #2f5530;
+		--myc-w2: #4f7a3a;
+		--myc-spark: #c4882a;
+		--myc-pulse: #b8801e;
+		--myc-glow: rgb(196 136 42 / 0.45);
+		--myc-aura: rgb(110 138 46 / 0.14);
+		--myc-fg: var(--text, #1f2a1c);
+		--myc-muted: var(--text-muted, #6b6556);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -116,11 +141,40 @@
 		color: var(--myc-fg);
 		font-family: var(--font-ui);
 	}
+	.myc .n {
+		fill: var(--fl);
+	}
+	:global(:root[data-theme='dark']) .myc {
+		--myc-w0: #c4882a;
+		--myc-w1: #e0b050;
+		--myc-w2: #f4d58d;
+		--myc-spark: #fff6dc;
+		--myc-pulse: #fff2cc;
+		--myc-glow: #f4d58d;
+		--myc-aura: rgb(244 213 141 / 0.16);
+	}
+	:global(:root[data-theme='dark']) .myc .n {
+		fill: var(--fd);
+	}
+	@media (prefers-color-scheme: dark) {
+		:global(:root:not([data-theme='light'])) .myc {
+			--myc-w0: #c4882a;
+			--myc-w1: #e0b050;
+			--myc-w2: #f4d58d;
+			--myc-spark: #fff6dc;
+			--myc-pulse: #fff2cc;
+			--myc-glow: #f4d58d;
+			--myc-aura: rgb(244 213 141 / 0.16);
+		}
+		:global(:root:not([data-theme='light'])) .myc .n {
+			fill: var(--fd);
+		}
+	}
 	.screen {
 		position: fixed;
 		inset: 0;
 		z-index: 9999;
-		background: radial-gradient(120% 90% at 50% 38%, var(--myc-bg-2), var(--myc-bg) 70%);
+		background: var(--bg, #f7f5ee);
 		transition:
 			opacity 0.7s ease,
 			transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -134,9 +188,6 @@
 	}
 	.inline {
 		padding: 1.5rem 2rem 1.25rem;
-		border-radius: 22px;
-		background: radial-gradient(120% 90% at 50% 38%, var(--myc-bg-2), var(--myc-bg) 75%);
-		box-shadow: var(--shadow-lg);
 	}
 	.stage {
 		position: relative;
@@ -159,11 +210,7 @@
 		inset: -30%;
 		pointer-events: none;
 		opacity: 0;
-		background: radial-gradient(
-			closest-side at 50% 36%,
-			rgba(244, 213, 141, 0.16),
-			transparent 72%
-		);
+		background: radial-gradient(closest-side at 50% 36%, var(--myc-aura), transparent 72%);
 		animation:
 			myc-fade 1.2s 1.28s ease forwards,
 			myc-aura 5s 2.66s ease-in-out infinite;
@@ -193,17 +240,17 @@
 			myc-twinkle var(--twd) var(--tw) ease-in-out infinite;
 	}
 	.spark {
-		stroke: #fff6dc;
+		stroke: var(--myc-spark);
 		stroke-width: 7;
 		stroke-dasharray: 0.16 1.3;
 		stroke-dashoffset: 0.16;
 		opacity: 0;
-		filter: drop-shadow(0 0 6px #f4d58d);
+		filter: drop-shadow(0 0 6px var(--myc-glow));
 		animation: myc-spark 0.5s 0.76s cubic-bezier(0.5, 0, 0.3, 1) forwards;
 	}
 	.flare {
 		fill: none;
-		stroke: #f4d58d;
+		stroke: var(--myc-spark);
 		stroke-width: 3;
 		opacity: 0;
 		transform-box: fill-box;
@@ -211,12 +258,12 @@
 		animation: myc-flare 0.9s 1.22s ease-out forwards;
 	}
 	.p {
-		stroke: #fff2cc;
+		stroke: var(--myc-pulse);
 		stroke-width: 5;
 		stroke-dasharray: 0.05 1.2;
 		stroke-dashoffset: 0.05;
 		opacity: 0;
-		filter: drop-shadow(0 0 5px #f4d58d);
+		filter: drop-shadow(0 0 5px var(--myc-glow));
 		animation: myc-flow 3.3s var(--d) cubic-bezier(0.45, 0.05, 0.4, 1) infinite;
 	}
 	.word {
