@@ -100,7 +100,11 @@
 				<ul class="repos">
 					{#each shown.slice(0, 100) as repo (repo.slug)}
 						<li>
-							<button type="button" onclick={() => open(repo)} disabled={!!app.loading}>
+							<button
+								type="button"
+								onclick={() => open(repo)}
+								disabled={!!app.loading || !!app.connecting}
+							>
 								<Icon name="git" size={15} />
 								<span class="slug">{repo.slug}</span>
 								{#if repo.private}<span class="lock">private</span>{/if}

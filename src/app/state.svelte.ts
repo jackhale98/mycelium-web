@@ -180,6 +180,8 @@ class AppState {
 	logSettings: LogSettings = $state(detectLogSettings(Object.values(demoSources)));
 	/** Non-null while a vault is being cloned or indexed. */
 	loading = $state<LoadProgress | null>(resumeId ? { phase: 'Opening vault', ratio: null } : null);
+	/** Cloning a new repository: shown in the Vaults form, which stays on screen so a failure keeps what was typed. */
+	connecting = $state<LoadProgress | null>(null);
 	loadError = $state<string | null>(null);
 	sync = $state<SyncState>({ kind: 'idle' });
 	git = $state<GitState>({ branch: 'main', changes: [], ahead: 0, behind: 0, hasRemote: false });
@@ -453,7 +455,7 @@ class AppState {
 	/** Clone a repository as a new vault and switch to it. */
 	async connect(input: ConnectInput): Promise<boolean> {
 		this.loadError = null;
-		this.loading = { phase: 'Connecting', ratio: null };
+		this.connecting = { phase: 'Connecting', ratio: null };
 		try {
 			const { Workspace } = await import('$lib/git/workspace');
 			const record: VaultRecord = {
@@ -476,8 +478,9 @@ class AppState {
 			};
 			const ws = await Workspace.create(
 				record,
-				(p) => (this.loading = { ...p, phase: `Cloning · ${p.phase}` }),
+				(p) => (this.connecting = { ...p, phase: `Cloning · ${p.phase}` }),
 			);
+			this.connecting = null;
 			this.vaults = [...this.vaults.filter((v) => v.id !== ws.record.id), ws.record];
 			await this.#activate(ws);
 			return true;
@@ -485,6 +488,7 @@ class AppState {
 			this.loadError = describeGitError(e);
 			return false;
 		} finally {
+			this.connecting = null;
 			this.loading = null;
 		}
 	}

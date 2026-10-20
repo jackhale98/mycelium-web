@@ -243,7 +243,10 @@
 
 		{#if info.needsUsername}
 			<div class="field">
-				<label for="username">Username</label>
+				<label for="username"
+					>Username{#if provider === 'bitbucket'}
+						<span class="optional">optional</span>{/if}</label
+				>
 				<input
 					id="username"
 					class="input"
@@ -345,14 +348,30 @@
 		{/if}
 
 		<div class="row">
-			<button type="submit" class="btn primary" disabled={!!app.loading || !repo.trim()}>
-				<Icon name="git" size={16} />{app.loading ? 'Cloning…' : 'Clone and open'}
+			<button
+				type="submit"
+				class="btn primary"
+				disabled={!!app.loading || !!app.connecting || !repo.trim()}
+			>
+				<Icon name="git" size={16} />{app.connecting ? 'Cloning…' : 'Clone and open'}
 			</button>
+			{#if app.connecting}
+				<span class="progress" role="status">
+					{app.connecting.phase}{app.connecting.ratio !== null
+						? ` · ${Math.round(app.connecting.ratio * 100)}%`
+						: '…'}
+				</span>
+			{/if}
 		</div>
 	</form>
 </div>
 
 <style>
+	.progress {
+		align-self: center;
+		color: var(--text-muted);
+		font-size: 0.85rem;
+	}
 	.muted {
 		margin: 0;
 		color: var(--text-muted);

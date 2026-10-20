@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRepo } from './providers';
+import { parseRepo, PROVIDERS } from './providers';
 
 describe('parseRepo', () => {
 	it('accepts shorthand, web and clone URLs', () => {
@@ -29,5 +29,26 @@ describe('parseRepo', () => {
 		);
 		expect(parseRepo('notes', 'github')).toBeNull();
 		expect(parseRepo('', 'github')).toBeNull();
+	});
+});
+
+describe('Bitbucket credentials', () => {
+	const auth = PROVIDERS.bitbucket.auth;
+	it('uses the API-token username unless a Bitbucket username is given', () => {
+		expect(auth({ token: 't' })).toEqual({ username: 'x-bitbucket-api-token-auth', password: 't' });
+		expect(auth({ token: 't', username: ' ' })).toEqual({
+			username: 'x-bitbucket-api-token-auth',
+			password: 't',
+		});
+		expect(auth({ token: 't', username: 'me@example.com' })).toEqual({
+			username: 'x-bitbucket-api-token-auth',
+			password: 't',
+		});
+		expect(auth({ token: 't', username: 'jack_h' })).toEqual({ username: 'jack_h', password: 't' });
+	});
+	it('signs OAuth access tokens in as x-token-auth', () => {
+		expect(
+			auth({ token: 't', username: 'jack_h', oauth: { refreshToken: null, expiresAt: null } }),
+		).toEqual({ username: 'x-token-auth', password: 't' });
 	});
 });

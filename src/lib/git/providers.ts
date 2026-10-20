@@ -50,12 +50,20 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
 		id: 'bitbucket',
 		name: 'Bitbucket',
 		host: 'bitbucket.org',
-		tokenUrl: 'https://bitbucket.org/account/settings/app-passwords/',
+		tokenUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
 		tokenHelp:
-			'Your Bitbucket username and an app password (or API token) with repository read and write.',
+			'An Atlassian API token for Bitbucket with the scopes read:repository:bitbucket and write:repository:bitbucket. Leave the username blank (or use your Bitbucket username, not your email).',
 		needsUsername: true,
-		auth: ({ token, username }) =>
-			username ? { username, password: token } : { username: 'x-token-auth', password: token },
+		auth: ({ token, username, oauth }) => {
+			// Signed-in (OAuth) tokens use x-token-auth. API tokens use Atlassian's fixed
+			// username, or the Bitbucket username; git rejects the account email.
+			if (oauth) return { username: 'x-token-auth', password: token };
+			const name = username?.trim();
+			return {
+				username: name && !name.includes('@') ? name : 'x-bitbucket-api-token-auth',
+				password: token,
+			};
+		},
 	},
 	other: {
 		id: 'other',
