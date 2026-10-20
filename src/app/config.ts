@@ -9,5 +9,9 @@ export const DEFAULT_GIT_PROXY: string =
 	import.meta.env.PUBLIC_GIT_PROXY || 'https://cors.isomorphic-git.org';
 export const PUBLIC_TEST_PROXY = 'https://cors.isomorphic-git.org';
 
-/** A public org-roam repository anyone can open read-only. */
-export const DEMO_REPO = { provider: 'github' as const, slug: 'jackhale98/mycelium-demo-vault' };
+/** A public org-roam vault anyone can open read-only (an orphan branch of this repository). */
+export const DEMO_REPO = {
+	provider: 'github' as const,
+	slug: 'jackhale98/mycelium-web',
+	branch: 'demo-vault',
+};

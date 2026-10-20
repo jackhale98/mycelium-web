@@ -55,7 +55,9 @@
 	>
 		<span class="vault-icon"><Icon name={app.demo ? 'zap' : 'git'} size={15} /></span>
 		<span class="vault-text">
-			<span class="vault-name">{app.activeVault?.name ?? 'Demo vault'}</span>
+			<span class="vault-name" title={app.activeVault?.name}
+				>{app.activeVault?.name.split('/').pop() ?? 'Demo vault'}</span
+			>
 			<span class="vault-sub">
 				{#if app.activeVault}{app.activeVault.branch ?? 'default branch'} · {app.vault.files.size} files{:else}{app
 						.vault.files.size} files · in this tab only{/if}

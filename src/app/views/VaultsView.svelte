@@ -22,6 +22,7 @@
 	function useDemoRepo() {
 		provider = DEMO_REPO.provider;
 		repo = DEMO_REPO.slug;
+		branch = DEMO_REPO.branch;
 		token = '';
 	}
 

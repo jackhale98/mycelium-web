@@ -412,7 +412,14 @@ class AppState {
 			this.unsynced = await ws.unpushed();
 			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
 		} catch (e) {
-			this.sync = { kind: 'error', message: describeGitError(e) };
+			const readOnly =
+				!ws.record.credentials && (e as { code?: string }).code === 'UserCanceledError';
+			this.sync = {
+				kind: 'error',
+				message: readOnly
+					? 'This vault is read-only, so your changes are saved here but not pushed. Add an access token in Settings to sync them.'
+					: describeGitError(e),
+			};
 			this.unsynced = await ws.unpushed().catch(() => this.unsynced);
 		}
 	}
