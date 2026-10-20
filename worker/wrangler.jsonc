@@ -1,0 +1,20 @@
+// The git sync worker. JSONC (not TOML) on purpose: Wrangler prefers a
+// .jsonc config, and would otherwise pick up the site's wrangler.jsonc at the
+// repository root when deploying from this folder.
+{
+	"name": "mycelium-sync",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+	// Stateless by design: no KV, D1, R2 or Durable Object bindings, and no logs.
+	"observability": { "enabled": false },
+	"vars": {
+		// Origins that may use this worker: the site (my-celium.org, its workers.dev
+		// address and the GitHub Pages copy) and localhost for development.
+		"ALLOWED_ORIGINS": "https://my-celium.org,https://www.my-celium.org,https://my-celium.fonur.workers.dev,https://jackhale98.github.io,http://localhost:4321",
+		// "EXTRA_GIT_HOSTS": "git.example.com",
+	},
+	// OAuth client credentials are secrets, never vars:
+	//   npx wrangler secret put GITHUB_CLIENT_ID
+	//   npx wrangler secret put GITHUB_CLIENT_SECRET
+	// (and GITLAB_*, BITBUCKET_* when those apps are registered)
+}

@@ -98,14 +98,14 @@ repository and redeploys it whenever that folder changes on `main`.
    (you can limit it to just this repository).
 4. Select the `mycelium-web` repository and fill in the project settings:
 
-   | Field                 | Value                                                         |
-   | --------------------- | ------------------------------------------------------------- |
-   | Project name          | `mycelium-sync` (must match `name` in `worker/wrangler.toml`) |
-   | Production branch     | `main`                                                        |
-   | Build command         | Leave empty                                                   |
-   | Deploy command        | `npx wrangler@4 deploy`                                       |
-   | Root directory / Path | `worker` (under **Advanced settings** if it's collapsed)      |
-   | Build variables       | None                                                          |
+   | Field                 | Value                                                          |
+   | --------------------- | -------------------------------------------------------------- |
+   | Project name          | `mycelium-sync` (must match `name` in `worker/wrangler.jsonc`) |
+   | Production branch     | `main`                                                         |
+   | Build command         | Leave empty                                                    |
+   | Deploy command        | `npx wrangler@4 deploy`                                        |
+   | Root directory / Path | `worker` (under **Advanced settings** if it's collapsed)       |
+   | Build variables       | None                                                           |
 
 5. Select **Save and Deploy** (or **Create and deploy**). The first build takes
    a minute or two; you can watch its log on the worker's **Deployments** tab.
@@ -117,7 +117,7 @@ repository and redeploys it whenever that folder changes on `main`.
    worker. That's harmless, just unnecessary.
 
 **Allowed origins live in the repository, not the dashboard.**
-`ALLOWED_ORIGINS` is set in `worker/wrangler.toml`, and every build applies the
+`ALLOWED_ORIGINS` is set in `worker/wrangler.jsonc`, and every build applies the
 file's value, so a variable edited in the dashboard would be overwritten on the
 next deploy. It lists `https://my-celium.org`, `https://www.my-celium.org`,
 `https://jackhale98.github.io` (origins, no path) and `http://localhost:4321`
@@ -136,7 +136,7 @@ npx wrangler deploy
 ```
 
 Wrangler prints the worker's URL. Check `ALLOWED_ORIGINS` in
-`worker/wrangler.toml` as described above, and deploy again if you changed it.
+`worker/wrangler.jsonc` as described above, and deploy again if you changed it.
 
 If you'd rather deploy from GitHub Actions, add a `CLOUDFLARE_API_TOKEN`
 repository secret (Cloudflare token template "Edit Cloudflare Workers") and run
@@ -310,16 +310,16 @@ Settings → Sync proxy in the app.
 
 **Troubleshooting**
 
-| Symptom                                    | Likely cause                                                 | Fix                                                                                                               |
-| ------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5 and re-run the Pages deploy                                                    |
-| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://my-celium.org/auth/callback/`                                                                |
-| "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.toml` on `main` (Option A rebuilds by itself; with Option B run `npx wrangler deploy`) |
-| "sign-in is not configured on this worker" | A worker secret is missing                                   | Add it under the worker's **Settings → Variables and Secrets**, or `npx wrangler secret put …`                    |
-| Dashboard build fails: name mismatch       | Project name isn't `mycelium-sync`                           | Rename the worker to match `name` in `worker/wrangler.toml`, or change the file                                   |
-| Dashboard build fails: no Wrangler config  | Root directory isn't `worker`                                | Worker → **Settings → Build** → set the root directory to `worker` and retry                                      |
-| GitHub repository picker is empty          | The app isn't installed on any repository yet                | Use "Install on repositories" on the Vaults page                                                                  |
-| Push rejected after a while                | Token expired and couldn't refresh                           | Sign out and back in on the Vaults page                                                                           |
+| Symptom                                    | Likely cause                                                 | Fix                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5 and re-run the Pages deploy                                                     |
+| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://my-celium.org/auth/callback/`                                                                 |
+| "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.jsonc` on `main` (Option A rebuilds by itself; with Option B run `npx wrangler deploy`) |
+| "sign-in is not configured on this worker" | A worker secret is missing                                   | Add it under the worker's **Settings → Variables and Secrets**, or `npx wrangler secret put …`                     |
+| Dashboard build fails: name mismatch       | Project name isn't `mycelium-sync`                           | Rename the worker to match `name` in `worker/wrangler.jsonc`, or change the file                                   |
+| Dashboard build fails: no Wrangler config  | Root directory isn't `worker`                                | Worker → **Settings → Build** → set the root directory to `worker` and retry                                       |
+| GitHub repository picker is empty          | The app isn't installed on any repository yet                | Use "Install on repositories" on the Vaults page                                                                   |
+| Push rejected after a while                | Token expired and couldn't refresh                           | Sign out and back in on the Vaults page                                                                            |
 
 **Security notes**
 

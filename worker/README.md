@@ -31,7 +31,7 @@ Or with Wrangler:
    npx wrangler deploy
    ```
    Wrangler prints the URL, e.g. `https://mycelium-sync.<you>.workers.dev`.
-2. Edit `ALLOWED_ORIGINS` in `wrangler.toml` if your site isn't
+2. Edit `ALLOWED_ORIGINS` in `wrangler.jsonc` if your site isn't
    `https://jackhale98.github.io`, and deploy again.
 3. Point the app at it: in the GitHub repository, add an Actions **variable**
    `PUBLIC_GIT_PROXY` = your worker URL (Settings → Secrets and variables →
