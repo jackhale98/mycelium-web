@@ -563,6 +563,16 @@ class AppState {
 	}
 
 	async #activate(ws: Workspace | FolderWorkspace) {
+		// Vaults saved with the public test proxy move to this site's own worker, so
+		// their tokens no longer pass through a third party.
+		if (ws.kind !== 'folder') {
+			const { DEFAULT_GIT_PROXY, PUBLIC_TEST_PROXY } = await import('./config');
+			const proxy = ws.record.corsProxy?.replace(/\/$/, '');
+			if (proxy === PUBLIC_TEST_PROXY && DEFAULT_GIT_PROXY !== PUBLIC_TEST_PROXY) {
+				await ws.updateRecord({ corsProxy: DEFAULT_GIT_PROXY });
+				this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
+			}
+		}
 		const files = await ws.load((p) => (this.loading = p));
 		if (ws.kind === 'folder') {
 			this.folder = ws;

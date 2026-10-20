@@ -1,12 +1,15 @@
 /// Build-time configuration. Set PUBLIC_GIT_PROXY to your deployed worker.
 
+/** This site's own sync worker (`worker/`), deployed on Cloudflare. */
+export const SYNC_WORKER = 'https://mycelium-sync.fonur.workers.dev';
+
 /**
  * Default prefix for git's HTTP traffic. Browsers need a CORS proxy to talk
- * to git hosts; the public isomorphic-git proxy is for trying things out —
- * deploy `worker/` and set PUBLIC_GIT_PROXY for real use.
+ * to git hosts; this site's sync worker, unless a build sets PUBLIC_GIT_PROXY
+ * to another deployment of `worker/`.
  */
-export const DEFAULT_GIT_PROXY: string =
-	import.meta.env.PUBLIC_GIT_PROXY || 'https://cors.isomorphic-git.org';
+export const DEFAULT_GIT_PROXY: string = import.meta.env.PUBLIC_GIT_PROXY || SYNC_WORKER;
+/** A third-party proxy for trying things out; vaults still using it move to the default. */
 export const PUBLIC_TEST_PROXY = 'https://cors.isomorphic-git.org';
 
 /** A public org-roam vault anyone can open read-only (an orphan branch of this repository). */
@@ -17,7 +20,7 @@ export const DEMO_REPO = {
 };
 
 /** The deployed sync worker, if this build has one (it also does OAuth). */
-export const WORKER_URL: string = import.meta.env.PUBLIC_GIT_PROXY || '';
+export const WORKER_URL: string = import.meta.env.PUBLIC_GIT_PROXY || SYNC_WORKER;
 
 /** OAuth sign-in: enabled per provider by setting its public client id at build time. */
 export const OAUTH_CONFIG = {
