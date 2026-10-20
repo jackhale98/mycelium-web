@@ -31,6 +31,8 @@ jobs:
           # Project sites are served from /<repo>/; a custom domain serves from /.
           SITE_URL: ${{ steps.pages.outputs.origin }}
           SITE_BASE: ${{ steps.pages.outputs.base_path || '/' }}
+          # Your deployed worker (see worker/README.md); falls back to the public test proxy.
+          PUBLIC_GIT_PROXY: ${{ vars.PUBLIC_GIT_PROXY }}
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

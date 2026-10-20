@@ -1,0 +1,81 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import worker, { isGitRequest, type Env } from './index';
+
+const env: Env = { ALLOWED_ORIGINS: 'https://app.example, http://localhost:4321', GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'shh' };
+const ORIGIN = 'https://app.example';
+const call = (path: string, init: RequestInit & { origin?: string | null } = {}) => {
+	const headers = new Headers(init.headers);
+	if (init.origin !== null) headers.set('Origin', init.origin ?? ORIGIN);
+	return worker.fetch(new Request(`https://proxy.example${path}`, { ...init, headers }), env);
+};
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('git proxy', () => {
+	it('recognises only smart-HTTP endpoints', () => {
+		const q = (s: string) => new URLSearchParams(s);
+		expect(isGitRequest('GET', '/a/b.git/info/refs', q('service=git-upload-pack'))).toBe(true);
+		expect(isGitRequest('GET', '/a/b.git/info/refs', q('service=evil'))).toBe(false);
+		expect(isGitRequest('POST', '/a/b.git/git-receive-pack', q(''))).toBe(true);
+		expect(isGitRequest('GET', '/a/b.git/git-receive-pack', q(''))).toBe(false);
+		expect(isGitRequest('GET', '/login', q(''))).toBe(false);
+	});
+
+	it('rejects unknown origins, hosts and paths', async () => {
+		expect((await call('/github.com/a/b.git/info/refs?service=git-upload-pack', { origin: null })).status).toBe(403);
+		expect((await call('/github.com/a/b.git/info/refs?service=git-upload-pack', { origin: 'https://evil.example' })).status).toBe(403);
+		expect((await call('/example.com/a/b.git/info/refs?service=git-upload-pack')).status).toBe(403);
+		expect((await call('/github.com/settings/profile')).status).toBe(403);
+		expect((await call('/github.com/a/../../b.git/info/refs?service=git-upload-pack')).status).toBe(403);
+	});
+
+	it('answers preflight with CORS headers', async () => {
+		const res = await call('/github.com/a/b.git/git-upload-pack', { method: 'OPTIONS' });
+		expect(res.status).toBe(204);
+		expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+		expect(res.headers.get('Access-Control-Allow-Headers')).toContain('Authorization');
+	});
+
+	it('forwards only git headers and streams the response back', async () => {
+		const upstream = vi.fn(async () => new Response('pack', { status: 200, headers: { 'Content-Type': 'application/x-git-upload-pack-result', 'Set-Cookie': 'x=1' } }));
+		vi.stubGlobal('fetch', upstream);
+		const res = await call('/github.com/a/b.git/git-upload-pack', {
+			method: 'POST',
+			body: 'want',
+			headers: { Authorization: 'Basic abc', Cookie: 'session=1', 'Content-Type': 'application/x-git-upload-pack-request' },
+		});
+		expect(await res.text()).toBe('pack');
+		expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+		expect(res.headers.get('Set-Cookie')).toBeNull();
+		const [target, init] = upstream.mock.calls[0] as unknown as [string, RequestInit];
+		expect(target).toBe('https://github.com/a/b.git/git-upload-pack');
+		const sent = new Headers(init.headers);
+		expect(sent.get('authorization')).toBe('Basic abc');
+		expect(sent.get('cookie')).toBeNull();
+	});
+});
+
+describe('oauth', () => {
+	it('adds the client secret and relays the token response', async () => {
+		const upstream = vi.fn(async () => new Response('{"access_token":"t"}', { headers: { 'Content-Type': 'application/json' } }));
+		vi.stubGlobal('fetch', upstream);
+		const res = await call('/oauth/github/token', { method: 'POST', body: JSON.stringify({ code: 'c', code_verifier: 'v', redirect_uri: 'https://app.example/cb' }) });
+		expect(await res.json()).toEqual({ access_token: 't' });
+		const [target, init] = upstream.mock.calls[0] as unknown as [string, RequestInit];
+		expect(target).toBe('https://github.com/login/oauth/access_token');
+		const body = new URLSearchParams(String(init.body));
+		expect(Object.fromEntries(body)).toEqual({
+			grant_type: 'authorization_code',
+			code: 'c',
+			code_verifier: 'v',
+			redirect_uri: 'https://app.example/cb',
+			client_id: 'id',
+			client_secret: 'shh',
+		});
+	});
+
+	it('reports unconfigured providers', async () => {
+		expect((await call('/oauth/gitlab/token', { method: 'POST', body: '{"code":"c"}' })).status).toBe(501);
+		expect((await call('/oauth/nope/token', { method: 'POST', body: '{}' })).status).toBe(404);
+	});
+});
