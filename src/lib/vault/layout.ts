@@ -81,11 +81,18 @@ export function dailyDate(layout: VaultLayout, path: string): string | null {
 }
 
 /** `true` when `path` is an org file org-roam would index for this layout. */
+/**
+ * `org-roam-file-exclude-regexp` defaults to `org-attach-id-dir` ("data/"),
+ * matched anywhere in the path relative to the roam directory — so
+ * attachment folders are never indexed.
+ */
+const EXCLUDE_RE = /data\//;
+
 export function inVault(layout: VaultLayout, path: string): boolean {
-	return (
-		path.toLowerCase().endsWith('.org') &&
-		(!layout.roamDir || path.startsWith(`${layout.roamDir}/`))
-	);
+	if (!path.toLowerCase().endsWith('.org')) return false;
+	if (layout.roamDir && !path.startsWith(`${layout.roamDir}/`)) return false;
+	const relative = layout.roamDir ? path.slice(layout.roamDir.length + 1) : path;
+	return !EXCLUDE_RE.test(relative);
 }
 
 /** Path for a new node file: `%<%Y%m%d%H%M%S>-${slug}.org` in the roam directory. */

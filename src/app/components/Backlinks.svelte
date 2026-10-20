@@ -16,6 +16,12 @@
 		return app.vault.forwardLinks(id);
 	});
 	const count = $derived(groups.reduce((n, g) => n + g.links.length, 0));
+	/** Links and citations to this note's ROAM_REFS (org-roam's "Reflinks"). */
+	const refGroups = $derived.by(() => {
+		void app.rev;
+		return app.vault.reflinksOf(id);
+	});
+	const refCount = $derived(refGroups.reduce((n, g) => n + g.links.length, 0));
 </script>
 
 <section class="panel-section" aria-labelledby="bl-heading">
@@ -47,6 +53,34 @@
 		</ul>
 	{/if}
 </section>
+
+{#if refGroups.length}
+	<section class="panel-section" aria-labelledby="rl-heading">
+		<h2 id="rl-heading" class="panel-title">
+			<Icon name="external" size={15} />
+			Reference backlinks
+			<span class="count">{refCount}</span>
+		</h2>
+		<ul class="groups">
+			{#each refGroups as group (group.from.id)}
+				<li class="group">
+					<a class="group-title" href={href.node(group.from.id)}>
+						{group.from.title}
+						{#if group.from.olp.length}<span class="olp">{group.from.olp.join(' › ')}</span>{/if}
+					</a>
+					{#each group.links as link (link.pos)}
+						<div class="context prose compact">
+							<Blocks
+								nodes={parseOrg(link.context).children}
+								ctx={{ path: group.from.file, levelOffset: 0, interactive: false }}
+							/>
+						</div>
+					{/each}
+				</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
 
 {#if forward.length}
 	<section class="panel-section" aria-labelledby="fl-heading">

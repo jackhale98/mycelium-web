@@ -3,7 +3,7 @@
 
 import type { Headline, Keyword, OrgNode, Planning, PropertyDrawer, Section } from 'uniorg';
 import { parseTagList } from './keywords';
-import { roamTitle } from './scan';
+import { bracketLinks, roamTitle } from './scan';
 import { effectiveKeywords, endOf, parseOrg, plainText, startOf } from './parse';
 import { splitPropertyValues } from './properties';
 import { parseTimestamp } from './timestamp';
@@ -246,8 +246,32 @@ export function indexFileTree(
 				visitSection(child, frame);
 				continue;
 			}
-			if (child.type === 'property-drawer' || child.type === 'keyword' || child.type === 'planning')
+			if (child.type === 'planning') continue;
+			// org-roam also records links in property values (but not ROAM_REFS) and in
+			// keyword lines (but not #+transclude): `org-roam-db-extra-links-elements`.
+			if (child.type === 'property-drawer' || child.type === 'keyword') {
+				const parts =
+					child.type === 'keyword'
+						? child.key.toLowerCase() === 'transclude'
+							? []
+							: [child]
+						: child.children.filter((p) => p.key.toUpperCase() !== 'ROAM_REFS');
+				if (frame.ownerId)
+					for (const part of parts) {
+						const raw = source.slice(startOf(part), endOf(part));
+						for (const l of bracketLinks(raw))
+							links.push({
+								source: frame.ownerId,
+								dest: l.dest,
+								type: l.type,
+								pos: startOf(part) + l.index,
+								end: startOf(part) + l.index + l.length,
+								description: l.description,
+								context: raw.trim(),
+							});
+					}
 				continue;
+			}
 			if (child.type === 'link' && frame.ownerId) {
 				const ctx = context ?? child;
 				let raw = source.slice(startOf(ctx), endOf(ctx)).trim();

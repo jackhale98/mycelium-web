@@ -51,12 +51,26 @@ export function tsLabel(ts: OrgTimestamp): string {
 	return `${shortDate(ts.date)}${ts.time ? ` · ${ts.time}` : ''}`;
 }
 
-/** org-roam's default slug: lower-case, non-alphanumerics to underscores. */
+/** The combining marks `org-roam-node-slugify` removes (and only these). */
+const SLUG_TRIM = new Set([
+	0x300, 0x301, 0x302, 0x303, 0x304, 0x306, 0x307, 0x308, 0x309, 0x30a, 0x30b, 0x30c, 0x31b, 0x323,
+	0x324, 0x325, 0x327, 0x32d, 0x32e, 0x330, 0x331,
+]);
+
+/**
+ * `org-roam-node-slugify`: decompose, drop common accents, recompose, turn
+ * anything not alphanumeric (Emacs `[:alnum:]`) into `_`, squeeze and trim
+ * underscores, lower-case.
+ */
 export function slugify(title: string): string {
-	return title
-		.normalize('NFD')
-		.replace(/[̀-ͯ]/g, '')
-		.replace(/[^\p{L}\p{N}]+/gu, '_')
-		.replace(/^_+|_+$/g, '')
+	const stripped = [...title.normalize('NFD')]
+		.filter((ch) => !SLUG_TRIM.has(ch.codePointAt(0)!))
+		.join('')
+		.normalize('NFC');
+	return stripped
+		.replace(/[^\p{L}\p{M}\p{Nl}\p{Nd}]/gu, '_')
+		.replace(/_+/g, '_')
+		.replace(/^_/, '')
+		.replace(/_$/, '')
 		.toLowerCase();
 }

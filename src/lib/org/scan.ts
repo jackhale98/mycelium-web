@@ -37,6 +37,10 @@ const LINK_SOURCE = /\[\[((?:[^\]\\]|\\.)+)\](?:\[((?:[^\]]|\](?!\]))*)\])?\]/.s
  * global regex would reset `lastIndex` mid-loop. */
 const LINK_RE = new RegExp(LINK_SOURCE, 'g');
 const LINK_REPLACE_RE = new RegExp(LINK_SOURCE, 'g');
+/** org-cite: `[cite/style:prefix; @key1 suffix; @key2]` (org-element-citation-re). */
+const CITATION_RE = /\[cite(?:\/[\w/-]*)?:([^\]\n]*)\]/g;
+/** org-element-citation-key-re. */
+const CITE_KEY_RE = /@([-.:?!`'/*@+|(){}<>&_^$#%~\p{L}\p{N}]+)/gu;
 const LIST_ITEM_RE = /^[ \t]*(?:[-+]|[ \t]+\*|\d+[.)])(?:[ \t]|$)/;
 const COOKIE_RE = /[ \t]*\[(?:\d*\/\d*|\d*%)\]/g;
 const MAX_CONTEXT = 400;
@@ -56,6 +60,27 @@ function basename(path: string): string {
  */
 export function roamTitle(raw: string): string {
 	return raw.replace(LINK_REPLACE_RE, (_m, target: string, desc?: string) => desc ?? target).trim();
+}
+
+/** Bracket links in `text`, with offsets relative to it. */
+export function bracketLinks(
+	text: string,
+): { index: number; length: number; type: string; dest: string; description: string | null }[] {
+	const out = [];
+	for (const m of text.matchAll(new RegExp(LINK_SOURCE, 'g'))) {
+		const target = m[1]!.replace(/\\(.)/g, '$1');
+		const colon = /^([a-zA-Z][\w+.-]*):(.*)$/s.exec(target);
+		const type = colon ? colon[1]!.toLowerCase() : 'fuzzy';
+		const dest = colon ? colon[2]! : target;
+		out.push({
+			index: m.index,
+			length: m[0].length,
+			type,
+			dest: type === 'file' ? dest.replace(/::.*$/, '') : dest,
+			description: m[2] !== undefined ? inlinePlain(m[2]) : null,
+		});
+	}
+	return out;
 }
 
 /** Strip org inline markup to readable text (links shown by description). */
@@ -228,6 +253,8 @@ export function scanFile(
 		return raw.length > MAX_CONTEXT ? `${raw.slice(0, MAX_CONTEXT)}…` : raw;
 	};
 
+	if (fileDrawer) collectPropertyLinks(i + 1, fileDrawer.end - 1);
+
 	for (let n = start; n < lines.length; n += 1) {
 		const line = lines[n]!;
 		const t = line.text;
@@ -324,6 +351,7 @@ export function scanFile(
 			stack.push({ level, title: htitle, tags, ownerId: id ?? parentOwner });
 			text.push(htitle);
 			collectLinks(n);
+			if (drawer) collectPropertyLinks(k + 1, drawer.end - 1);
 			n = drawer ? drawer.end - 1 : k - 1;
 			continue;
 		}
@@ -336,8 +364,14 @@ export function scanFile(
 			continue;
 		}
 		if (/^[ \t]*#\+end_/i.test(t)) continue;
-		if (KEYWORD_RE.test(t) || /^[ \t]*#(?:[ \t]|$)/.test(t) || /^[ \t]*:(?:[ \t]|$)/.test(t))
+		const keyword = KEYWORD_RE.exec(t);
+		if (keyword) {
+			// Links in keyword lines count, except `#+transclude:` (org-roam's defaults).
+			if (keyword[1]!.toLowerCase() !== 'transclude' && keyword[2]!.includes('[['))
+				collectLinks(n, true);
 			continue;
+		}
+		if (/^[ \t]*#(?:[ \t]|$)/.test(t) || /^[ \t]*:(?:[ \t]|$)/.test(t)) continue;
 		// Drawer markers carry nothing; links inside drawers (LOGBOOK notes) still count.
 		if (ANY_DRAWER_RE.test(t)) continue;
 		if (t.trim() === '') {
@@ -357,10 +391,10 @@ export function scanFile(
 	 * paragraph — what `fill-paragraph` produces — so the search window
 	 * extends over them, and only matches starting on this line count.
 	 */
-	function collectLinks(index: number) {
+	function collectLinks(index: number, single = false) {
 		const line = lines[index]!;
 		let last = index;
-		if (!HEADLINE_RE.test(line.text) && /\[\[(?:(?!\]\]).)*$/.test(line.text)) {
+		if (!single && !HEADLINE_RE.test(line.text) && /\[\[(?:(?!\]\]).)*$/.test(line.text)) {
 			while (last < index + 3 && last + 1 < lines.length) {
 				const next = lines[last + 1]!.text;
 				if (
@@ -375,7 +409,8 @@ export function scanFile(
 			}
 		}
 		const window = last === index ? line.text : source.slice(line.from, lines[last]!.to);
-		const masked = window.split('\n').map(maskVerbatim).join('\n');
+		// Keyword and property values are parsed as plain link text (org-element-link-parser).
+		const masked = single ? window : window.split('\n').map(maskVerbatim).join('\n');
 		const base = line.from;
 		LINK_RE.lastIndex = 0;
 		const ownerId = owner();
@@ -393,8 +428,38 @@ export function scanFile(
 				pos: base + m.index,
 				end: base + m.index + m[0].length,
 				description: m[2] !== undefined ? inlinePlain(m[2]) : null,
-				context: contextFor(index),
+				context: single ? line.text.trim() : contextFor(index),
 			});
+		}
+		if (single) return;
+		CITATION_RE.lastIndex = 0;
+		for (let m = CITATION_RE.exec(masked); m; m = CITATION_RE.exec(masked)) {
+			if (m.index >= line.text.length) break;
+			const inner = m.index + m[0].indexOf(':') + 1;
+			for (const k of m[1]!.matchAll(CITE_KEY_RE)) {
+				links.push({
+					source: ownerId,
+					dest: k[1]!,
+					type: 'cite',
+					pos: base + inner + k.index,
+					end: base + inner + k.index + k[0].length,
+					description: null,
+					context: contextFor(index),
+				});
+			}
+		}
+	}
+
+	/**
+	 * Links in a property drawer's values count too: org-roam's default
+	 * `org-roam-db-extra-links-elements` is `(node-property keyword)`, minus
+	 * `ROAM_REFS` (`org-roam-db-extra-links-exclude-keys`).
+	 */
+	function collectPropertyLinks(from: number, to: number) {
+		for (let j = from; j < to; j += 1) {
+			const m = PROPERTY_RE.exec(lines[j]!.text);
+			if (m && m[2] && m[1]!.toUpperCase() !== 'ROAM_REFS' && m[2].includes('[['))
+				collectLinks(j, true);
 		}
 	}
 

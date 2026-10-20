@@ -14,6 +14,9 @@ describe('layout', () => {
 		expect(dailyPath(layout, '2026-10-20')).toBe('notes/journal/20261020.org');
 		expect(dailyDate(layout, 'notes/journal/20261020.org')).toBe('2026-10-20');
 		expect(inVault(layout, 'README.org')).toBe(false);
+		// org-attach directories (org-roam-file-exclude-regexp = "data/").
+		expect(inVault(layout, 'notes/data/ab/cdef/attached.org')).toBe(false);
+		expect(inVault(layout, 'notes/b/c.org')).toBe(true);
 	});
 
 	it('defaults to org-roam conventions', () => {

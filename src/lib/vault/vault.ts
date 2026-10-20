@@ -36,6 +36,8 @@ export class Vault {
 	readonly tags = new Map<string, Set<string>>();
 	/** Lower-cased titles and aliases → node id, for `roam:` links and lookups. */
 	readonly titles = new Map<string, string>();
+	/** Every link by its destination (path without type), for reference backlinks. */
+	private readonly byDest = new Map<string, Backlink[]>();
 	/** Node ids defined in more than one place: org-roam would reject these. */
 	readonly duplicates = new Set<string>();
 
@@ -107,13 +109,18 @@ export class Vault {
 				}
 			}
 		}
+		this.byDest.clear();
 		for (const file of this.files.values()) {
 			for (const link of file.index.links) {
-				const dest = this.resolve(link);
 				const from = this.nodes.get(link.source);
-				if (!dest || !from || dest === link.source) continue;
-				if (!this.backlinks.has(dest)) this.backlinks.set(dest, []);
-				this.backlinks.get(dest)!.push({ ...link, from });
+				if (!from) continue;
+				const all = this.byDest.get(link.dest);
+				if (all) all.push({ ...link, from });
+				else this.byDest.set(link.dest, [{ ...link, from }]);
+				// Like org-roam's backlinks buffer: `id:` links only (self-links included).
+				if (link.type !== 'id' || !this.nodes.has(link.dest)) continue;
+				if (!this.backlinks.has(link.dest)) this.backlinks.set(link.dest, []);
+				this.backlinks.get(link.dest)!.push({ ...link, from });
 			}
 		}
 	}
@@ -149,6 +156,24 @@ export class Vault {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * Reference backlinks: links and citations whose target is one of the
+	 * node's `ROAM_REFS` (org-roam matches `links.dest` or `cite_key` to the ref).
+	 */
+	reflinksOf(id: string): { from: RoamNode; links: Backlink[] }[] {
+		const node = this.nodes.get(id);
+		if (!node) return [];
+		const groups = new Map<string, { from: RoamNode; links: Backlink[] }>();
+		for (const ref of node.refs)
+			for (const link of this.byDest.get(ref.ref) ?? []) {
+				const group = groups.get(link.from.id) ?? { from: link.from, links: [] };
+				if (!group.links.some((l) => l.pos === link.pos && l.from.file === link.from.file))
+					group.links.push(link);
+				groups.set(link.from.id, group);
+			}
+		return [...groups.values()];
 	}
 
 	/** Backlinks grouped by the node they come from. */

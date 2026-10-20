@@ -100,3 +100,58 @@ describe('inlinePlain', () => {
 		);
 	});
 });
+
+describe('links outside paragraphs (org-roam-db-extra-links-elements)', () => {
+	const source = [
+		':PROPERTIES:',
+		':ID:       f1',
+		':SOURCE:   [[id:a][A]]',
+		':ROAM_REFS: [[https://example.com]]',
+		':END:',
+		'#+title: File',
+		'#+related: [[id:b][B]]',
+		'#+transclude: [[id:c]]',
+		'* Heading',
+		':PROPERTIES:',
+		':ID:       h1',
+		':SEE:      [[id:d]]',
+		':END:',
+		'Body [[id:e]]',
+		'',
+	].join('\n');
+
+	it('records links in property values and keywords, but not ROAM_REFS or #+transclude', () => {
+		for (const index of [scanFile('t.org', source), indexFileTree('t.org', source)]) {
+			expect(index.links.map((l) => [l.source, l.dest])).toEqual([
+				['f1', 'a'],
+				['f1', 'b'],
+				['h1', 'd'],
+				['h1', 'e'],
+			]);
+		}
+		const scanned = scanFile('t.org', source).links;
+		expect(scanned.map((l) => source.slice(l.pos, l.end))).toEqual([
+			'[[id:a][A]]',
+			'[[id:b][B]]',
+			'[[id:d]]',
+			'[[id:e]]',
+		]);
+	});
+});
+
+describe('citations', () => {
+	it('records org-cite keys like the tree indexer, skipping inline code', () => {
+		const source =
+			':PROPERTIES:\n:ID: n\n:END:\n#+title: N\nSee [cite/t:see @smith2020 p. 4;@doe-1999] and =[cite:@no]=.\n* H\n:PROPERTIES:\n:ID: h\n:END:\n- [cite:@a.b]\n';
+		const keys = (idx: FileIndex) =>
+			idx.links.filter((l) => l.type === 'cite').map((l) => [l.source, l.dest]);
+		expect(keys(scanFile('n.org', source))).toEqual([
+			['n', 'smith2020'],
+			['n', 'doe-1999'],
+			['h', 'a.b'],
+		]);
+		expect(keys(scanFile('n.org', source))).toEqual(keys(indexFileTree('n.org', source)));
+		const first = scanFile('n.org', source).links.find((l) => l.type === 'cite')!;
+		expect(source.slice(first.pos, first.end)).toBe('@smith2020');
+	});
+});

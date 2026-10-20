@@ -14,7 +14,23 @@ describe('Vault', () => {
 	it('builds backlinks grouped by source', () => {
 		expect(vault.backlinksOf('b').map((g) => g.from.id)).toEqual(['a']);
 		expect(vault.backlinksOf('a').map((g) => g.from.id)).toEqual(['b1']);
-		expect(vault.backlinksOf('c').map((g) => g.from.id)).toEqual(['a']);
+		// org-roam counts only id: links as backlinks; roam: links still navigate.
+		expect(vault.backlinksOf('c')).toEqual([]);
+		expect(vault.resolve({ type: 'roam', dest: 'Gamma' })).toBe('c');
+	});
+
+	it('finds reference backlinks to ROAM_REFS, like org-roam', () => {
+		const v = Vault.fromSources({
+			'paper.org':
+				':PROPERTIES:\n:ID: p\n:ROAM_REFS: @smith2020 https://example.com/post\n:END:\n#+title: Paper\n',
+			'notes.org':
+				':PROPERTIES:\n:ID: n\n:END:\n#+title: Notes\nSee [cite:@smith2020] and [[https://example.com/post][the post]].\n',
+			'self.org': ':PROPERTIES:\n:ID: s\n:END:\n#+title: Self\n[[id:s][me]]\n',
+		});
+		const groups = v.reflinksOf('p');
+		expect(groups.map((g) => g.from.id)).toEqual(['n']);
+		expect(groups[0]!.links.map((l) => l.type).sort()).toEqual(['cite', 'https']);
+		expect(v.backlinksOf('s').map((g) => g.from.id)).toEqual(['s']);
 	});
 
 	it('resolves forward links and tags', () => {
