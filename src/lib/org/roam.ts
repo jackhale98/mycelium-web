@@ -78,7 +78,8 @@ export interface FileIndex {
 	text: string;
 }
 
-const truthy = (v: string | undefined) => v !== undefined && v.trim() !== '' && v.trim().toLowerCase() !== 'nil';
+const truthy = (v: string | undefined) =>
+	v !== undefined && v.trim() !== '' && v.trim().toLowerCase() !== 'nil';
 
 function drawerProperties(drawer: PropertyDrawer | undefined): Record<string, string> {
 	const props: Record<string, string> = {};
@@ -101,7 +102,8 @@ export function parseRefs(value: string | undefined): RoamRef[] {
 		const v = raw.replace(/^\[\[(.*)\]\]$/, '$1').replace(/^\[cite:(.*)\]$/, '$1');
 		const cite = /^(?:cite:)?@?([^\s;]+)$/.exec(v);
 		const url = /^([a-z][a-z0-9+.-]*):(.*)$/i.exec(v);
-		if (url && url[1]!.toLowerCase() !== 'cite') refs.push({ ref: url[2]!, type: url[1]!.toLowerCase() });
+		if (url && url[1]!.toLowerCase() !== 'cite')
+			refs.push({ ref: url[2]!, type: url[1]!.toLowerCase() });
 		else if (cite) refs.push({ ref: cite[1]!, type: 'cite' });
 	}
 	return refs;
@@ -127,7 +129,8 @@ export function indexFile(
 	const fileKeywords = new Map<string, string>();
 	let fileDrawer: PropertyDrawer | undefined;
 	for (const child of tree.children) {
-		if (child.type === 'property-drawer' && !fileDrawer && fileKeywords.size === 0) fileDrawer = child;
+		if (child.type === 'property-drawer' && !fileDrawer && fileKeywords.size === 0)
+			fileDrawer = child;
 		if (child.type === 'keyword') {
 			const k = child as Keyword;
 			if (!fileKeywords.has(k.key.toUpperCase())) fileKeywords.set(k.key.toUpperCase(), k.value);
@@ -136,7 +139,8 @@ export function indexFile(
 	}
 	// org collects in-buffer keywords from the whole file, not just the preamble.
 	walk(tree, (n) => {
-		if (n.type === 'keyword' && !fileKeywords.has(n.key.toUpperCase())) fileKeywords.set(n.key.toUpperCase(), n.value);
+		if (n.type === 'keyword' && !fileKeywords.has(n.key.toUpperCase()))
+			fileKeywords.set(n.key.toUpperCase(), n.value);
 	});
 
 	const fileProps = drawerProperties(fileDrawer);
@@ -189,8 +193,10 @@ export function indexFile(
 		const props = drawerProperties(drawer);
 		const htitle = plainText(headline.children).trim();
 		const tags = [...new Set([...parent.tags, ...headline.tags])];
-		const id = !excluded && props['ID'] && !truthy(props['ROAM_EXCLUDE']) ? props['ID'].trim() : null;
-		const ts = (t: { rawValue: string } | null | undefined) => (t ? parseTimestamp(t.rawValue) : null);
+		const id =
+			!excluded && props['ID'] && !truthy(props['ROAM_EXCLUDE']) ? props['ID'].trim() : null;
+		const ts = (t: { rawValue: string } | null | undefined) =>
+			t ? parseTimestamp(t.rawValue) : null;
 		const pos = startOf(headline);
 
 		if (id) {
@@ -239,7 +245,8 @@ export function indexFile(
 				visitSection(child, frame);
 				continue;
 			}
-			if (child.type === 'property-drawer' || child.type === 'keyword' || child.type === 'planning') continue;
+			if (child.type === 'property-drawer' || child.type === 'keyword' || child.type === 'planning')
+				continue;
 			if (child.type === 'link' && frame.ownerId) {
 				const ctx = context ?? child;
 				let raw = source.slice(startOf(ctx), endOf(ctx)).trim();
@@ -255,7 +262,9 @@ export function indexFile(
 				});
 			}
 			if (child.type === 'citation-reference' && frame.ownerId) {
-				const key = (child.children.find((c) => c.type === 'citation-key') as { key?: string } | undefined)?.key;
+				const key = (
+					child.children.find((c) => c.type === 'citation-key') as { key?: string } | undefined
+				)?.key;
 				if (key) {
 					links.push({
 						source: frame.ownerId,
@@ -264,7 +273,9 @@ export function indexFile(
 						pos: startOf(child),
 						end: endOf(child),
 						description: null,
-						context: context ? source.slice(startOf(context), endOf(context)).trim().slice(0, MAX_CONTEXT) : '',
+						context: context
+							? source.slice(startOf(context), endOf(context)).trim().slice(0, MAX_CONTEXT)
+							: '',
 					});
 				}
 			}
@@ -278,10 +289,21 @@ export function indexFile(
 	const root: Frame = { olp: [], tags: filetags, ownerId: fileId };
 	collect(tree, root);
 
-	return { path, title, excluded, filetags, keywords, nodes, links, headlines, text: text.join('\n') };
+	return {
+		path,
+		title,
+		excluded,
+		filetags,
+		keywords,
+		nodes,
+		links,
+		headlines,
+		text: text.join('\n'),
+	};
 }
 
 function walk(node: OrgNode, visit: (n: OrgNode) => void) {
 	visit(node);
-	if ('children' in node && Array.isArray(node.children)) for (const c of node.children as OrgNode[]) walk(c, visit);
+	if ('children' in node && Array.isArray(node.children))
+		for (const c of node.children as OrgNode[]) walk(c, visit);
 }

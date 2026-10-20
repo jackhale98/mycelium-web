@@ -1,0 +1,17 @@
+:PROPERTIES:
+:ID:       d0a1b2c3-0000-4000-8000-202610200001
+:END:
+#+title: 2026-10-20
+
+* Morning pages
+Thinking about how [[id:3c9d7e10-2f4b-4a8e-b1c6-7d8e9f0a1b02][Zettelkasten]] links behave like hyphae: the
+useful ones get reinforced, the rest quietly fade.
+
+* TODO Sketch the graph view
+DEADLINE: <2026-10-22 Thu>
+- [X] Colour nodes by tag
+- [ ] Highlight orphans
+- [ ] Local graph on each note
+
+* Captured
+- [2026-10-20 Tue 09:12] Idea: show unlinked mentions under backlinks

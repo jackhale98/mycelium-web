@@ -51,7 +51,16 @@ export function readTimestamp(text: string, from = 0): TimestampRead | null {
 		}
 	}
 	return {
-		timestamp: { raw: text.slice(from, closeIndex + 1), active, date, dayName, time, endTime, repeater, warning },
+		timestamp: {
+			raw: text.slice(from, closeIndex + 1),
+			active,
+			date,
+			dayName,
+			time,
+			endTime,
+			repeater,
+			warning,
+		},
 		from,
 		to: closeIndex + 1,
 	};
@@ -126,7 +135,11 @@ export function withTimestamp(ts: OrgTimestamp, patch: TimestampPatch): OrgTimes
 		date,
 		dayName,
 		time,
-		endTime: time ? (patch.endTime === undefined ? ts.endTime : normaliseTime(patch.endTime)) : null,
+		endTime: time
+			? patch.endTime === undefined
+				? ts.endTime
+				: normaliseTime(patch.endTime)
+			: null,
 		repeater: patch.repeater === undefined ? ts.repeater : patch.repeater,
 		warning: patch.warning === undefined ? ts.warning : patch.warning,
 	};
@@ -186,6 +199,9 @@ export function parseTimestampInput(
 }
 
 /** A timestamp for "now", as org writes CLOSED stamps and log entries. */
-export function nowTimestamp(now: { date: string; time?: string | null }, active = false): OrgTimestamp {
+export function nowTimestamp(
+	now: { date: string; time?: string | null },
+	active = false,
+): OrgTimestamp {
 	return makeTimestamp({ date: now.date, time: now.time ?? null, active });
 }

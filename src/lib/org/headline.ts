@@ -60,7 +60,10 @@ function keywordRegex(config: KeywordConfig): RegExp | null {
 }
 
 /** Scan a headline line. Returns `null` for anything that is not a headline. */
-export function scanHeadline(line: Line, config: KeywordConfig = DEFAULT_KEYWORD_CONFIG): HeadlineScan | null {
+export function scanHeadline(
+	line: Line,
+	config: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+): HeadlineScan | null {
 	const m = /^(\*+)[ \t]+/.exec(line.text);
 	if (!m) return null;
 	const base = line.from;
@@ -108,7 +111,8 @@ export function scanHeadline(line: Line, config: KeywordConfig = DEFAULT_KEYWORD
 		};
 		titleEnd = pos + tm.index;
 	}
-	while (titleEnd > pos && (text[titleEnd - 1] === ' ' || text[titleEnd - 1] === '\t')) titleEnd -= 1;
+	while (titleEnd > pos && (text[titleEnd - 1] === ' ' || text[titleEnd - 1] === '\t'))
+		titleEnd -= 1;
 
 	return {
 		line,
@@ -118,7 +122,11 @@ export function scanHeadline(line: Line, config: KeywordConfig = DEFAULT_KEYWORD
 		afterKeyword,
 		priority,
 		commented,
-		title: { from: base + pos, to: base + Math.max(pos, titleEnd), value: text.slice(pos, Math.max(pos, titleEnd)) },
+		title: {
+			from: base + pos,
+			to: base + Math.max(pos, titleEnd),
+			value: text.slice(pos, Math.max(pos, titleEnd)),
+		},
 		tags,
 	};
 }
@@ -187,7 +195,8 @@ function removeToken(line: Line, span: Span, floor: number): Change {
 		to = end;
 	} else {
 		let start = from;
-		while (start > floor - line.from && (text[start - 1] === ' ' || text[start - 1] === '\t')) start -= 1;
+		while (start > floor - line.from && (text[start - 1] === ' ' || text[start - 1] === '\t'))
+			start -= 1;
 		from = start;
 		to = text.length;
 	}
@@ -322,7 +331,11 @@ export function nextTodoKeyword(
 }
 
 /** Next priority, wrapping through "no priority". */
-export function nextPriority(current: string | null, priorities: readonly string[], direction: 1 | -1 = 1): string | null {
+export function nextPriority(
+	current: string | null,
+	priorities: readonly string[],
+	direction: 1 | -1 = 1,
+): string | null {
 	const cycle: (string | null)[] = [...priorities, null];
 	if (cycle.length === 1) return null;
 	const index = cycle.indexOf(current);

@@ -6,7 +6,7 @@ const config = { todoKeywords: ['TODO', 'NEXT'], doneKeywords: ['DONE'] };
 const now = { date: '2024-03-10', time: '14:05' };
 
 describe('repeaters', () => {
-	it('implements org\'s three flavours', () => {
+	it("implements org's three flavours", () => {
 		const t = (raw: string) => nextOccurrence(parseTimestamp(raw)!, now).raw;
 		expect(t('<2024-03-01 Fri +1w>')).toBe('<2024-03-08 Fri +1w>');
 		expect(t('<2024-03-01 Fri ++1w>')).toBe('<2024-03-15 Fri ++1w>');
@@ -18,16 +18,22 @@ describe('repeaters', () => {
 describe('changeTodoState', () => {
 	it('stamps CLOSED when completing', () => {
 		const src = '* TODO Task\nBody\n';
-		expect(changeTodoState(src, 0, 'DONE', { config, now }).text).toBe('* DONE Task\nCLOSED: [2024-03-10 Sun 14:05]\nBody\n');
+		expect(changeTodoState(src, 0, 'DONE', { config, now }).text).toBe(
+			'* DONE Task\nCLOSED: [2024-03-10 Sun 14:05]\nBody\n',
+		);
 	});
 
 	it('can skip the CLOSED stamp', () => {
-		expect(changeTodoState('* TODO Task\n', 0, 'DONE', { config, now, logDone: false }).text).toBe('* DONE Task\n');
+		expect(changeTodoState('* TODO Task\n', 0, 'DONE', { config, now, logDone: false }).text).toBe(
+			'* DONE Task\n',
+		);
 	});
 
 	it('removes CLOSED when reopening', () => {
 		const src = '* DONE Task\nCLOSED: [2024-03-09 Sat 10:00] DEADLINE: <2024-03-12 Tue>\n';
-		expect(changeTodoState(src, 0, 'TODO', { config, now }).text).toBe('* TODO Task\nDEADLINE: <2024-03-12 Tue>\n');
+		expect(changeTodoState(src, 0, 'TODO', { config, now }).text).toBe(
+			'* TODO Task\nDEADLINE: <2024-03-12 Tue>\n',
+		);
 	});
 
 	it('reschedules repeating tasks instead of closing them', () => {

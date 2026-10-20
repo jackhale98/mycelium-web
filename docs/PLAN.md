@@ -5,26 +5,37 @@ exploring [org-roam](https://www.orgroam.com/) knowledge bases stored in a git
 repository on GitHub, GitLab or Bitbucket. Deployed to GitHub Pages.
 
 Successor to the Tauri app at [jackhale98/mycelium](https://github.com/jackhale98/mycelium).
-We reuse its *ideas* (round-trip safety, conflict detection, org-roam schema,
+We reuse its _ideas_ (round-trip safety, conflict detection, org-roam schema,
 agenda semantics) but not its UI.
+
+## Progress
+
+- [x] **Phase 1 — Foundation:** Astro + Svelte scaffold, design system with light/dark
+      themes, CI and Pages deploy, org layer with text-patch edits and a fidelity suite,
+      demo vault with home, note, daily, agenda, tags and ⌘K search.
+- [ ] Phase 2 — Git, auth & index
+- [ ] Phase 3 — Read & navigate (graph, unlinked mentions, file browser)
+- [ ] Phase 4 — Edit & sync
+- [ ] Phase 5 — Capture templates, dailies calendar, graph
+- [ ] Phase 6 — Polish
 
 ## Decisions
 
-| Area | Decision |
-|---|---|
-| Framework | Astro (static output) + Svelte 5 islands; the app is a single `client:only` Svelte SPA mounted on one Astro page |
-| Git | `isomorphic-git` with a browser filesystem (OPFS, falling back to `@isomorphic-git/lightning-fs` / IndexedDB) |
-| Transport | Git smart-HTTP through a stateless, locked-down Cloudflare Worker proxy (self-hostable) |
-| Auth | OAuth sign-in: GitHub App (user-to-server tokens), GitLab OAuth (PKCE), Bitbucket OAuth. Token exchange/refresh via the same Worker. PAT fallback for self-hosted hosts |
-| Sync | Manual **Sync** button: local commits on save, pull + merge + push on demand. Unsynced-changes badge and reminders |
-| Parsing | `uniorg-parse` with `trackPosition: true` for reading/indexing/rendering |
-| Writing | **Text patches only**: never re-serialise a file from an AST |
-| Index | IndexedDB via Dexie, keyed by git blob OID for incremental re-indexing |
-| Search | MiniSearch (fuzzy + prefix), persisted and rebuilt incrementally |
-| Editor | CodeMirror 6, org language + live-preview decorations; separate reading view |
-| Graph | d3-force simulation in a Web Worker, rendered on `<canvas>` |
-| Offline | Service worker + web app manifest; installable on iOS/Android/desktop |
-| License | Apache-2.0 (matches the original project) |
+| Area      | Decision                                                                                                                                                                |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework | Astro (static output) + Svelte 5 islands; the app is a single `client:only` Svelte SPA mounted on one Astro page                                                        |
+| Git       | `isomorphic-git` with a browser filesystem (OPFS, falling back to `@isomorphic-git/lightning-fs` / IndexedDB)                                                           |
+| Transport | Git smart-HTTP through a stateless, locked-down Cloudflare Worker proxy (self-hostable)                                                                                 |
+| Auth      | OAuth sign-in: GitHub App (user-to-server tokens), GitLab OAuth (PKCE), Bitbucket OAuth. Token exchange/refresh via the same Worker. PAT fallback for self-hosted hosts |
+| Sync      | Manual **Sync** button: local commits on save, pull + merge + push on demand. Unsynced-changes badge and reminders                                                      |
+| Parsing   | `uniorg-parse` with `trackPosition: true` for reading/indexing/rendering                                                                                                |
+| Writing   | **Text patches only**: never re-serialise a file from an AST                                                                                                            |
+| Index     | IndexedDB via Dexie, keyed by git blob OID for incremental re-indexing                                                                                                  |
+| Search    | MiniSearch (fuzzy + prefix), persisted and rebuilt incrementally                                                                                                        |
+| Editor    | CodeMirror 6, org language + live-preview decorations; separate reading view                                                                                            |
+| Graph     | d3-force simulation in a Web Worker, rendered on `<canvas>`                                                                                                             |
+| Offline   | Service worker + web app manifest; installable on iOS/Android/desktop                                                                                                   |
+| License   | Apache-2.0 (matches the original project)                                                                                                                               |
 
 ## Architecture
 
@@ -97,16 +108,16 @@ On first open we scan the repo and infer, with overrides in Settings:
 
 Mirrors org-roam v2's schema so concepts map 1:1:
 
-| Table | Key | Fields |
-|---|---|---|
-| `files` | `path` | `oid` (git blob id), `title`, `mtime`, `excluded`, `todoKeywords` |
-| `nodes` | `id` | `file`, `level`, `pos`, `title`, `olp`, `todo`, `priority`, `scheduled`, `deadline`, `properties` |
-| `aliases` | `[nodeId+alias]` | |
-| `tags` | `[nodeId+tag]` | indexed by `tag` |
-| `refs` | `[nodeId+ref]` | `type` |
-| `links` | auto | `source`, `dest`, `type`, `pos`, `context` (snippet for backlinks) — indexed by `source` and `dest` |
-| `headlines` | `[file+pos]` | all headlines incl. non-nodes, for agenda: `todo`, `priority`, `scheduled`, `deadline`, `closed`, `repeater` |
-| `meta` | key | schema version, last indexed commit, detected config |
+| Table       | Key              | Fields                                                                                                       |
+| ----------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `files`     | `path`           | `oid` (git blob id), `title`, `mtime`, `excluded`, `todoKeywords`                                            |
+| `nodes`     | `id`             | `file`, `level`, `pos`, `title`, `olp`, `todo`, `priority`, `scheduled`, `deadline`, `properties`            |
+| `aliases`   | `[nodeId+alias]` |                                                                                                              |
+| `tags`      | `[nodeId+tag]`   | indexed by `tag`                                                                                             |
+| `refs`      | `[nodeId+ref]`   | `type`                                                                                                       |
+| `links`     | auto             | `source`, `dest`, `type`, `pos`, `context` (snippet for backlinks) — indexed by `source` and `dest`          |
+| `headlines` | `[file+pos]`     | all headlines incl. non-nodes, for agenda: `todo`, `priority`, `scheduled`, `deadline`, `closed`, `repeater` |
+| `meta`      | key              | schema version, last indexed commit, detected config                                                         |
 
 Incremental update: diff the working tree's blob OIDs against `files.oid`;
 re-parse only changed files in the indexer worker; write in one transaction.
@@ -115,6 +126,7 @@ MiniSearch holds titles, aliases, tags and body text with snippet extraction.
 ## Auth & Worker
 
 **Sign-in (GitHub App example)**
+
 1. App redirects to the provider's authorize URL with `state` + PKCE challenge.
 2. First time: the user installs the GitHub App on chosen repositories
    (Contents: read/write, Metadata: read).
@@ -124,11 +136,11 @@ MiniSearch holds titles, aliases, tags and body text with snippet extraction.
    JSON. Nothing is stored or logged.
 5. Tokens are kept in IndexedDB on the device; refresh via `/auth/<p>/refresh`.
 
-| Provider | Access token | Refresh |
-|---|---|---|
-| GitHub App | 8 h | refresh token ~6 months, rotated on use |
-| GitLab | 2 h | PKCE public client; refresh may not need the Worker |
-| Bitbucket | 2 h | via Worker (needs client secret) |
+| Provider   | Access token | Refresh                                             |
+| ---------- | ------------ | --------------------------------------------------- |
+| GitHub App | 8 h          | refresh token ~6 months, rotated on use             |
+| GitLab     | 2 h          | PKCE public client; refresh may not need the Worker |
+| Bitbucket  | 2 h          | via Worker (needs client secret)                    |
 
 **Worker hardening**: `Origin` allowlist (our Pages origin + configured
 extras); host allowlist (github.com, gitlab.com, bitbucket.org); path allowlist
@@ -207,11 +219,11 @@ e2e, Lighthouse CI budget.
 
 1. **Foundation**: Astro + Svelte scaffold, design tokens/themes, Pages deploy
    workflow, CI. Org layer: parsing with positions, roam metadata extraction,
-   patch ops, round-trip test suite. *Exit: patch ops proven byte-safe on the
-   fixture corpus.*
+   patch ops, round-trip test suite. _Exit: patch ops proven byte-safe on the
+   fixture corpus._
 2. **Git, auth & index**: Worker (proxy + OAuth), provider adapters, clone into
-   OPFS, Dexie index, indexer worker, MiniSearch, PAT fallback. *Exit: sign in,
-   pick repo, clone, browse an indexed vault offline.*
+   OPFS, Dexie index, indexer worker, MiniSearch, PAT fallback. _Exit: sign in,
+   pick repo, clone, browse an indexed vault offline._
 3. **Read & navigate**: reading view, backlinks/forward links/unlinked mentions,
    file & tag browser, quick switcher, search page.
 4. **Edit & sync**: CodeMirror live-preview editor, autocomplete, structured

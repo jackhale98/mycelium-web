@@ -1,0 +1,29 @@
+:PROPERTIES:
+:ID:       3c9d7e10-2f4b-4a8e-b1c6-7d8e9f0a1b02
+:ROAM_ALIASES: Zettel
+:ROAM_REFS: https://zettelkasten.de/introduction/
+:END:
+#+title: Zettelkasten
+#+filetags: :pkm:method:
+
+A Zettelkasten ("slip box") is a note system built from small, linked,
+permanent notes. Niklas Luhmann wrote ~90,000 of them over four decades.
+
+* Principles
+1. One idea per note — keep notes /atomic/.
+2. Write in your own words; never just copy.
+3. Link every new note to at least one existing note.
+4. Let structure emerge from links instead of folders.
+
+See [[id:9b8c7d60-5e4f-4a3b-8c2d-1e0f9a8b7c06][Evergreen notes]] for a modern take, and [[id:8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01][Mycelial networks]] for the
+metaphor I keep coming back to.
+
+* Luhmann's numbering
+Notes were addressed like =1/1a/1a2=, so a thought could branch anywhere.
+org-roam replaces this with stable IDs:
+
+#+begin_src org
+:PROPERTIES:
+:ID:       3c9d7e10-2f4b-4a8e-b1c6-7d8e9f0a1b02
+:END:
+#+end_src

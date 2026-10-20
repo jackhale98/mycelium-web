@@ -3,7 +3,8 @@ import { getPlanning, setPlanning } from '../planning';
 import { makeTimestamp, parseTimestamp, parseTimestampInput, withTimestamp } from '../timestamp';
 import { apply } from './helpers';
 
-const ts = (date: string, extra: Partial<Parameters<typeof makeTimestamp>[0]> = {}) => makeTimestamp({ date, ...extra });
+const ts = (date: string, extra: Partial<Parameters<typeof makeTimestamp>[0]> = {}) =>
+	makeTimestamp({ date, ...extra });
 
 describe('timestamps', () => {
 	it('parses every component', () => {
@@ -46,7 +47,9 @@ describe('setPlanning', () => {
 
 	it('adds a terminator to a final headline without one', () => {
 		const src = '* Task';
-		expect(apply(src, setPlanning(src, 0, 'SCHEDULED', ts('2024-01-01')))).toBe('* Task\nSCHEDULED: <2024-01-01 Mon>');
+		expect(apply(src, setPlanning(src, 0, 'SCHEDULED', ts('2024-01-01')))).toBe(
+			'* Task\nSCHEDULED: <2024-01-01 Mon>',
+		);
 	});
 
 	it('replaces only the targeted timestamp', () => {
@@ -60,14 +63,23 @@ describe('setPlanning', () => {
 		const src = '* T\nSCHEDULED: <2024-01-15 Mon>\n';
 		const out = apply(src, setPlanning(src, 0, 'DEADLINE', ts('2024-01-20')));
 		expect(out).toBe('* T\nDEADLINE: <2024-01-20 Sat> SCHEDULED: <2024-01-15 Mon>\n');
-		const closed = apply(out, setPlanning(out, 0, 'CLOSED', ts('2024-01-16', { active: false, time: '10:00' })));
-		expect(closed).toBe('* T\nCLOSED: [2024-01-16 Tue 10:00] DEADLINE: <2024-01-20 Sat> SCHEDULED: <2024-01-15 Mon>\n');
+		const closed = apply(
+			out,
+			setPlanning(out, 0, 'CLOSED', ts('2024-01-16', { active: false, time: '10:00' })),
+		);
+		expect(closed).toBe(
+			'* T\nCLOSED: [2024-01-16 Tue 10:00] DEADLINE: <2024-01-20 Sat> SCHEDULED: <2024-01-15 Mon>\n',
+		);
 	});
 
 	it('removes one entry and keeps the rest', () => {
 		const src = '* T\nDEADLINE: <2024-01-20 Sat> SCHEDULED: <2024-01-15 Mon>\n';
-		expect(apply(src, setPlanning(src, 0, 'DEADLINE', null))).toBe('* T\nSCHEDULED: <2024-01-15 Mon>\n');
-		expect(apply(src, setPlanning(src, 0, 'SCHEDULED', null))).toBe('* T\nDEADLINE: <2024-01-20 Sat>\n');
+		expect(apply(src, setPlanning(src, 0, 'DEADLINE', null))).toBe(
+			'* T\nSCHEDULED: <2024-01-15 Mon>\n',
+		);
+		expect(apply(src, setPlanning(src, 0, 'SCHEDULED', null))).toBe(
+			'* T\nDEADLINE: <2024-01-20 Sat>\n',
+		);
 	});
 
 	it('removes the line with its last entry', () => {
@@ -84,6 +96,8 @@ describe('setPlanning', () => {
 
 	it('preserves CRLF', () => {
 		const src = '* T\r\nBody\r\n';
-		expect(apply(src, setPlanning(src, 0, 'SCHEDULED', ts('2024-01-01')))).toBe('* T\r\nSCHEDULED: <2024-01-01 Mon>\r\nBody\r\n');
+		expect(apply(src, setPlanning(src, 0, 'SCHEDULED', ts('2024-01-01')))).toBe(
+			'* T\r\nSCHEDULED: <2024-01-01 Mon>\r\nBody\r\n',
+		);
 	});
 });

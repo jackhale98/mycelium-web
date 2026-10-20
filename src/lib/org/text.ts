@@ -33,12 +33,26 @@ export function splitLines(source: string): Line[] {
 	while (from < source.length) {
 		const nl = source.indexOf('\n', from);
 		if (nl === -1) {
-			lines.push({ index, from, to: source.length, end: source.length, text: source.slice(from), eol: '' });
+			lines.push({
+				index,
+				from,
+				to: source.length,
+				end: source.length,
+				text: source.slice(from),
+				eol: '',
+			});
 			break;
 		}
 		const cr = nl > from && source[nl - 1] === '\r';
 		const to = cr ? nl - 1 : nl;
-		lines.push({ index, from, to, end: nl + 1, text: source.slice(from, to), eol: cr ? '\r\n' : '\n' });
+		lines.push({
+			index,
+			from,
+			to,
+			end: nl + 1,
+			text: source.slice(from, to),
+			eol: cr ? '\r\n' : '\n',
+		});
 		from = nl + 1;
 		index += 1;
 	}
@@ -74,7 +88,9 @@ export function applyChanges(source: string, changes: readonly Change[]): string
 	if (changes.length === 0) return source;
 	const ordered = changes
 		.map((change, order) => ({ change, order }))
-		.sort((a, b) => a.change.from - b.change.from || a.change.to - b.change.to || a.order - b.order);
+		.sort(
+			(a, b) => a.change.from - b.change.from || a.change.to - b.change.to || a.order - b.order,
+		);
 	let out = '';
 	let cursor = 0;
 	for (const { change } of ordered) {
@@ -127,7 +143,11 @@ export function minimalChange(before: string, after: string): Change | null {
 	while (start < max && before.charCodeAt(start) === after.charCodeAt(start)) start += 1;
 	let endBefore = before.length;
 	let endAfter = after.length;
-	while (endBefore > start && endAfter > start && before.charCodeAt(endBefore - 1) === after.charCodeAt(endAfter - 1)) {
+	while (
+		endBefore > start &&
+		endAfter > start &&
+		before.charCodeAt(endBefore - 1) === after.charCodeAt(endAfter - 1)
+	) {
 		endBefore -= 1;
 		endAfter -= 1;
 	}

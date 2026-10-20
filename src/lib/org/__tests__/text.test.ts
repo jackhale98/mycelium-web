@@ -56,7 +56,10 @@ describe('applyChanges', () => {
 
 describe('runEdits', () => {
 	it('runs edits against each intermediate text', () => {
-		const result = runEdits('abc', [() => [{ from: 0, to: 1, insert: 'xx' }], (s) => [{ from: s.length, to: s.length, insert: '!' }]]);
+		const result = runEdits('abc', [
+			() => [{ from: 0, to: 1, insert: 'xx' }],
+			(s) => [{ from: s.length, to: s.length, insert: '!' }],
+		]);
 		expect(result.text).toBe('xxbc!');
 		expect(result.steps.length).toBe(2);
 	});

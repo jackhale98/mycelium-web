@@ -1,0 +1,269 @@
+/* Mycelium design tokens.
+ * Warm paper and moss in light; deep forest charcoal in dark.
+ * Every colour is a token so themes only redefine variables. */
+
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/newsreader/wght.css';
+@import '@fontsource-variable/newsreader/wght-italic.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+:root {
+	color-scheme: light;
+
+	--font-ui: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-read: 'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	--font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+	--bg: #f8f6f1;
+	--bg-raised: #fdfcf9;
+	--surface: #ffffff;
+	--surface-2: #f2efe8;
+	--surface-3: #e9e5dc;
+	--border: #e3ded3;
+	--border-strong: #cfc8b9;
+	--text: #1d1c19;
+	--text-2: #4a463f;
+	--text-muted: #5d584f;
+	--text-faint: #716b60;
+
+	--accent: #3d6a4c;
+	--accent-strong: #2c5139;
+	--accent-soft: #e3ece4;
+	--accent-softer: #eef3ee;
+	--on-accent: #ffffff;
+	--link: #2f6345;
+	--link-underline: color-mix(in oklab, var(--link) 35%, transparent);
+
+	--todo: #a14a12;
+	--todo-soft: #f8e9dc;
+	--next: #2a5f99;
+	--next-soft: #e2ecf7;
+	--wait: #74508f;
+	--wait-soft: #efe7f5;
+	--done: #5b6b5f;
+	--done-soft: #e7ebe6;
+	--danger: #b3261e;
+	--danger-soft: #fbe5e2;
+	--warn: #8a5a00;
+	--warn-soft: #fbf0d9;
+
+	--code-bg: #f1eee6;
+	--selection: color-mix(in oklab, var(--accent) 22%, transparent);
+	--focus: #2f6cb5;
+
+	--shadow-sm: 0 1px 2px rgb(40 32 16 / 0.06);
+	--shadow-md: 0 1px 2px rgb(40 32 16 / 0.05), 0 6px 20px -6px rgb(40 32 16 / 0.12);
+	--shadow-lg: 0 2px 6px rgb(40 32 16 / 0.06), 0 24px 60px -12px rgb(40 32 16 / 0.25);
+
+	--radius-sm: 6px;
+	--radius: 10px;
+	--radius-lg: 16px;
+
+	--sidebar-w: 264px;
+	--panel-w: 320px;
+	--read-w: 42rem;
+
+	--ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Dark tokens are repeated for the system preference and the explicit choice. */
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--bg: #111311;
+	--bg-raised: #151815;
+	--surface: #181b18;
+	--surface-2: #1e221f;
+	--surface-3: #262b27;
+	--border: #2a2f2b;
+	--border-strong: #3a413b;
+	--text: #e9e7e1;
+	--text-2: #cdc9c0;
+	--text-muted: #b1aca1;
+	--text-faint: #949085;
+
+	--accent: #8cc29d;
+	--accent-strong: #a8d6b5;
+	--accent-soft: #1f2e24;
+	--accent-softer: #19221c;
+	--on-accent: #0f1a12;
+	--link: #9ccdaa;
+
+	--todo: #f0a46a;
+	--todo-soft: #3a2616;
+	--next: #8fb8ea;
+	--next-soft: #1b2a3d;
+	--wait: #c6a5e3;
+	--wait-soft: #2c2236;
+	--done: #93a297;
+	--done-soft: #222a24;
+	--danger: #f2948b;
+	--danger-soft: #3b1d1a;
+	--warn: #e8c070;
+	--warn-soft: #352a14;
+
+	--code-bg: #1b1f1c;
+	--focus: #7fb0ec;
+
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+	--shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.5);
+	--shadow-lg: 0 2px 6px rgb(0 0 0 / 0.35), 0 24px 60px -12px rgb(0 0 0 / 0.65);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--bg: #111311;
+		--bg-raised: #151815;
+		--surface: #181b18;
+		--surface-2: #1e221f;
+		--surface-3: #262b27;
+		--border: #2a2f2b;
+		--border-strong: #3a413b;
+		--text: #e9e7e1;
+		--text-2: #cdc9c0;
+		--text-muted: #b1aca1;
+		--text-faint: #949085;
+
+		--accent: #8cc29d;
+		--accent-strong: #a8d6b5;
+		--accent-soft: #1f2e24;
+		--accent-softer: #19221c;
+		--on-accent: #0f1a12;
+		--link: #9ccdaa;
+
+		--todo: #f0a46a;
+		--todo-soft: #3a2616;
+		--next: #8fb8ea;
+		--next-soft: #1b2a3d;
+		--wait: #c6a5e3;
+		--wait-soft: #2c2236;
+		--done: #93a297;
+		--done-soft: #222a24;
+		--danger: #f2948b;
+		--danger-soft: #3b1d1a;
+		--warn: #e8c070;
+		--warn-soft: #352a14;
+
+		--code-bg: #1b1f1c;
+		--focus: #7fb0ec;
+
+		--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+		--shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.5);
+		--shadow-lg: 0 2px 6px rgb(0 0 0 / 0.35), 0 24px 60px -12px rgb(0 0 0 / 0.65);
+	}
+}
+
+/* ---------------------------------------------------------------- base */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+	background: var(--bg);
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-ui);
+	font-size: 15px;
+	line-height: 1.5;
+	font-feature-settings: 'cv11', 'ss01';
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+::selection {
+	background: var(--selection);
+}
+
+a {
+	color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+img,
+svg {
+	display: block;
+	max-width: 100%;
+}
+
+.sr-only {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.skip-link {
+	position: absolute;
+	left: 12px;
+	top: -48px;
+	z-index: 100;
+	padding: 10px 14px;
+	border-radius: var(--radius-sm);
+	background: var(--accent);
+	color: var(--on-accent);
+	font-weight: 600;
+	text-decoration: none;
+	transition: top 0.15s var(--ease);
+}
+
+.skip-link:focus {
+	top: 12px;
+}
+
+kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.5em;
+	padding: 0 0.35em;
+	border: 1px solid var(--border);
+	border-bottom-width: 2px;
+	border-radius: 5px;
+	background: var(--surface);
+	color: var(--text-muted);
+	font: 500 11px/1.6 var(--font-ui);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

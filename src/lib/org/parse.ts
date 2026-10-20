@@ -11,7 +11,10 @@ import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig } from './types';
 export type { OrgData, OrgNode } from 'uniorg';
 
 /** Keywords in effect for a file: its own `#+TODO:` lines, else the global set. */
-export function effectiveKeywords(source: string, fallback: KeywordConfig = DEFAULT_KEYWORD_CONFIG): KeywordConfig {
+export function effectiveKeywords(
+	source: string,
+	fallback: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+): KeywordConfig {
 	return fileTodoKeywords(source) ?? fallback;
 }
 
@@ -20,7 +23,10 @@ export function effectiveKeywords(source: string, fallback: KeywordConfig = DEFA
  * parsed with LF endings and every offset is mapped back onto the original
  * text; positions always index the source exactly as stored.
  */
-export function parseOrg(source: string, keywords: KeywordConfig = DEFAULT_KEYWORD_CONFIG): OrgData {
+export function parseOrg(
+	source: string,
+	keywords: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+): OrgData {
 	const processor = unified().use(uniorgParse, {
 		trackPosition: true,
 		todoKeywords: [...keywords.todoKeywords, ...keywords.doneKeywords],
@@ -57,7 +63,8 @@ export function parseOrg(source: string, keywords: KeywordConfig = DEFAULT_KEYWO
 			const child = (node as unknown as Record<string, unknown>)[key];
 			if (child && typeof child === 'object' && 'type' in child) remap(child as OrgNode);
 		}
-		if ('children' in node && Array.isArray(node.children)) for (const c of node.children as OrgNode[]) remap(c);
+		if ('children' in node && Array.isArray(node.children))
+			for (const c of node.children as OrgNode[]) remap(c);
 	};
 	remap(tree);
 	return tree;

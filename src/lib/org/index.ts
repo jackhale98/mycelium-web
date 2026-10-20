@@ -12,3 +12,4 @@ export * from './checkbox';
 export * from './todo';
 export * from './parse';
 export * from './roam';
+export * from './capture';

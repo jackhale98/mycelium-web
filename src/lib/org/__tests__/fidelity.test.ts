@@ -23,11 +23,17 @@ const files = (dir: string): string[] =>
 	});
 
 const apply = (s: string, c: Change[]) => applyChanges(s, c);
-const lineEndings = (s: string) => ({ crlf: (s.match(/\r\n/g) ?? []).length, lf: (s.match(/(?<!\r)\n/g) ?? []).length });
+const lineEndings = (s: string) => ({
+	crlf: (s.match(/\r\n/g) ?? []).length,
+	lf: (s.match(/(?<!\r)\n/g) ?? []).length,
+});
 
 for (const path of files(root)) {
 	const source = readFileSync(path, 'utf8');
-	const keywords = fileTodoKeywords(source) ?? { todoKeywords: ['TODO', 'NEXT'], doneKeywords: ['DONE'] };
+	const keywords = fileTodoKeywords(source) ?? {
+		todoKeywords: ['TODO', 'NEXT'],
+		doneKeywords: ['DONE'],
+	};
 	const name = path.slice(root.length + 1);
 	const headlines = splitLines(source)
 		.map((line) => scanHeadline(line, keywords))
@@ -37,7 +43,16 @@ for (const path of files(root)) {
 	describe(`fidelity: ${name}`, () => {
 		it('keeps line endings consistent through edits', () => {
 			for (const h of headlines) {
-				const out = apply(source, setPlanning(source, h.line.from, 'DEADLINE', makeTimestamp({ date: '2030-01-01' }), keywords));
+				const out = apply(
+					source,
+					setPlanning(
+						source,
+						h.line.from,
+						'DEADLINE',
+						makeTimestamp({ date: '2030-01-01' }),
+						keywords,
+					),
+				);
 				const endings = lineEndings(out);
 				if (usesCrlf) expect(endings.lf).toBe(0);
 				else expect(endings.crlf).toBe(0);
@@ -49,15 +64,23 @@ for (const path of files(root)) {
 				const at = h.line.from;
 				const kw = h.keyword?.value ?? null;
 				const toggled = apply(source, setTodoKeyword(source, at, kw ? null : 'TODO', keywords));
-				expect(apply(toggled, setTodoKeyword(toggled, at, kw, keywords)), `keyword: ${h.line.text}`).toBe(source);
+				expect(
+					apply(toggled, setTodoKeyword(toggled, at, kw, keywords)),
+					`keyword: ${h.line.text}`,
+				).toBe(source);
 
 				if (!h.priority) {
 					const p = apply(source, setPriority(source, at, 'A', keywords));
-					expect(apply(p, setPriority(p, at, null, keywords)), `priority: ${h.line.text}`).toBe(source);
+					expect(apply(p, setPriority(p, at, null, keywords)), `priority: ${h.line.text}`).toBe(
+						source,
+					);
 				}
 				const tags = h.tags?.values ?? [];
 				const t = apply(source, setHeadlineTags(source, at, [...tags, 'fidelity'], keywords));
-				expect(apply(t, setHeadlineTags(t, at, tags, keywords)), `tags: ${h.line.text} -> ${splitLines(t)[h.line.index]?.text}`).toBe(source);
+				expect(
+					apply(t, setHeadlineTags(t, at, tags, keywords)),
+					`tags: ${h.line.text} -> ${splitLines(t)[h.line.index]?.text}`,
+				).toBe(source);
 			}
 		});
 
@@ -68,7 +91,8 @@ for (const path of files(root)) {
 				const after = splitLines(out);
 				expect(after.length).toBe(before.length);
 				after.forEach((line, i) => {
-					if (i !== h.line.index) expect(line.text + line.eol).toBe(before[i]!.text + before[i]!.eol);
+					if (i !== h.line.index)
+						expect(line.text + line.eol).toBe(before[i]!.text + before[i]!.eol);
 				});
 			}
 		});
@@ -76,12 +100,17 @@ for (const path of files(root)) {
 		it('round-trips planning and property additions', () => {
 			for (const h of headlines) {
 				const at = h.line.from;
-				const p = apply(source, setPlanning(source, at, 'SCHEDULED', makeTimestamp({ date: '2031-02-03' }), keywords));
+				const p = apply(
+					source,
+					setPlanning(source, at, 'SCHEDULED', makeTimestamp({ date: '2031-02-03' }), keywords),
+				);
 				if (!/SCHEDULED:/.test(splitLines(source)[h.line.index + 1]?.text ?? '')) {
 					expect(apply(p, setPlanning(p, at, 'SCHEDULED', null, keywords))).toBe(source);
 				}
 				const q = apply(source, setProperty(source, at, 'FIDELITY', 'yes', keywords));
-				expect(apply(q, setProperty(q, at, 'FIDELITY', null, keywords))).not.toContain(':FIDELITY:');
+				expect(apply(q, setProperty(q, at, 'FIDELITY', null, keywords))).not.toContain(
+					':FIDELITY:',
+				);
 			}
 		});
 

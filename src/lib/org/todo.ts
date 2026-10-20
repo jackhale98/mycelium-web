@@ -27,7 +27,11 @@ export function parseRepeater(cookie: string | null | undefined): RepeaterCookie
 	};
 }
 
-function shiftOnce(date: string, time: string | null, cookie: RepeaterCookie): [string, string | null] {
+function shiftOnce(
+	date: string,
+	time: string | null,
+	cookie: RepeaterCookie,
+): [string, string | null] {
 	if (cookie.unit === 'h') {
 		const shifted = addHours(date, time, cookie.value);
 		return [shifted.date, shifted.time];
@@ -69,7 +73,8 @@ export interface TodoChangeResult extends EditResult {
 	keyword: string | null;
 }
 
-const isDone = (kw: string | null, config: KeywordConfig) => kw !== null && config.doneKeywords.includes(kw);
+const isDone = (kw: string | null, config: KeywordConfig) =>
+	kw !== null && config.doneKeywords.includes(kw);
 
 /** Change a headline's TODO state, applying CLOSED stamps and repeaters. */
 export function changeTodoState(
@@ -86,14 +91,23 @@ export function changeTodoState(
 	const lineFrom = h.line.from;
 	const previous = h.keyword?.value ?? null;
 	const planning = findPlanning(lines, h);
-	const ts = (kind: PlanningKind) => planning?.entries.find((e) => e.kind === kind)?.timestamp ?? null;
+	const ts = (kind: PlanningKind) =>
+		planning?.entries.find((e) => e.kind === kind)?.timestamp ?? null;
 
 	if (isDone(keyword, config) && !isDone(previous, config)) {
-		const repeating = (['DEADLINE', 'SCHEDULED'] as const).filter((k) => parseRepeater(ts(k)?.repeater));
+		const repeating = (['DEADLINE', 'SCHEDULED'] as const).filter((k) =>
+			parseRepeater(ts(k)?.repeater),
+		);
 		if (repeating.length > 0) {
-			const back = previous && config.todoKeywords.includes(previous) ? previous : (config.todoKeywords[0] ?? null);
+			const back =
+				previous && config.todoKeywords.includes(previous)
+					? previous
+					: (config.todoKeywords[0] ?? null);
 			const result = runEdits(source, [
-				...repeating.map((kind) => (s: string) => setPlanning(s, lineFrom, kind, nextOccurrence(ts(kind)!, now), config)),
+				...repeating.map(
+					(kind) => (s: string) =>
+						setPlanning(s, lineFrom, kind, nextOccurrence(ts(kind)!, now), config),
+				),
 				(s: string) => setPlanning(s, lineFrom, 'CLOSED', null, config),
 				(s: string) => setTodoKeyword(s, lineFrom, back, config),
 			]);

@@ -49,7 +49,8 @@ function readDrawer(lines: readonly Line[], startIndex: number): PropertyDrawer 
 		const m = PROPERTY_RE.exec(line.text);
 		if (!m) continue;
 		const valueText = m[4] ?? '';
-		const valueFrom = m[3] !== undefined ? line.from + m[1]!.length + m[2]!.length + 2 + m[3].length : line.to;
+		const valueFrom =
+			m[3] !== undefined ? line.from + m[1]!.length + m[2]!.length + 2 + m[3].length : line.to;
 		properties.push({
 			key: m[2]!,
 			value: valueText,
@@ -63,7 +64,11 @@ function readDrawer(lines: readonly Line[], startIndex: number): PropertyDrawer 
 /** Index of the line where a file-level drawer may start. */
 function fileDrawerIndex(lines: readonly Line[]): number {
 	let i = 0;
-	while (i < lines.length && (lines[i]!.text.trim() === '' || /^[ \t]*#(?:[ \t]|$)/.test(lines[i]!.text))) i += 1;
+	while (
+		i < lines.length &&
+		(lines[i]!.text.trim() === '' || /^[ \t]*#(?:[ \t]|$)/.test(lines[i]!.text))
+	)
+		i += 1;
 	return i;
 }
 
@@ -123,7 +128,10 @@ function formatProperty(drawer: PropertyDrawer | null, key: string, value: strin
 	if (props.length > 0) {
 		const columns = props.map((p) => p.valueSpan.from - p.line.from - indent.length);
 		const aligned = props.length > 1 && columns.every((c) => c === columns[0]);
-		const single = props.length === 1 && props[0]!.valueSpan.from - props[0]!.line.from - indent.length > `:${props[0]!.key}:`.length + 1;
+		const single =
+			props.length === 1 &&
+			props[0]!.valueSpan.from - props[0]!.line.from - indent.length >
+				`:${props[0]!.key}:`.length + 1;
 		if (aligned || single) column = columns[0]!;
 		else column = -1; // unaligned drawer: one space
 	}
@@ -162,7 +170,9 @@ export function setProperty(
 
 	if (drawer) {
 		const line = formatProperty(drawer, key, clean);
-		return [{ from: drawer.end.from, to: drawer.end.from, insert: `${line}${drawer.end.eol || eol}` }];
+		return [
+			{ from: drawer.end.from, to: drawer.end.from, insert: `${line}${drawer.end.eol || eol}` },
+		];
 	}
 
 	const block = [':PROPERTIES:', formatProperty(null, key, clean), ':END:'];

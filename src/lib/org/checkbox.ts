@@ -6,9 +6,18 @@
 /// headline are recounted. Unrelated cookies elsewhere are left alone.
 
 import { headlineLevel } from './headline';
-import { indentWidth, lineAt, runEdits, splitLines, type Change, type EditResult, type Line } from './text';
+import {
+	indentWidth,
+	lineAt,
+	runEdits,
+	splitLines,
+	type Change,
+	type EditResult,
+	type Line,
+} from './text';
 
-const ITEM_RE = /^([ \t]*)(?:[-+]|\*(?=[ \t])|\d+[.)]|[A-Za-z][.)])[ \t]+(?:\[@\w+\][ \t]+)?(?:\[([ xX-])\])?/;
+const ITEM_RE =
+	/^([ \t]*)(?:[-+]|\*(?=[ \t])|\d+[.)]|[A-Za-z][.)])[ \t]+(?:\[@\w+\][ \t]+)?(?:\[([ xX-])\])?/;
 const COOKIE_RE = /\[(\d*)\/(\d*)\]|\[(\d{0,3})%\]/g;
 
 export type CheckboxState = 'unchecked' | 'checked' | 'partial';
@@ -23,7 +32,8 @@ export interface ListItemScan {
 
 const stateOf = (mark: string): CheckboxState =>
 	mark === 'x' || mark === 'X' ? 'checked' : mark === '-' ? 'partial' : 'unchecked';
-const markOf = (state: CheckboxState) => (state === 'checked' ? 'X' : state === 'partial' ? '-' : ' ');
+const markOf = (state: CheckboxState) =>
+	state === 'checked' ? 'X' : state === 'partial' ? '-' : ' ';
 
 /** Scan a line as a list item. `*` bullets only count when indented, as in org. */
 export function scanListItem(line: Line): ListItemScan | null {
@@ -97,8 +107,10 @@ function cookieChanges(lines: readonly Line[], line: Line): Change[] {
 	const changes: Change[] = [];
 	COOKIE_RE.lastIndex = 0;
 	for (let m = COOKIE_RE.exec(line.text); m; m = COOKIE_RE.exec(line.text)) {
-		const insert = m[3] !== undefined ? `[${Math.floor((done / total) * 100)}%]` : `[${done}/${total}]`;
-		if (insert !== m[0]) changes.push({ from: line.from + m.index, to: line.from + m.index + m[0].length, insert });
+		const insert =
+			m[3] !== undefined ? `[${Math.floor((done / total) * 100)}%]` : `[${done}/${total}]`;
+		if (insert !== m[0])
+			changes.push({ from: line.from + m.index, to: line.from + m.index + m[0].length, insert });
 	}
 	return changes;
 }
@@ -125,13 +137,18 @@ function fixParentBoxes(source: string, offset: number): Change[] {
 	for (const parent of ancestors(lines, line)) {
 		const item = scanListItem(parent);
 		if (!item || item.mark === null) continue;
-		const kids = children(lines, parent).map((k) => ({ ...k, state: states.get(k.line.index) ?? k.state }));
+		const kids = children(lines, parent).map((k) => ({
+			...k,
+			state: states.get(k.line.index) ?? k.state,
+		}));
 		const { done, total } = summarise(kids);
 		if (total === 0) continue;
 		const partial = kids.some((k) => k.state === 'partial');
-		const state: CheckboxState = done === total ? 'checked' : done > 0 || partial ? 'partial' : 'unchecked';
+		const state: CheckboxState =
+			done === total ? 'checked' : done > 0 || partial ? 'partial' : 'unchecked';
 		states.set(parent.index, state);
-		if (state !== item.state) changes.push({ from: item.mark, to: item.mark + 1, insert: markOf(state) });
+		if (state !== item.state)
+			changes.push({ from: item.mark, to: item.mark + 1, insert: markOf(state) });
 	}
 	return changes;
 }

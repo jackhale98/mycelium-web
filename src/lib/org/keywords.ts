@@ -17,7 +17,10 @@ export interface FileKeyword {
 }
 
 /** Every `#+KEY: value` line outside blocks, in source order. */
-export function scanFileKeywords(source: string, lines: readonly Line[] = splitLines(source)): FileKeyword[] {
+export function scanFileKeywords(
+	source: string,
+	lines: readonly Line[] = splitLines(source),
+): FileKeyword[] {
 	const out: FileKeyword[] = [];
 	let blockEnd: RegExp | null = null;
 	for (const line of lines) {
@@ -33,8 +36,15 @@ export function scanFileKeywords(source: string, lines: readonly Line[] = splitL
 		const m = KEYWORD_RE.exec(line.text);
 		if (!m) continue;
 		const value = m[4] ?? '';
-		const from = m[3] !== undefined ? line.from + m[1]!.length + 2 + m[2]!.length + 1 + m[3].length : line.to;
-		out.push({ key: m[2]!.toUpperCase(), written: m[2]!, value, line, valueSpan: { from, to: from + value.length } });
+		const from =
+			m[3] !== undefined ? line.from + m[1]!.length + 2 + m[2]!.length + 1 + m[3].length : line.to;
+		out.push({
+			key: m[2]!.toUpperCase(),
+			written: m[2]!,
+			value,
+			line,
+			valueSpan: { from, to: from + value.length },
+		});
 	}
 	return out;
 }
@@ -47,12 +57,21 @@ export function getFileKeyword(source: string, key: string): string | null {
 /** Index of the line a new metadata keyword is inserted before. */
 function metadataInsertLine(lines: readonly Line[]): number {
 	let i = 0;
-	while (i < lines.length && (lines[i]!.text.trim() === '' || /^[ \t]*#(?:[ \t]|$)/.test(lines[i]!.text))) i += 1;
+	while (
+		i < lines.length &&
+		(lines[i]!.text.trim() === '' || /^[ \t]*#(?:[ \t]|$)/.test(lines[i]!.text))
+	)
+		i += 1;
 	if (lines[i] && /^[ \t]*:PROPERTIES:[ \t]*$/i.test(lines[i]!.text)) {
 		while (i < lines.length && !/^[ \t]*:END:[ \t]*$/i.test(lines[i]!.text)) i += 1;
 		i += 1;
 	}
-	while (i < lines.length && KEYWORD_RE.test(lines[i]!.text) && !BLOCK_START_RE.test(lines[i]!.text)) i += 1;
+	while (
+		i < lines.length &&
+		KEYWORD_RE.test(lines[i]!.text) &&
+		!BLOCK_START_RE.test(lines[i]!.text)
+	)
+		i += 1;
 	return i;
 }
 

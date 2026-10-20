@@ -140,7 +140,7 @@ export function formatTime(minutes: number): string {
 export function addHours(
 	iso: string,
 	time: string | null,
-	hours: number
+	hours: number,
 ): { date: string; time: string | null } {
 	if (time === null) return { date: addDays(iso, Math.trunc(hours / 24)), time: null };
 	const minutes = parseTime(time);

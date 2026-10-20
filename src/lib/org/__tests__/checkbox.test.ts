@@ -11,7 +11,9 @@ describe('checkboxes', () => {
 
 	it('updates cookies on the owning headline', () => {
 		const src = '* Tasks [1/3] [33%]\n- [X] a\n- [ ] b\n- [ ] c\n';
-		expect(toggleCheckbox(src, at(src, '- [ ] b')).text).toBe('* Tasks [2/3] [66%]\n- [X] a\n- [X] b\n- [ ] c\n');
+		expect(toggleCheckbox(src, at(src, '- [ ] b')).text).toBe(
+			'* Tasks [2/3] [66%]\n- [X] a\n- [X] b\n- [ ] c\n',
+		);
 	});
 
 	it('fixes parent boxes and nested cookies', () => {
@@ -24,7 +26,9 @@ describe('checkboxes', () => {
 
 	it('leaves unrelated cookies alone', () => {
 		const src = '* Other [0/0]\n* Tasks [0/1]\n- [ ] a\n';
-		expect(toggleCheckbox(src, at(src, '- [ ]')).text).toBe('* Other [0/0]\n* Tasks [1/1]\n- [X] a\n');
+		expect(toggleCheckbox(src, at(src, '- [ ]')).text).toBe(
+			'* Other [0/0]\n* Tasks [1/1]\n- [X] a\n',
+		);
 	});
 
 	it('ignores lines without a box', () => {

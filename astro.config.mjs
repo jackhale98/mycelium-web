@@ -12,7 +12,26 @@ export default defineConfig({
 	output: 'static',
 	trailingSlash: 'ignore',
 	integrations: [svelte()],
+	// Strict CSP: Astro hashes its own inline scripts and styles. connect-src
+	// gains the git providers and the sync worker once those land.
+	security: {
+		csp: {
+			directives: [
+				"default-src 'self'",
+				"img-src 'self' data: blob:",
+				"font-src 'self'",
+				"connect-src 'self'",
+				"object-src 'none'",
+				"base-uri 'self'",
+				"form-action 'self'",
+				'upgrade-insecure-requests',
+			],
+		},
+	},
+	markdown: { syntaxHighlight: false },
 	vite: {
 		worker: { format: 'es' },
+		// Emit every asset as a file: inlined data: URLs would need a looser CSP.
+		build: { assetsInlineLimit: 0 },
 	},
 });

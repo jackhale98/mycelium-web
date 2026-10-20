@@ -7,7 +7,13 @@
 import { headlineAt, type HeadlineScan } from './headline';
 import { readTimestamp } from './timestamp';
 import { splitLines, type Change, type Line } from './text';
-import { DEFAULT_KEYWORD_CONFIG, PLANNING_ORDER, type KeywordConfig, type OrgTimestamp, type PlanningKind } from './types';
+import {
+	DEFAULT_KEYWORD_CONFIG,
+	PLANNING_ORDER,
+	type KeywordConfig,
+	type OrgTimestamp,
+	type PlanningKind,
+} from './types';
 
 const PLANNING_KEYWORD_RE = /^(SCHEDULED|DEADLINE|CLOSED):[ \t]*/;
 

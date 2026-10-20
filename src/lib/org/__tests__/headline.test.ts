@@ -51,7 +51,9 @@ describe('scanHeadline', () => {
 describe('setTodoKeyword', () => {
 	it('replaces only the keyword', () => {
 		const src = '* TODO   spaced    title   :tag:\nbody\n';
-		expect(apply(src, setTodoKeyword(src, 0, 'DONE', kw))).toBe('* DONE   spaced    title   :tag:\nbody\n');
+		expect(apply(src, setTodoKeyword(src, 0, 'DONE', kw))).toBe(
+			'* DONE   spaced    title   :tag:\nbody\n',
+		);
 	});
 
 	it('inserts a keyword', () => {
@@ -147,6 +149,8 @@ describe('helpers', () => {
 	});
 
 	it('formats new headlines', () => {
-		expect(formatHeadline({ level: 2, title: 'Hi', keyword: 'TODO', priority: 'A', tags: ['x'] })).toBe('** TODO [#A] Hi :x:');
+		expect(
+			formatHeadline({ level: 2, title: 'Hi', keyword: 'TODO', priority: 'A', tags: ['x'] }),
+		).toBe('** TODO [#A] Hi :x:');
 	});
 });

@@ -1,0 +1,303 @@
+<script lang="ts">
+	import { href, router } from '../router.svelte';
+	import { app, localNow, type ThemeChoice } from '../state.svelte';
+	import Icon, { type IconName } from './Icon.svelte';
+	import Logo from './Logo.svelte';
+
+	const today = localNow().date;
+	const route = $derived(router.route);
+
+	const nav: {
+		label: string;
+		icon: IconName;
+		href: string;
+		match: (r: typeof route) => boolean;
+	}[] = [
+		{ label: 'Home', icon: 'home', href: href.home(), match: (r) => r.name === 'home' },
+		{ label: 'Today', icon: 'calendar', href: href.daily(today), match: (r) => r.name === 'daily' },
+		{ label: 'Agenda', icon: 'agenda', href: href.agenda(), match: (r) => r.name === 'agenda' },
+		{ label: 'Tags', icon: 'tag', href: href.tags(), match: (r) => r.name === 'tags' },
+	];
+
+	const notes = $derived.by(() => {
+		void app.rev;
+		return [...app.vault.nodes.values()]
+			.filter((n) => n.level === 0 && !n.file.startsWith(`${app.dailyDir}/`))
+			.sort((a, b) => a.title.localeCompare(b.title));
+	});
+
+	const themes: { value: ThemeChoice; icon: IconName; label: string }[] = [
+		{ value: 'light', icon: 'sun', label: 'Light' },
+		{ value: 'system', icon: 'monitor', label: 'System' },
+		{ value: 'dark', icon: 'moon', label: 'Dark' },
+	];
+
+	const current = $derived(route.name === 'node' ? route.id : null);
+</script>
+
+<div class="sidebar">
+	<div class="brand">
+		<Logo size={28} />
+		<span class="name">Mycelium</span>
+		<button
+			type="button"
+			class="close"
+			aria-label="Close menu"
+			onclick={() => (app.navOpen = false)}><Icon name="close" size={18} /></button
+		>
+	</div>
+
+	<button type="button" class="vault" aria-label="Current vault: demo vault">
+		<span class="vault-icon"><Icon name="git" size={15} /></span>
+		<span class="vault-text">
+			<span class="vault-name">Demo vault</span>
+			<span class="vault-sub">{app.vault.files.size} files · in this tab only</span>
+		</span>
+	</button>
+
+	<button type="button" class="search" onclick={() => (app.paletteOpen = true)}>
+		<Icon name="search" size={16} />
+		<span>Search</span>
+		<kbd>⌘K</kbd>
+	</button>
+
+	<nav aria-label="Main">
+		<ul class="nav">
+			{#each nav as item (item.label)}
+				<li>
+					<a href={item.href} aria-current={item.match(route) ? 'page' : undefined}>
+						<Icon name={item.icon} size={17} />{item.label}
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</nav>
+
+	<div class="notes">
+		<h2>Notes <span>{notes.length}</span></h2>
+		<ul>
+			{#each notes as node (node.id)}
+				<li>
+					<a href={href.node(node.id)} aria-current={current === node.id ? 'page' : undefined}
+						>{node.title}</a
+					>
+				</li>
+			{/each}
+		</ul>
+	</div>
+
+	<footer class="foot">
+		<div class="sync" role="status">
+			<span class="sync-dot" class:pending={app.dirty.length > 0}></span>
+			{#if app.dirty.length}
+				{app.dirty.length} unsynced {app.dirty.length === 1 ? 'change' : 'changes'}
+			{:else}
+				Nothing to sync
+			{/if}
+		</div>
+		<div class="theme" role="radiogroup" aria-label="Theme">
+			{#each themes as t (t.value)}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={app.theme === t.value}
+					aria-label={t.label}
+					title={t.label}
+					onclick={() => app.setTheme(t.value)}
+				>
+					<Icon name={t.icon} size={15} />
+				</button>
+			{/each}
+		</div>
+	</footer>
+</div>
+
+<style>
+	.sidebar {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		padding: 1rem 0.75rem 0.75rem;
+		gap: 0.5rem;
+	}
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.25rem 0.5rem 0.5rem;
+	}
+	.name {
+		font-family: var(--font-read);
+		font-size: 1.3rem;
+		font-weight: 600;
+		letter-spacing: -0.015em;
+	}
+	.close {
+		display: none;
+		margin-left: auto;
+		padding: 0.35rem;
+		border: 0;
+		border-radius: 8px;
+		background: none;
+		color: var(--text-muted);
+	}
+	.vault {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.55rem 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--surface);
+		text-align: left;
+	}
+	.vault-icon {
+		display: grid;
+		place-items: center;
+		width: 1.9rem;
+		height: 1.9rem;
+		border-radius: 8px;
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+	.vault-text {
+		display: flex;
+		flex-direction: column;
+		line-height: 1.25;
+	}
+	.vault-name {
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+	.vault-sub {
+		color: var(--text-faint);
+		font-size: 0.72rem;
+	}
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		height: 2.3rem;
+		padding: 0 0.5rem 0 0.7rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg);
+		color: var(--text-faint);
+		font-size: 0.85rem;
+	}
+	.search:hover {
+		border-color: var(--border-strong);
+		color: var(--text-muted);
+	}
+	.search kbd {
+		margin-left: auto;
+	}
+	.nav,
+	.notes ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.nav {
+		margin-top: 0.4rem;
+	}
+	.nav a,
+	.notes a {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		padding: 0.42rem 0.6rem;
+		border-radius: 8px;
+		color: var(--text-2);
+		font-size: 0.875rem;
+		font-weight: 500;
+		text-decoration: none;
+	}
+	.nav a:hover,
+	.notes a:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+	.nav a[aria-current='page'],
+	.notes a[aria-current='page'] {
+		background: var(--accent-soft);
+		color: var(--accent-strong);
+		font-weight: 600;
+	}
+	.notes {
+		flex: 1;
+		min-height: 0;
+		margin-top: 0.75rem;
+		overflow-y: auto;
+	}
+	.notes h2 {
+		display: flex;
+		justify-content: space-between;
+		margin: 0 0 0.3rem;
+		padding: 0 0.6rem;
+		color: var(--text-faint);
+		font-size: 0.7rem;
+		font-weight: 650;
+		letter-spacing: 0.07em;
+		text-transform: uppercase;
+	}
+	.notes a {
+		display: block;
+		overflow: hidden;
+		padding-block: 0.32rem;
+		font-size: 0.84rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		padding: 0.75rem 0.4rem 0;
+		border-top: 1px solid var(--border);
+	}
+	.sync {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		color: var(--text-muted);
+		font-size: 0.75rem;
+	}
+	.sync-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--accent);
+	}
+	.sync-dot.pending {
+		background: var(--todo);
+		box-shadow: 0 0 0 3px var(--todo-soft);
+	}
+	.theme {
+		display: flex;
+		padding: 2px;
+		border-radius: 9px;
+		background: var(--surface-2);
+	}
+	.theme button {
+		display: grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.6rem;
+		border: 0;
+		border-radius: 7px;
+		background: none;
+		color: var(--text-faint);
+	}
+	.theme button[aria-checked='true'] {
+		background: var(--surface);
+		color: var(--text);
+		box-shadow: var(--shadow-sm);
+	}
+	@media (max-width: 960px) {
+		.close {
+			display: grid;
+		}
+	}
+</style>
