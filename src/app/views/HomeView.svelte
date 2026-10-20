@@ -122,10 +122,12 @@
 		<section class="card daily" aria-labelledby="daily-h">
 			<div class="card-head">
 				<h2 id="daily-h">Daily notes</h2>
-				<a class="more" href={href.daily()}>Today <Icon name="chevronRight" size={14} /></a>
+				<a class="more" href={href.dailies()}
+					>All {app.dailies.length} <Icon name="chevronRight" size={14} /></a
+				>
 			</div>
 			<ul class="days">
-				{#each app.dailies.slice(0, 5) as date (date)}
+				{#each app.dailies.slice(0, 3) as date (date)}
 					{@const node = app.vault.fileNode(app.dailyPath(date))}
 					<li>
 						<a href={href.daily(date)}>

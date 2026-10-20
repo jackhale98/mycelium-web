@@ -29,6 +29,12 @@
 			icon: 'agenda',
 			run: () => router.go(href.agenda()),
 		},
+		{
+			key: 'cmd:dailies',
+			label: 'Browse daily notes',
+			icon: 'calendar',
+			run: () => router.go(href.dailies()),
+		},
 		{ key: 'cmd:home', label: 'Go home', icon: 'home', run: () => router.go(href.home()) },
 		{ key: 'cmd:tags', label: 'Browse tags', icon: 'tag', run: () => router.go(href.tags()) },
 		{ key: 'cmd:new', label: 'New note', icon: 'plus', run: () => (app.newNote = { title: '' }) },

@@ -9,6 +9,7 @@ export type Route =
 	| { name: 'vaults' }
 	| { name: 'settings' }
 	| { name: 'changes' }
+	| { name: 'dailies' }
 	| { name: 'search'; q: string }
 	| { name: 'graph'; id: string | null }
 	| { name: 'notfound'; path: string };
@@ -34,6 +35,8 @@ export function parseHash(hash: string): Route {
 			return { name: 'settings' };
 		case 'changes':
 			return { name: 'changes' };
+		case 'dailies':
+			return { name: 'dailies' };
 		case 'search':
 			return { name: 'search', q: tail };
 		case 'graph':
@@ -52,6 +55,7 @@ export const href = {
 	vaults: () => '#/vaults',
 	settings: () => '#/settings',
 	changes: () => '#/changes',
+	dailies: () => '#/dailies',
 	search: (q = '') => (q ? `#/search/${encodeURIComponent(q)}` : '#/search'),
 	graph: (id?: string) => (id ? `#/graph/${encodeURIComponent(id)}` : '#/graph'),
 };

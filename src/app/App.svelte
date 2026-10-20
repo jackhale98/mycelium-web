@@ -12,6 +12,7 @@
 	import { app } from './state.svelte';
 	import AgendaView from './views/AgendaView.svelte';
 	import ChangesView from './views/ChangesView.svelte';
+	import DailiesView from './views/DailiesView.svelte';
 	import DailyView from './views/DailyView.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
@@ -141,6 +142,8 @@
 			{#key router.route.id}<GraphView focus={router.route.id} />{/key}
 		{:else if router.route.name === 'search'}
 			<SearchView q={router.route.q} />
+		{:else if router.route.name === 'dailies'}
+			<DailiesView />
 		{:else if router.route.name === 'changes'}
 			<ChangesView />
 		{:else if router.route.name === 'settings'}

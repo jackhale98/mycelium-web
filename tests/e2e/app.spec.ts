@@ -165,3 +165,15 @@ test('graph view draws the vault', async ({ page }) => {
 	await expect(page.getByRole('link', { name: 'Mycelial networks' }).last()).toBeVisible();
 	await expectAccessible(page);
 });
+
+test('dailies page lists every daily note; home shows three', async ({ page }) => {
+	await open(page, 'app#/');
+	await expect(page.locator('.days li')).toHaveCount(3);
+	await page.getByRole('link', { name: /^All \d+/ }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Dailies' })).toBeVisible();
+	const entries = page.locator('.entries li');
+	expect(await entries.count()).toBeGreaterThanOrEqual(3);
+	await page.getByRole('searchbox', { name: 'Filter dailies' }).fill('zzzz-no-match');
+	await expect(page.getByText('No daily note matches.')).toBeVisible();
+	await expectAccessible(page);
+});

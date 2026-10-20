@@ -16,6 +16,7 @@
 	}[] = [
 		{ label: 'Home', icon: 'home', href: href.home(), match: (r) => r.name === 'home' },
 		{ label: 'Today', icon: 'calendar', href: href.daily(today), match: (r) => r.name === 'daily' },
+		{ label: 'Dailies', icon: 'inbox', href: href.dailies(), match: (r) => r.name === 'dailies' },
 		{ label: 'Agenda', icon: 'agenda', href: href.agenda(), match: (r) => r.name === 'agenda' },
 		{ label: 'Search', icon: 'search', href: href.search(), match: (r) => r.name === 'search' },
 		{ label: 'Graph', icon: 'graph', href: href.graph(), match: (r) => r.name === 'graph' },
