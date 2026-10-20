@@ -5,22 +5,10 @@
 	import Inline from './OrgInline.svelte';
 	import Self from './OrgBlocks.svelte';
 	import Section from './OrgSection.svelte';
+	import OrgTable from './OrgTable.svelte';
 	import type { RenderContext } from './context';
 
 	let { nodes, ctx }: { nodes: OrgNode[]; ctx: RenderContext } = $props();
-
-	type Row = { type: 'table-row'; rowType: 'standard' | 'rule'; children: OrgNode[] };
-
-	function tableParts(rows: Row[]) {
-		const rule = rows.findIndex((r) => r.rowType === 'rule');
-		const body = rows.filter((r) => r.rowType !== 'rule');
-		if (rule > 0)
-			return {
-				head: rows.slice(0, rule).filter((r) => r.rowType !== 'rule'),
-				body: rows.slice(rule).filter((r) => r.rowType !== 'rule'),
-			};
-		return { head: [] as Row[], body };
-	}
 
 	const HIDDEN = new Set([
 		'property-drawer',
@@ -81,39 +69,7 @@
 		{/if}
 	{:else if node.type === 'table'}
 		{#if node.tableType === 'org'}
-			{@const parts = tableParts(node.children as unknown as Row[])}
-			<!-- Scrollable tables must be reachable by keyboard. -->
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<div class="table-wrap" role="region" aria-label="Table" tabindex="0">
-				<table>
-					{#if parts.head.length}
-						<thead>
-							{#each parts.head as row, r (r)}
-								<tr
-									>{#each row.children as cell, c (c)}<th scope="col"
-											><Inline
-												nodes={'children' in cell ? (cell.children as OrgNode[]) : []}
-												{ctx}
-											/></th
-										>{/each}</tr
-								>
-							{/each}
-						</thead>
-					{/if}
-					<tbody>
-						{#each parts.body as row, r (r)}
-							<tr
-								>{#each row.children as cell, c (c)}<td
-										><Inline
-											nodes={'children' in cell ? (cell.children as OrgNode[]) : []}
-											{ctx}
-										/></td
-									>{/each}</tr
-							>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+			<OrgTable node={node as never} {ctx} />
 		{:else}
 			<pre class="block">{node.value}</pre>
 		{/if}

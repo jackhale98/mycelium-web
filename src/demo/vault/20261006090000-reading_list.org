@@ -4,6 +4,17 @@
 #+title: Reading list
 #+filetags: :books:
 
+#+CAPTION: Pages read this year
+#+NAME: reading-log
+| Book                          | Author           | Pages | Read | Status |
+|-------------------------------+------------------+-------+------+--------|
+| <l>                           | <l20>            |       |      | <c>    |
+| The Hidden Life of Trees      | Peter Wohlleben  |   288 |  288 | done   |
+| Finding the Mother Tree       | Suzanne Simard   |   368 |  142 | 39%    |
+| Entangled Life                | Merlin Sheldrake |   368 |    0 | queued |
+|-------------------------------+------------------+-------+------+--------|
+| Total                         |                  |  1024 |  430 |        |
+
 * NEXT [#A] Finding the Mother Tree                                    :forest:
 :PROPERTIES:
 :ID:       b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d14

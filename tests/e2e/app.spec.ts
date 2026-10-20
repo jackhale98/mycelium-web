@@ -312,3 +312,22 @@ test('agenda filters: tags, org match strings, text and URL', async ({ page }) =
 	await page.keyboard.press('|');
 	expect((await titles()).length).toBe(before.length);
 });
+
+test('org tables render with caption, header, groups and alignment', async ({ page }) => {
+	await open(page, 'app#/node/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d13');
+	const table = page.locator('table#reading-log');
+	await expect(table.locator('caption')).toHaveText('Pages read this year');
+	await expect(table.locator('thead th')).toHaveText(['Book', 'Author', 'Pages', 'Read', 'Status']);
+	// The cookie row is hidden; two row groups split by the rule before the total.
+	await expect(table.locator('tbody')).toHaveCount(2);
+	await expect(table.getByText('<l20>')).toHaveCount(0);
+	await expect(table.locator('tbody tr').first().locator('td').nth(2)).toHaveCSS(
+		'text-align',
+		'right',
+	);
+	await expect(table.locator('tbody tr').first().locator('td').nth(4)).toHaveCSS(
+		'text-align',
+		'center',
+	);
+	await expectAccessible(page);
+});
