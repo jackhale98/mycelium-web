@@ -175,7 +175,7 @@
 			</legend>
 			{#each ['todo', 'done'] as const as lane (lane)}
 				<div class="lane">
-					<h4>{lane === 'todo' ? 'Open states' : 'Done states'}</h4>
+					<h3>{lane === 'todo' ? 'Open states' : 'Done states'}</h3>
 					<ul>
 						{#each seq[lane] as row, i (row.id)}
 							{@const tone = tones[row.name] ?? keywordTone(row.name, sequencesToConfig(sequences))}
@@ -286,7 +286,7 @@
 
 	{#if usage.candidates.length}
 		<div class="found">
-			<h4>Found in your notes</h4>
+			<h3>Found in your notes</h3>
 			<p class="hint">Words that start several headings but aren't keywords yet.</p>
 			<ul>
 				{#each usage.candidates.filter(([w]) => !names.includes(w)) as [word, count] (word)}
@@ -306,7 +306,7 @@
 
 	<div class="preview">
 		<div class="row between">
-			<h4>As an org line</h4>
+			<h3>As an org line</h3>
 			<button type="button" class="btn small" onclick={copy}>Copy</button>
 		</div>
 		<pre>{preview}</pre>
@@ -326,7 +326,7 @@
 
 	{#if confirming}
 		<div class="confirm" role="alertdialog" aria-labelledby="kw-confirm">
-			<h4 id="kw-confirm">Before saving</h4>
+			<h3 id="kw-confirm">Before saving</h3>
 			{#if renames.length}
 				<label class="check"
 					><input type="checkbox" bind:checked={updateHeadings} />
@@ -370,7 +370,7 @@
 		gap: 0.4rem;
 	}
 	.label,
-	h4 {
+	h3 {
 		margin: 0;
 		color: var(--text-muted);
 		font-size: 0.74rem;

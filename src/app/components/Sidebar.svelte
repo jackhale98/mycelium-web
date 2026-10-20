@@ -52,11 +52,7 @@
 		>
 	</div>
 
-	<a
-		class="vault"
-		href={href.vaults()}
-		aria-label={`Current vault: ${app.activeVault?.name ?? 'demo vault'}. Switch vault`}
-	>
+	<a class="vault" href={href.vaults()} title="Switch vault">
 		<span class="vault-icon"><Icon name={app.demo ? 'zap' : 'git'} size={15} /></span>
 		<span class="vault-text">
 			<span class="vault-name" title={app.activeVault?.name}
@@ -67,7 +63,9 @@
 						.vault.files.size} files · in this tab only{/if}
 			</span>
 		</span>
-		<span class="vault-go"><Icon name="chevronRight" size={15} /></span>
+		<span class="vault-go"
+			><Icon name="chevronRight" size={15} /><span class="sr-only">Switch vault</span></span
+		>
 	</a>
 
 	<button type="button" class="search" onclick={() => (app.paletteOpen = true)}>
@@ -126,7 +124,7 @@
 				type="button"
 				class="aa"
 				popovertarget="text-size-pop"
-				aria-label="Text size"
+				aria-label="Aa: text size"
 				title="Text size">Aa</button
 			>
 			<div id="text-size-pop" class="text-pop" popover>

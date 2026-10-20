@@ -53,7 +53,7 @@
 			class="face"
 			onclick={pick}
 			title={`${ts.raw} — click to change`}
-			aria-label={`${LABEL[kind]} ${tsLabel(ts)}. Change date`}
+			aria-label={`${text}, change ${LABEL[kind].toLowerCase()} date`}
 			><Icon name={ICON[kind]} size={13} />{text}</button
 		>
 		<input
@@ -127,10 +127,10 @@
 	.clear {
 		display: grid;
 		place-items: center;
-		width: 1.2rem;
-		height: 1.2rem;
-		margin-right: 0.25rem;
-		margin-left: -0.3rem;
+		width: 1.5rem;
+		height: 1.5rem;
+		margin-right: 0.1rem;
+		margin-left: -0.35rem;
 		border: 0;
 		border-radius: 50%;
 		background: none;

@@ -222,7 +222,7 @@ test('edit a heading from the agenda: date chip and heading sheet', async ({ pag
 	const row = page.locator('.agenda .item', { hasText: 'Ship the design system' }).first();
 	// The date chip opens the native picker; set the value as the picker would.
 	await row.locator('input[type="date"]').fill('2026-11-05');
-	await expect(row.getByRole('button', { name: /Due .*Change date/ })).toBeVisible();
+	await expect(row.getByRole('button', { name: /change due date/ })).toBeVisible();
 
 	await row.getByRole('button', { name: /Edit “Ship the design system”/ }).click();
 	const sheet = page.getByRole('dialog');
