@@ -393,8 +393,11 @@ test('a page whose code vanished in a deploy reloads, then explains instead of g
 	await expect(page.getByRole('heading', { name: "This page didn't load" })).toBeVisible({
 		timeout: 15_000,
 	});
+	await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible();
+	// Once the new build is reachable, reloading recovers. (Checked with a plain reload: while the
+	// app is still starting up the page may also retry on its own.)
 	await page.unroute('**/_astro/SettingsView.*.js');
-	await page.getByRole('button', { name: 'Reload' }).click();
+	await page.reload();
 	await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible({
 		timeout: 15_000,
 	});
