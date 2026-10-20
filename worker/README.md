@@ -17,6 +17,14 @@ plan (100,000 requests/day) covers roughly 20,000 syncs a day.
 
 ## Deploy (about 5 minutes)
 
+No terminal needed: in the Cloudflare dashboard, **Workers & Pages → Create
+application → Import a repository**, pick this repository, name the project
+`mycelium-sync`, set the root directory to `worker` and the deploy command to
+`npx wrangler@4 deploy`. Full walkthrough in
+[docs/setup-git-providers.md](../docs/setup-git-providers.md#step-1--deploy-the-cloudflare-worker).
+
+Or with Wrangler:
+
 1. Create a free Cloudflare account, then from this folder:
    ```sh
    npx wrangler login

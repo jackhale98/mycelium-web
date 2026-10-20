@@ -12,7 +12,7 @@ proxies git traffic, which browsers cannot send to git hosts directly.
 
 | Where                | What you create                            | Public values (safe in the site build) | Secrets (worker only) |
 | -------------------- | ------------------------------------------ | -------------------------------------- | --------------------- |
-| Cloudflare           | Worker `mycelium-sync`                     | Worker URL                             | —                     |
+| Cloudflare           | Worker `mycelium-sync` (dashboard or CLI)  | Worker URL                             | —                     |
 | GitHub               | GitHub App                                 | Client ID, app slug                    | Client secret         |
 | GitLab               | OAuth application (non-confidential, PKCE) | Application ID                         | None needed           |
 | Bitbucket            | OAuth consumer                             | Key                                    | Secret                |
@@ -49,29 +49,78 @@ The worker is the only server piece. It runs on Cloudflare's free plan
 (100,000 requests a day, roughly 20,000 syncs) and takes about five minutes.
 Do this first: the other steps need its URL.
 
-1. Create a free account at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up).
-2. In a local clone of `mycelium-web`, deploy from the `worker` folder:
-   ```sh
-   cd worker
-   npx wrangler login
-   npx wrangler deploy
-   ```
-3. Wrangler prints the worker's URL, for example
-   `https://mycelium-sync.<your-subdomain>.workers.dev`. Keep it for Step 5.
-4. Check `ALLOWED_ORIGINS` in `worker/wrangler.toml`. It should list
-   `https://jackhale98.github.io` (the site's origin, no path) and
-   `http://localhost:4321` for local development. Deploy again if you changed it.
-5. Recommended: in the Cloudflare dashboard, open the worker and add a
-   rate-limiting rule (for example 300 requests per minute per IP).
+You can create it entirely from the Cloudflare dashboard (Option A, no
+terminal needed) or with Wrangler on your computer (Option B).
 
-To check it, open
+### Option A — From the Cloudflare dashboard (recommended)
+
+Cloudflare builds the worker straight from the `worker` folder of this
+repository and redeploys it whenever that folder changes on `main`.
+
+1. Create a free account at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up)
+   and sign in.
+2. Open **Workers & Pages** (under **Compute** in the sidebar) and select
+   **Create application**.
+3. Choose **Import a repository** (the GitHub option). If asked, connect your
+   GitHub account and allow Cloudflare access to `jackhale98/mycelium-web`
+   (you can limit it to just this repository).
+4. Select the `mycelium-web` repository and fill in the project settings:
+
+   | Field                 | Value                                                         |
+   | --------------------- | ------------------------------------------------------------- |
+   | Project name          | `mycelium-sync` (must match `name` in `worker/wrangler.toml`) |
+   | Production branch     | `main`                                                        |
+   | Build command         | Leave empty                                                   |
+   | Deploy command        | `npx wrangler@4 deploy`                                       |
+   | Root directory / Path | `worker` (under **Advanced settings** if it's collapsed)      |
+   | Build variables       | None                                                          |
+
+5. Select **Save and Deploy** (or **Create and deploy**). The first build takes
+   a minute or two; you can watch its log on the worker's **Deployments** tab.
+6. When it finishes, the worker's page shows its URL, for example
+   `https://mycelium-sync.<your-subdomain>.workers.dev`. Keep it for Step 5.
+7. Only rebuild when the worker changes: open the worker → **Settings** →
+   **Build** → **Build watch paths**, and set **Include paths** to `worker/*`.
+   Otherwise every push to `main` (notes app changes included) redeploys the
+   worker. That's harmless, just unnecessary.
+
+**Allowed origins live in the repository, not the dashboard.**
+`ALLOWED_ORIGINS` is set in `worker/wrangler.toml`, and every build applies the
+file's value, so a variable edited in the dashboard would be overwritten on the
+next deploy. It should list `https://jackhale98.github.io` (the site's origin,
+no path) and `http://localhost:4321` for local development. To change it, edit
+the file on GitHub (open it, select the pencil icon, commit to `main`) and
+Cloudflare redeploys by itself.
+
+### Option B — With Wrangler from a terminal
+
+In a local clone of `mycelium-web`, deploy from the `worker` folder:
+
+```sh
+cd worker
+npx wrangler login
+npx wrangler deploy
+```
+
+Wrangler prints the worker's URL. Check `ALLOWED_ORIGINS` in
+`worker/wrangler.toml` as described above, and deploy again if you changed it.
+
+If you'd rather deploy from GitHub Actions, add a `CLOUDFLARE_API_TOKEN`
+repository secret (Cloudflare token template "Edit Cloudflare Workers") and run
+the **Deploy worker** workflow in the Actions tab. Use only one of Option A or
+the Actions workflow, so two deploy paths don't race each other.
+
+### Check it
+
+Open
 `https://<worker-url>/github.com/x/y.git/info/refs?service=git-upload-pack` in
 a browser tab. You should see "Origin not allowed": the worker refuses
 anything that isn't the site, which is what you want.
 
-If you'd rather deploy from GitHub, add a `CLOUDFLARE_API_TOKEN` repository
-secret (Cloudflare token template "Edit Cloudflare Workers") and run the
-**Deploy worker** workflow in the Actions tab.
+Recommended: add a rate-limiting rule, for example 300 requests per minute per
+IP. With the worker on a `workers.dev` address, Cloudflare's WAF rules need a
+custom domain or route on a zone you own; on the free plan without one, skip
+this step.
 
 ## Step 2 — Register the GitHub App
 
@@ -160,7 +209,25 @@ uses them with the username `x-token-auth`; the site handles that.
 Secrets go into the worker; public IDs go into the site's build. A provider
 you skip simply doesn't get a sign-in button.
 
-**Worker secrets.** From the `worker` folder, run each command and paste the
+**Worker secrets.** Add only the ones for the providers you registered.
+
+_In the dashboard:_ open **Workers & Pages** → `mycelium-sync` → **Settings**
+→ **Variables and Secrets** → **Add**. For each row below, choose type
+**Secret**, enter the name and paste the value, then select **Deploy**. Secrets
+added this way stay in place across later builds.
+
+| Name                      | Value                     |
+| ------------------------- | ------------------------- |
+| `GITHUB_CLIENT_ID`        | GitHub App client ID      |
+| `GITHUB_CLIENT_SECRET`    | GitHub App client secret  |
+| `GITLAB_CLIENT_ID`        | GitLab application ID     |
+| `BITBUCKET_CLIENT_ID`     | Bitbucket consumer key    |
+| `BITBUCKET_CLIENT_SECRET` | Bitbucket consumer secret |
+
+Don't use **Build** → **Variables and secrets** for these: those are visible
+only while the worker is being built, not when it runs.
+
+_With Wrangler:_ from the `worker` folder, run each command and paste the
 value when asked:
 
 ```sh
@@ -171,7 +238,7 @@ npx wrangler secret put BITBUCKET_CLIENT_ID
 npx wrangler secret put BITBUCKET_CLIENT_SECRET
 ```
 
-Secrets take effect immediately; no redeploy is needed.
+Either way, secrets take effect right away; no rebuild is needed.
 
 **Site build variables.** In `jackhale98/mycelium-web` on GitHub, open
 **Settings → Secrets and variables → Actions → Variables** and add:
@@ -202,14 +269,16 @@ Settings → Sync proxy in the app.
 
 **Troubleshooting**
 
-| Symptom                                    | Likely cause                                                 | Fix                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5 and re-run the Pages deploy         |
-| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://jackhale98.github.io/mycelium-web/auth/callback/` |
-| "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.toml` and run `npx wrangler deploy`         |
-| "sign-in is not configured on this worker" | A worker secret is missing                                   | `npx wrangler secret put …` for that provider                          |
-| GitHub repository picker is empty          | The app isn't installed on any repository yet                | Use "Install on repositories" on the Vaults page                       |
-| Push rejected after a while                | Token expired and couldn't refresh                           | Sign out and back in on the Vaults page                                |
+| Symptom                                    | Likely cause                                                 | Fix                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5 and re-run the Pages deploy                                                    |
+| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://jackhale98.github.io/mycelium-web/auth/callback/`                                            |
+| "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.toml` on `main` (Option A rebuilds by itself; with Option B run `npx wrangler deploy`) |
+| "sign-in is not configured on this worker" | A worker secret is missing                                   | Add it under the worker's **Settings → Variables and Secrets**, or `npx wrangler secret put …`                    |
+| Dashboard build fails: name mismatch       | Project name isn't `mycelium-sync`                           | Rename the worker to match `name` in `worker/wrangler.toml`, or change the file                                   |
+| Dashboard build fails: no Wrangler config  | Root directory isn't `worker`                                | Worker → **Settings → Build** → set the root directory to `worker` and retry                                      |
+| GitHub repository picker is empty          | The app isn't installed on any repository yet                | Use "Install on repositories" on the Vaults page                                                                  |
+| Push rejected after a while                | Token expired and couldn't refresh                           | Sign out and back in on the Vaults page                                                                           |
 
 **Security notes**
 
