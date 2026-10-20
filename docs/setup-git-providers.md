@@ -226,22 +226,42 @@ repository scopes let git clone and push over HTTPS. GitLab access tokens last
 Bitbucket needs its secret for every token exchange and refresh, so the secret
 lives in the worker.
 
-1. In Bitbucket, open the workspace you'll register it under, then
-   **Settings → Apps and features → OAuth consumers → Add consumer**.
-2. Fill in the form:
+OAuth consumers belong to a **workspace**, not to your personal account
+settings, and only workspace admins see them. In a personal workspace, only
+its owner sees them.
 
-   | Field                      | Value                                   |
-   | -------------------------- | --------------------------------------- |
-   | Name                       | `Mycelium`                              |
-   | Callback URL               | `https://my-celium.org/auth/callback/`  |
-   | This is a private consumer | Unchecked (so other people can sign in) |
-   | Permissions → Account      | Read                                    |
-   | Permissions → Repositories | Read and Write                          |
+1. In Bitbucket, select your avatar (top right) and pick the workspace under
+   **Recent workspaces** (or **All workspaces**).
+2. Open the workspace's settings: select **Settings** in the left sidebar (or the
+   **Settings** cog in the top bar, then **Workspace settings**). Don't use
+   **Personal settings**: it has no OAuth consumers.
+3. In the settings sidebar, under **Apps and features**, select
+   **OAuth consumers**, then **Add consumer**.
 
-3. Click **Save**, then expand the consumer to see its **Key** (the client ID) and **Secret**.
+   Can't see **Apps and features**? You aren't an admin of that workspace, or
+   it's someone else's personal workspace. Use a workspace you own.
+
+4. Fill in the form:
+
+   | Field                      | Value                                             |
+   | -------------------------- | ------------------------------------------------- |
+   | Name                       | `Mycelium`                                        |
+   | Callback URL               | `https://my-celium.org/auth/callback/`            |
+   | This is a private consumer | Unchecked, if shown (so other people can sign in) |
+   | Permissions → Account      | Read                                              |
+   | Permissions → Repositories | Read and Write                                    |
+
+5. Select **Save**, then select the consumer's name in the list to see its
+   **Key** (the client ID) and **Secret**.
 
 Bitbucket access tokens last about 2 hours and refresh through the worker. Git
 uses them with the username `x-token-auth`; the site handles that.
+
+Bitbucket sign-in is optional: without a consumer, people paste an Atlassian
+API token instead (Step 6).
+
+Sources: Atlassian's [Use OAuth on Bitbucket Cloud](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
+and [Apps and features settings are missing for admins in personal workspace](https://support.atlassian.com/bitbucket-cloud/kb/apps-and-features-settings-are-missing-for-admins-in-personal-workspace/).
 
 ## Step 5 — Wire it up
 
@@ -333,5 +353,7 @@ Settings → Sync proxy in the app.
 **Fallback: access tokens.** Sign-in is optional. On the Vaults page anyone
 can paste a personal access token instead: a fine-grained GitHub token with
 "Contents: Read and write" on one repository, a GitLab token with
-`read_repository` and `write_repository`, or a Bitbucket username and API
-token. This is also the way to use self-hosted GitLab or Gitea.
+`read_repository` and `write_repository`, or an Atlassian API token for
+Bitbucket with `read:repository:bitbucket` and `write:repository:bitbucket`
+(created at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens);
+leave the username blank). This is also the way to use self-hosted GitLab or Gitea.
