@@ -156,6 +156,70 @@ test('a custom template with prompts writes into a file under a heading', async 
 	await expect(diff).toContainText('About the budget');
 });
 
+test('the cursor starts in the first empty field of a template', async ({ page }) => {
+	await open(page, 'app#/');
+	await page.keyboard.press('ControlOrMeta+Alt+KeyC');
+	const sheet = page.getByRole('dialog', { name: 'Capture' });
+	await expect(sheet.getByRole('textbox', { name: 'Text' })).toBeFocused();
+	await sheet.getByRole('radio', { name: /New note/ }).click();
+	await expect(sheet.getByRole('textbox', { name: 'Title' })).toBeFocused();
+	await sheet.getByRole('radio', { name: /Journal/ }).click();
+	await expect(sheet.getByRole('textbox', { name: 'Title' })).toBeFocused();
+	await page.keyboard.type('Morning');
+	await sheet.getByRole('radio', { name: /Task/ }).click();
+	await expect(sheet.getByRole('textbox', { name: 'Text' })).toBeFocused();
+});
+
+test('settings export to a file and import back, section by section', async ({ page }) => {
+	await open(page, 'app#/settings');
+	// A custom template to carry across.
+	await page.getByRole('button', { name: 'Add template' }).click();
+	await page.locator('.tpl').last().getByLabel('Name').fill('Reading');
+	await page.getByRole('button', { name: 'Save templates' }).click();
+	await expect(page.getByText('Capture templates saved')).toBeVisible();
+
+	const download = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Export settings' }).click();
+	const file = await download;
+	expect(file.suggestedFilename()).toMatch(/^mycelium-settings-.*\.json$/);
+	const text = await (
+		await file.createReadStream()
+	)
+		.toArray()
+		.then((c) => Buffer.concat(c).toString());
+	const json = JSON.parse(text);
+	expect(json.format).toBe('mycelium-settings');
+	expect(json.capture.templates.map((t: { name: string }) => t.name)).toContain('Reading');
+	expect(text).not.toMatch(/token|credentials/);
+
+	// Back to defaults, then bring only the templates back.
+	page.once('dialog', (d) => d.accept());
+	await page.getByRole('button', { name: 'Reset to defaults' }).click();
+	await expect(page.locator('.tpl').getByLabel('Name').last()).not.toHaveValue('Reading');
+	await page.getByLabel('Settings file to import').setInputFiles({
+		name: 'mine.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(text),
+	});
+	const dialog = page.getByRole('group', { name: 'Import from mine.json' });
+	for (const box of await dialog.getByRole('checkbox').all()) await box.uncheck();
+	await dialog.getByRole('checkbox', { name: /Capture templates/ }).check();
+	await dialog.getByRole('button', { name: 'Import' }).click();
+	await expect(page.getByText('Imported 1 section from mine.json.')).toBeVisible();
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.locator('.tpl').getByLabel('Name').last()).toHaveValue('Reading');
+
+	// A file that isn't valid says why.
+	await page.getByLabel('Settings file to import').setInputFiles({
+		name: 'bad.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from('{"format":"something-else"}'),
+	});
+	await expect(page.getByRole('alert')).toContainText("isn't a Mycelium settings file");
+	await expectAccessible(page);
+});
+
 test('on phones, swiping up on the search button opens capture; a tap still searches', async ({
 	page,
 }) => {

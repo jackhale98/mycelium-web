@@ -6,6 +6,7 @@
 		templatePrompts,
 		type CaptureTemplate,
 	} from '$lib/org';
+	import { tick } from 'svelte';
 	import { router } from '../router.svelte';
 	import { app, localNow } from '../state.svelte';
 	import Icon from './Icon.svelte';
@@ -60,7 +61,15 @@
 		values = {};
 		for (const p of templatePrompts(templates.find((t) => t.id === id)?.template ?? ''))
 			if (p.default) values[p.id] = p.default;
-		queueMicrotask(() => textArea?.focus());
+		void tick().then(focusFirst);
+	}
+
+	/** The cursor starts in the first empty field (a title, a prompt), else the text. */
+	function focusFirst() {
+		const empty = [...(dialog?.querySelectorAll<HTMLInputElement>('.field input') ?? [])].find(
+			(i) => !i.value,
+		);
+		(empty ?? textArea)?.focus();
 	}
 
 	$effect(() => {

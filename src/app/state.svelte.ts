@@ -761,6 +761,50 @@ class AppState {
 		});
 	}
 
+	/** This vault's settings (and this browser's appearance) as a settings file. */
+	async settingsFile(): Promise<string> {
+		const { exportSettings, serializeSettings } = await import('./settings-file');
+		const record = this.activeVault;
+		return serializeSettings(
+			exportSettings({
+				theme: this.theme,
+				textSize: this.textSize,
+				keywords: this.vault.keywords,
+				keywordTones: record?.keywordTones,
+				log: record?.log,
+				autoCommit: record?.autoCommit,
+				captureTemplates: $state.snapshot(this.captureTemplates) as CaptureTemplate[],
+				agendaViews: record?.agendaViews,
+				layout: this.layout,
+			}),
+		);
+	}
+
+	/** Apply the chosen sections of an imported settings file to this vault. */
+	async importSettings(
+		file: import('./settings-file').SettingsFile,
+		sections: Set<import('./settings-file').SettingsSection>,
+	) {
+		const { workflowKeywords } = await import('./settings-file');
+		// Plain data: IndexedDB can't store reactive proxies.
+		file = $state.snapshot(file) as typeof file;
+		if (sections.has('appearance') && file.appearance) {
+			if (file.appearance.theme) this.setTheme(file.appearance.theme);
+			if (file.appearance.textSize) this.setTextSize(file.appearance.textSize);
+		}
+		const patch: Partial<VaultRecord> = {};
+		if (sections.has('workflow') && file.workflow) {
+			patch.keywords = workflowKeywords(file)!;
+			if (file.workflow.tones) patch.keywordTones = file.workflow.tones;
+			if (file.workflow.log) patch.log = file.workflow.log;
+			if (file.workflow.autoCommit !== undefined) patch.autoCommit = file.workflow.autoCommit;
+		}
+		if (sections.has('capture') && file.capture) patch.captureTemplates = file.capture.templates;
+		if (sections.has('agenda') && file.agenda) patch.agendaViews = file.agenda.views;
+		if (sections.has('layout') && file.layout) patch.layout = file.layout;
+		if (Object.keys(patch).length) await this.updateVault(patch);
+	}
+
 	/** Quick capture with the first template (the home page's box). */
 	capture(text: string): CaptureResult | null {
 		const template = this.captureTemplates[0];

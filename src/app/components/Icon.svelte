@@ -42,6 +42,8 @@
 		zap: '<path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/>',
 		smartphone: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
 		arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+		arrowDown: '<path d="M12 4v13M6 12l6 6 6-6"/><path d="M5 21h14"/>',
+		arrowUp: '<path d="M12 18V5M6 10l6-6 6 6"/><path d="M5 21h14"/>',
 		sync: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20.5V16h-4.5"/>',
 		trash: '<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>',
 		key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/>',

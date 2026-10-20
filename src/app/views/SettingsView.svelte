@@ -4,6 +4,7 @@
 	import Icon from '../components/Icon.svelte';
 	import CaptureTemplatesEditor from '../components/CaptureTemplatesEditor.svelte';
 	import KeywordEditor from '../components/KeywordEditor.svelte';
+	import SettingsTransfer from '../components/SettingsTransfer.svelte';
 	import { href, router } from '../router.svelte';
 	import { app, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
 
@@ -118,6 +119,11 @@
 	<section class="panel stack" aria-labelledby="capture-h">
 		<h2 id="capture-h">Capture templates</h2>
 		{#key app.activeId}<CaptureTemplatesEditor />{/key}
+	</section>
+
+	<section class="panel stack" aria-labelledby="transfer-h">
+		<h2 id="transfer-h">Settings file</h2>
+		{#key app.activeId}<SettingsTransfer />{/key}
 	</section>
 
 	<section class="panel stack" aria-labelledby="logging-h">
