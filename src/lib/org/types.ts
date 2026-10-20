@@ -47,7 +47,33 @@ export interface RepeaterCookie {
 export interface KeywordConfig {
 	todoKeywords: string[];
 	doneKeywords: string[];
+	/**
+	 * Per-keyword state logging from `#+TODO:` markers: `WAIT(w@/!)` logs on
+	 * entering (`!` time, `@` note) and on leaving (`/!`). Notes are recorded
+	 * as timestamps.
+	 */
+	log?: Record<string, { enter: boolean; leave: boolean }>;
 }
+
+/** How state changes are recorded, mirroring org's logging options. */
+export interface LogSettings {
+	/** `org-log-done`: stamp `CLOSED:` when a task is completed. Emacs default: off. */
+	logDone: boolean;
+	/** `org-log-repeat`: record `LAST_REPEAT` and a state note when a repeater fires. Emacs default: on. */
+	logRepeat: boolean;
+	/** `org-log-into-drawer`: drawer for state notes (`LOGBOOK`), or `null` to log under the heading. */
+	logIntoDrawer: string | null;
+	/** `org-todo-repeat-to-state`: state a repeating task returns to; `null` means the first TODO keyword. */
+	repeatToState: string | null;
+}
+
+/** Emacs' out-of-the-box logging behaviour. */
+export const EMACS_LOG_DEFAULTS: LogSettings = {
+	logDone: false,
+	logRepeat: true,
+	logIntoDrawer: null,
+	repeatToState: null,
+};
 
 /** Priority values, highest first. */
 export interface PriorityConfig {

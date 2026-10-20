@@ -1,16 +1,23 @@
 /// TODO state changes with org's completion semantics.
 ///
-/// Marking a task done stamps `CLOSED:` (when `logDone` is on, as with
-/// `org-log-done 'time`). Completing a *repeating* task does not close it: its
-/// SCHEDULED/DEADLINE dates move to the next occurrence and it returns to a
-/// not-done state, so the next occurrence stays on the agenda.
+/// Behaviour follows org.el (`org-todo`, `org-auto-repeat-maybe`) with Emacs'
+/// default options unless the vault or file says otherwise.
 
 import { addHours, compareDates, shiftDate } from './date';
 import { headlineAt, setTodoKeyword } from './headline';
+import { addLogNote, entryEnd, startupLogSettings, stateNote } from './log';
 import { findPlanning, setPlanning } from './planning';
-import { nowTimestamp, withTimestamp } from './timestamp';
+import { getProperties, setProperty } from './properties';
+import { nowTimestamp, readTimestamp, withTimestamp } from './timestamp';
 import { runEdits, splitLines, type EditResult } from './text';
-import type { KeywordConfig, OrgNow, OrgTimestamp, PlanningKind, RepeaterCookie } from './types';
+import {
+	EMACS_LOG_DEFAULTS,
+	type KeywordConfig,
+	type LogSettings,
+	type OrgNow,
+	type OrgTimestamp,
+	type RepeaterCookie,
+} from './types';
 
 const COOKIE_RE = /^(\+\+|\.\+|\+)(\d+)([hdwmy])/;
 
@@ -63,8 +70,8 @@ export function nextOccurrence(ts: OrgTimestamp, now: OrgNow): OrgTimestamp {
 export interface TodoChangeOptions {
 	config: KeywordConfig;
 	now: OrgNow;
-	/** Stamp `CLOSED:` on completion (org-log-done). Defaults to `true`. */
-	logDone?: boolean;
+	/** How changes are recorded. Defaults to Emacs' out-of-the-box behaviour. */
+	log?: Partial<LogSettings>;
 }
 
 export interface TodoChangeResult extends EditResult {
@@ -76,7 +83,34 @@ export interface TodoChangeResult extends EditResult {
 const isDone = (kw: string | null, config: KeywordConfig) =>
 	kw !== null && config.doneKeywords.includes(kw);
 
-/** Change a headline's TODO state, applying CLOSED stamps and repeaters. */
+const ACTIVE_TS_RE = /<\d{4}-\d{2}-\d{2}[^>\n]*>/g;
+
+/** Every active timestamp with a repeater between the headline and the next heading. */
+function repeatingTimestamps(source: string, from: number, to: number) {
+	const out: { from: number; to: number; ts: OrgTimestamp }[] = [];
+	const text = source.slice(from, to);
+	ACTIVE_TS_RE.lastIndex = 0;
+	for (let m = ACTIVE_TS_RE.exec(text); m; m = ACTIVE_TS_RE.exec(text)) {
+		const read = readTimestamp(text, m.index);
+		if (read && parseRepeater(read.timestamp.repeater)) {
+			out.push({ from: from + read.from, to: from + read.to, ts: read.timestamp });
+		}
+	}
+	return out;
+}
+
+/**
+ * Change a headline's TODO state with org's semantics (see `org-todo` and
+ * `org-auto-repeat-maybe`):
+ *
+ * - entering a done state stamps `CLOSED:` when `logDone` is on;
+ * - leaving a done state removes `CLOSED:`;
+ * - completing a repeating task instead shifts every repeating timestamp in
+ *   the entry, drops a non-repeating SCHEDULED, returns the task to
+ *   `REPEAT_TO_STATE` (or the first TODO keyword), and with `logRepeat` sets
+ *   `LAST_REPEAT` and logs the transition;
+ * - `#+TODO:` markers such as `DONE(d!)` or `WAIT(w@/!)` log state notes.
+ */
 export function changeTodoState(
 	source: string,
 	offset: number,
@@ -84,46 +118,59 @@ export function changeTodoState(
 	options: TodoChangeOptions,
 ): TodoChangeResult {
 	const { config, now } = options;
-	const logDone = options.logDone ?? true;
+	const log: LogSettings = { ...EMACS_LOG_DEFAULTS, ...startupLogSettings(source), ...options.log };
 	const lines = splitLines(source);
 	const h = headlineAt(source, offset, config, lines);
 	if (!h) return { text: source, steps: [], repeated: false, keyword: null };
-	const lineFrom = h.line.from;
+	const at = h.line.from;
 	const previous = h.keyword?.value ?? null;
-	const planning = findPlanning(lines, h);
-	const ts = (kind: PlanningKind) =>
-		planning?.entries.find((e) => e.kind === kind)?.timestamp ?? null;
+	if (previous === keyword) return { text: source, steps: [], repeated: false, keyword };
+
+	const stamp = nowTimestamp(now).raw;
+	const stateLogged = (next: string | null) =>
+		(next !== null && !!config.log?.[next]?.enter) ||
+		(previous !== null && !!config.log?.[previous]?.leave);
+	const note = (next: string | null) => (s: string) =>
+		addLogNote(s, at, stateNote(next, previous, stamp), log.logIntoDrawer, config);
 
 	if (isDone(keyword, config) && !isDone(previous, config)) {
-		const repeating = (['DEADLINE', 'SCHEDULED'] as const).filter((k) =>
-			parseRepeater(ts(k)?.repeater),
-		);
-		if (repeating.length > 0) {
+		const end = entryEnd(lines, h);
+		const repeats = repeatingTimestamps(source, h.line.end, end);
+		if (repeats.length > 0) {
+			const requested = getProperties(source, at, config)['REPEAT_TO_STATE'] ?? log.repeatToState;
+			const all = [...config.todoKeywords, ...config.doneKeywords];
 			const back =
-				previous && config.todoKeywords.includes(previous)
-					? previous
-					: (config.todoKeywords[0] ?? null);
+				requested && all.includes(requested) ? requested : (config.todoKeywords[0] ?? null);
+			const planning = findPlanning(lines, h);
+			const scheduled = planning?.entries.find((e) => e.kind === 'SCHEDULED');
 			const result = runEdits(source, [
-				...repeating.map(
-					(kind) => (s: string) =>
-						setPlanning(s, lineFrom, kind, nextOccurrence(ts(kind)!, now), config),
-				),
-				(s: string) => setPlanning(s, lineFrom, 'CLOSED', null, config),
-				(s: string) => setTodoKeyword(s, lineFrom, back, config),
+				// Shift repeaters first: all their offsets refer to the original text.
+				() =>
+					repeats.map((r) => ({ from: r.from, to: r.to, insert: nextOccurrence(r.ts, now).raw })),
+				(s) =>
+					scheduled && !parseRepeater(scheduled.timestamp.repeater)
+						? setPlanning(s, at, 'SCHEDULED', null, config)
+						: [],
+				(s) => setPlanning(s, at, 'CLOSED', null, config),
+				(s) => (log.logRepeat ? setProperty(s, at, 'LAST_REPEAT', stamp, config) : []),
+				(s) => (log.logRepeat || stateLogged(keyword) ? note(keyword)(s) : []),
+				(s) => setTodoKeyword(s, at, back, config),
 			]);
 			return { ...result, repeated: true, keyword: back };
 		}
 		const result = runEdits(source, [
-			(s: string) => setTodoKeyword(s, lineFrom, keyword, config),
-			(s: string) => (logDone ? setPlanning(s, lineFrom, 'CLOSED', nowTimestamp(now), config) : []),
+			(s) => (log.logDone ? setPlanning(s, at, 'CLOSED', nowTimestamp(now), config) : []),
+			(s) => (stateLogged(keyword) ? note(keyword)(s) : []),
+			(s) => setTodoKeyword(s, at, keyword, config),
 		]);
 		return { ...result, repeated: false, keyword };
 	}
 
 	const reopening = isDone(previous, config) && !isDone(keyword, config);
 	const result = runEdits(source, [
-		(s: string) => setTodoKeyword(s, lineFrom, keyword, config),
-		(s: string) => (reopening ? setPlanning(s, lineFrom, 'CLOSED', null, config) : []),
+		(s) => (reopening ? setPlanning(s, at, 'CLOSED', null, config) : []),
+		(s) => (stateLogged(keyword) ? note(keyword)(s) : []),
+		(s) => setTodoKeyword(s, at, keyword, config),
 	]);
 	return { ...result, repeated: false, keyword };
 }

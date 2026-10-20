@@ -6,6 +6,7 @@ import {
 	applyChanges,
 	captureEntry,
 	changeTodoState,
+	detectLogSettings,
 	newNodeSource,
 	parseOrg,
 	toggleCheckbox,
@@ -52,6 +53,8 @@ class AppState {
 	/** Paths edited in this session that are not yet synced. */
 	dirty = $state<string[]>([]);
 	readonly demo = true;
+	/** Logging behaviour inferred from the vault's own files (see `detectLogSettings`). */
+	logSettings = detectLogSettings(Object.values(demoSources));
 
 	#search = $derived.by(() => {
 		void this.rev;
@@ -140,6 +143,7 @@ class AppState {
 		const result = changeTodoState(file.source, offset, keyword, {
 			config: file.index.keywords,
 			now: localNow(),
+			log: this.logSettings,
 		});
 		if (result.steps.length > 0) this.#write(path, result.text);
 	}

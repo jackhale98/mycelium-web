@@ -136,13 +136,21 @@ export function setFiletags(source: string, tags: readonly string[]): Change[] {
 export function fileTodoKeywords(source: string): KeywordConfig | null {
 	const todo: string[] = [];
 	const done: string[] = [];
+	const log: NonNullable<KeywordConfig['log']> = {};
 	let found = false;
 	for (const k of scanFileKeywords(source)) {
 		if (k.key !== 'TODO' && k.key !== 'SEQ_TODO' && k.key !== 'TYP_TODO') continue;
 		found = true;
 		const words = k.value.split(/\s+/).filter((w) => w.length > 0);
 		const bar = words.indexOf('|');
-		const strip = (w: string) => w.replace(/\(.*\)$/, '');
+		const strip = (w: string) => {
+			const m = /^(.*?)\(([^)]*)\)$/.exec(w);
+			if (!m) return w;
+			// `(t)`, `(d!)`, `(w@/!)`: fast key, then enter and leave logging markers.
+			const marks = /^[^!@/]?([!@])?(?:\/([!@]))?$/.exec(m[2]!);
+			if (marks && (marks[1] || marks[2])) log[m[1]!] = { enter: !!marks[1], leave: !!marks[2] };
+			return m[1]!;
+		};
 		if (bar === -1) {
 			const names = words.map(strip);
 			if (names.length > 0) {
@@ -154,5 +162,8 @@ export function fileTodoKeywords(source: string): KeywordConfig | null {
 			done.push(...words.slice(bar + 1).map(strip));
 		}
 	}
-	return found ? { todoKeywords: todo, doneKeywords: done } : null;
+	if (!found) return null;
+	return Object.keys(log).length > 0
+		? { todoKeywords: todo, doneKeywords: done, log }
+		: { todoKeywords: todo, doneKeywords: done };
 }

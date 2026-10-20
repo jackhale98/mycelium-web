@@ -9,6 +9,7 @@ export * from './planning';
 export * from './properties';
 export * from './keywords';
 export * from './checkbox';
+export * from './log';
 export * from './todo';
 export * from './parse';
 export * from './roam';

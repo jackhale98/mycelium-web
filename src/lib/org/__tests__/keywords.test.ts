@@ -40,6 +40,7 @@ describe('file keywords', () => {
 		expect(fileTodoKeywords('#+TODO: TODO(t) NEXT(n) | DONE(d!) CANCELLED(c@)\n')).toEqual({
 			todoKeywords: ['TODO', 'NEXT'],
 			doneKeywords: ['DONE', 'CANCELLED'],
+			log: { DONE: { enter: true, leave: false }, CANCELLED: { enter: true, leave: false } },
 		});
 		expect(fileTodoKeywords('#+SEQ_TODO: OPEN CLOSED\n')).toEqual({
 			todoKeywords: ['OPEN'],
