@@ -93,6 +93,8 @@ select.input {
 
 .segmented {
 	display: inline-flex;
+	flex-wrap: wrap;
+	max-width: 100%;
 	padding: 3px;
 	border-radius: 11px;
 	background: var(--surface-2);

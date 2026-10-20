@@ -16,20 +16,37 @@
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
 	import TagsView from './views/TagsView.svelte';
+	import LoadError from './components/LoadError.svelte';
+	import { reloadForUpdate } from './util';
 
 	let main: HTMLElement | undefined = $state();
 
 	// Heavier pages load on first visit, keeping the startup bundle small.
+	// A deploy while the app is open removes the old build's files, so a
+	// failed load reloads once to pick up the new version.
+	const lazy =
+		<T,>(load: () => Promise<T>) =>
+		() =>
+			load().catch((e: unknown) => {
+				reloadForUpdate();
+				throw e;
+			});
 	const views = {
-		changes: () => import('./views/ChangesView.svelte'),
-		dailies: () => import('./views/DailiesView.svelte'),
-		graph: () => import('./views/GraphView.svelte'),
-		search: () => import('./views/SearchView.svelte'),
-		settings: () => import('./views/SettingsView.svelte'),
-		vaults: () => import('./views/VaultsView.svelte'),
+		changes: lazy(() => import('./views/ChangesView.svelte')),
+		dailies: lazy(() => import('./views/DailiesView.svelte')),
+		graph: lazy(() => import('./views/GraphView.svelte')),
+		search: lazy(() => import('./views/SearchView.svelte')),
+		settings: lazy(() => import('./views/SettingsView.svelte')),
+		vaults: lazy(() => import('./views/VaultsView.svelte')),
 	};
 
 	$effect(() => router.start());
+	// Vite reports a failed preload of a lazy page's dependencies the same way.
+	$effect(() => {
+		const onPreloadError = () => reloadForUpdate();
+		window.addEventListener('vite:preloadError', onPreloadError);
+		return () => window.removeEventListener('vite:preloadError', onPreloadError);
+	});
 	$effect(() => {
 		const started = performance.now();
 		void app.init().then(() => {
@@ -150,20 +167,28 @@
 		{:else if router.route.name === 'tags'}
 			<TagsView tag={router.route.tag} />
 		{:else if router.route.name === 'vaults'}
-			{#await views.vaults() then { default: VaultsView }}<VaultsView />{/await}
+			{#await views.vaults() then { default: VaultsView }}<VaultsView />{:catch error}<LoadError
+					{error}
+				/>{/await}
 		{:else if router.route.name === 'graph'}
 			{#await views.graph() then { default: GraphView }}{#key router.route.id}<GraphView
 						focus={router.route.id}
-					/>{/key}{/await}
+					/>{/key}{:catch error}<LoadError {error} />{/await}
 		{:else if router.route.name === 'search'}
-			{#await views.search() then { default: SearchView }}<SearchView q={router.route.q} />{/await}
+			{#await views.search() then { default: SearchView }}<SearchView
+					q={router.route.q}
+				/>{:catch error}<LoadError {error} />{/await}
 		{:else if router.route.name === 'dailies'}
-			{#await views.dailies() then { default: DailiesView }}<DailiesView />{/await}
+			{#await views.dailies() then { default: DailiesView }}<DailiesView />{:catch error}<LoadError
+					{error}
+				/>{/await}
 		{:else if router.route.name === 'changes'}
-			{#await views.changes() then { default: ChangesView }}<ChangesView />{/await}
+			{#await views.changes() then { default: ChangesView }}<ChangesView />{:catch error}<LoadError
+					{error}
+				/>{/await}
 		{:else if router.route.name === 'settings'}
 			{#await views.settings() then { default: SettingsView }}{#key app.activeId}<SettingsView
-					/>{/key}{/await}
+					/>{/key}{:catch error}<LoadError {error} />{/await}
 		{:else}
 			<div class="nf">
 				<h1>Page not found</h1>

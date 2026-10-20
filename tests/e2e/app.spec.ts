@@ -381,6 +381,25 @@ test('lists continue on Enter and indent with Tab in the editor', async ({ page 
 	await last(4).toEqual(['- [ ] milk', '  - [ ] oat', '- [ ] eggs', 'done']);
 });
 
+test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
+	page,
+}) => {
+	await open(page, 'app#/');
+	// The old build's chunk is gone after a deploy.
+	await page.route('**/_astro/SettingsView.*.js', (r) => r.fulfill({ status: 404 }));
+	const reloaded = page.waitForEvent('load');
+	await page.goto('app#/settings');
+	await reloaded;
+	await expect(page.getByRole('heading', { name: "This page didn't load" })).toBeVisible({
+		timeout: 15_000,
+	});
+	await page.unroute('**/_astro/SettingsView.*.js');
+	await page.getByRole('button', { name: 'Reload' }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible({
+		timeout: 15_000,
+	});
+});
+
 test('org tables render with caption, header, groups and alignment', async ({ page }) => {
 	await open(page, 'app#/node/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d13');
 	const table = page.locator('table#reading-log');

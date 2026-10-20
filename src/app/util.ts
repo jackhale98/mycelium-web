@@ -87,3 +87,20 @@ export function slugify(title: string): string {
 		.replace(/_$/, '')
 		.toLowerCase();
 }
+
+const RELOADED_KEY = 'mycelium:reloaded-for-update';
+
+/**
+ * Reload to pick up a new deploy after the old build's files have gone.
+ * Only once a minute, so a real outage shows an error instead of looping.
+ */
+export function reloadForUpdate(): void {
+	try {
+		const last = Number(sessionStorage.getItem(RELOADED_KEY) ?? 0);
+		if (Date.now() - last < 60_000) return;
+		sessionStorage.setItem(RELOADED_KEY, String(Date.now()));
+	} catch {
+		return;
+	}
+	location.reload();
+}
