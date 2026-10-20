@@ -100,6 +100,10 @@
 								target="_blank"
 								rel="noopener noreferrer">Install on repositories</a
 							>, then sign in again.
+						{:else if s.session.tokens.provider === 'github'}
+							The GitHub App has to be installed on your notes repository first: open the app's page
+							on GitHub (Settings → Developer settings → GitHub Apps → your app → Install App),
+							choose the repository, then sign in again.
 						{/if}</span
 					>
 				</p>
