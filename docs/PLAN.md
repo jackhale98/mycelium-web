@@ -13,7 +13,11 @@ agenda semantics) but not its UI.
 - [x] **Phase 1 — Foundation:** Astro + Svelte scaffold, design system with light/dark
       themes, CI and Pages deploy, org layer with text-patch edits and a fidelity suite,
       demo vault with home, note, daily, agenda, tags and ⌘K search.
-- [ ] Phase 2 — Git, auth & index
+- [x] **Phase 2a — Git & index:** isomorphic-git clone/commit/sync with an org-aware merge and
+      conflict resolver, token auth for GitHub/GitLab/Bitbucket/any HTTPS host, layout and
+      keyword detection, IndexedDB parse cache, fast line scanner (5,000 files index in 0.3 s),
+      stateless worker (git proxy + OAuth exchange) ready to deploy.
+- [ ] Phase 2b — OAuth sign-in (needs the GitHub App / GitLab / Bitbucket registrations)
 - [ ] Phase 3 — Read & navigate (graph, unlinked mentions, file browser)
 - [ ] Phase 4 — Edit & sync
 - [ ] Phase 5 — Capture templates, dailies calendar, graph

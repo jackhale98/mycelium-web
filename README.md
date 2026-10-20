@@ -7,8 +7,9 @@ Pages, installable on phones.
 
 Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/mycelium).
 
-> **Status:** phase 1 of [the plan](docs/PLAN.md). The app runs against a
-> bundled demo vault; git sign-in and sync land in phase 2.
+> **Status:** early preview — see [the plan](docs/PLAN.md). Open any org-roam
+> git repository with an access token (OAuth sign-in comes next), or try the
+> public demo vault on the `demo-vault` branch of this repository.
 
 ## Principles
 
@@ -39,14 +40,16 @@ npm run build && npm run test:e2e   # Playwright end-to-end + axe accessibility
 
 Set `SITE_BASE=/` when building for a custom domain.
 
-| Path             | What lives there                                               |
-| ---------------- | -------------------------------------------------------------- |
-| `src/lib/org`    | Pure org logic: parsing, text-patch edits, org-roam extraction |
-| `src/lib/vault`  | Vault model (backlinks, tags, agenda) and search               |
-| `src/app`        | The Svelte app: views, components and the org renderer         |
-| `src/pages`      | Astro pages: landing page and the app shell                    |
-| `src/demo/vault` | The demo org-roam vault                                        |
-| `tests/fixtures` | Org files used by the fidelity suite                           |
+| Path             | What lives there                                                   |
+| ---------------- | ------------------------------------------------------------------ |
+| `src/lib/org`    | Pure org logic: parsing, text-patch edits, org-roam extraction     |
+| `src/lib/vault`  | Vault model (backlinks, tags, agenda), layout detection and search |
+| `src/lib/git`    | isomorphic-git repository, org-aware merge, browser workspace      |
+| `worker`         | Stateless Cloudflare Worker: git CORS proxy and OAuth exchange     |
+| `src/app`        | The Svelte app: views, components and the org renderer             |
+| `src/pages`      | Astro pages: landing page and the app shell                        |
+| `src/demo/vault` | The demo org-roam vault                                            |
+| `tests/fixtures` | Org files used by the fidelity suite                               |
 
 ## Licence
 
