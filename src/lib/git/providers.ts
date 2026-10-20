@@ -24,6 +24,11 @@ export interface Provider {
 	tokenHelp: string;
 	needsUsername: boolean;
 	auth(credentials: Credentials): { username: string; password: string };
+	/** Credentials to try once more after the host rejected `failed`, if the token might be another kind. */
+	retryAuth?(
+		credentials: Credentials,
+		failed: { username?: string | undefined },
+	): { username: string; password: string } | null;
 }
 
 export const PROVIDERS: Record<ProviderId, Provider> = {
@@ -52,7 +57,7 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
 		host: 'bitbucket.org',
 		tokenUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
 		tokenHelp:
-			'An Atlassian API token for Bitbucket with the scopes read:repository:bitbucket and write:repository:bitbucket. Leave the username blank (or use your Bitbucket username, not your email).',
+			'An Atlassian API token for Bitbucket with the scopes read:repository:bitbucket and write:repository:bitbucket, or a repository access token (the repository’s Settings → Access tokens, with Repository read and write) to limit access to one repository. Leave the username blank (or use your Bitbucket username, not your email).',
 		needsUsername: true,
 		auth: ({ token, username, oauth }) => {
 			// Signed-in (OAuth) tokens use x-token-auth. API tokens use Atlassian's fixed
@@ -64,6 +69,12 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
 				password: token,
 			};
 		},
+		// Repository, project and workspace access tokens (scoped to one repo or project)
+		// sign in as x-token-auth instead.
+		retryAuth: ({ token, oauth }, failed) =>
+			!oauth && failed.username === 'x-bitbucket-api-token-auth'
+				? { username: 'x-token-auth', password: token }
+				: null,
 	},
 	other: {
 		id: 'other',

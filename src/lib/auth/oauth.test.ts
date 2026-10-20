@@ -83,6 +83,31 @@ describe('oauth', () => {
 		expect(result.expiresAt).toBeGreaterThan(Date.now());
 	});
 
+	it('sends Bitbucket only the code (its authorize link has no redirect or PKCE)', async () => {
+		store.set(
+			'mycelium:oauth-pending',
+			JSON.stringify({
+				provider: 'bitbucket',
+				state: 'abc',
+				verifier: 'v',
+				redirectUri: 'https://app/cb/',
+				returnTo: '/app#/vaults',
+			}),
+		);
+		const fetch = vi.fn(async () => Response.json({ access_token: 't', expires_in: 7200 }));
+		vi.stubGlobal('fetch', fetch);
+		await completeSignIn(new URLSearchParams('code=xyz&state=abc'), {
+			...config,
+			clientIds: { bitbucket: 'bb' },
+		});
+		const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+		expect(url).toBe('https://w.example/oauth/bitbucket/token');
+		expect(JSON.parse(String(init.body))).toEqual({ code: 'xyz' });
+		expect(authorizeUrl('bitbucket', 'bb', 'https://app/cb/', 's', 'c')).not.toMatch(
+			/redirect_uri|code_challenge/,
+		);
+	});
+
 	it('rejects a mismatched state', async () => {
 		store.set(
 			'mycelium:oauth-pending',

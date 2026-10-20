@@ -52,3 +52,15 @@ describe('Bitbucket credentials', () => {
 		).toEqual({ username: 'x-token-auth', password: 't' });
 	});
 });
+
+describe('Bitbucket access tokens', () => {
+	it('retries a rejected API-token username as x-token-auth (repository access tokens)', () => {
+		const retry = PROVIDERS.bitbucket.retryAuth!;
+		expect(retry({ token: 't' }, { username: 'x-bitbucket-api-token-auth' })).toEqual({
+			username: 'x-token-auth',
+			password: 't',
+		});
+		expect(retry({ token: 't' }, { username: 'x-token-auth' })).toBeNull();
+		expect(retry({ token: 't', username: 'jack_h' }, { username: 'jack_h' })).toBeNull();
+	});
+});

@@ -257,8 +257,16 @@ its owner sees them.
 Bitbucket access tokens last about 2 hours and refresh through the worker. Git
 uses them with the username `x-token-auth`; the site handles that.
 
+**Access is not per repository.** A Bitbucket OAuth consumer can't be limited
+to chosen repositories: signing in grants read and write to every repository
+the person can access. To limit access to one repository, skip sign-in and
+paste a **repository access token** instead (the repository's **Repository
+settings → Security → Access tokens**, with Repository Read and Write; check
+your Bitbucket plan includes them, as workspace and project tokens are
+Premium-only).
+
 Bitbucket sign-in is optional: without a consumer, people paste an Atlassian
-API token instead (Step 6).
+API token or a repository access token instead (Step 6).
 
 Sources: Atlassian's [Use OAuth on Bitbucket Cloud](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
 and [Apps and features settings are missing for admins in personal workspace](https://support.atlassian.com/bitbucket-cloud/kb/apps-and-features-settings-are-missing-for-admins-in-personal-workspace/).
@@ -356,4 +364,5 @@ can paste a personal access token instead: a fine-grained GitHub token with
 `read_repository` and `write_repository`, or an Atlassian API token for
 Bitbucket with `read:repository:bitbucket` and `write:repository:bitbucket`
 (created at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens);
-leave the username blank). This is also the way to use self-hosted GitLab or Gitea.
+leave the username blank), or a Bitbucket repository access token for access to
+one repository only. This is also the way to use self-hosted GitLab or Gitea.

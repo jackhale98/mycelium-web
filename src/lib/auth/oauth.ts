@@ -169,11 +169,14 @@ export async function completeSignIn(
 		throw new Error('Sign-in state mismatch. Start again from Mycelium.');
 	const code = params.get('code');
 	if (!code) throw new Error('No authorization code came back.');
-	const body = await post(`${config.worker.replace(/\/$/, '')}/oauth/${pending.provider}/token`, {
-		code,
-		code_verifier: pending.verifier,
-		redirect_uri: pending.redirectUri,
-	});
+	// Bitbucket's authorize link carries no redirect_uri or PKCE challenge (it uses the
+	// consumer's registered callback), and it rejects a token request that adds them.
+	const body = await post(
+		`${config.worker.replace(/\/$/, '')}/oauth/${pending.provider}/token`,
+		pending.provider === 'bitbucket'
+			? { code }
+			: { code, code_verifier: pending.verifier, redirect_uri: pending.redirectUri },
+	);
 	const tokens = toTokenSet(pending.provider, body);
 	sessionStorage.setItem(RESULT_KEY, JSON.stringify(tokens));
 	return pending.returnTo;
@@ -229,7 +232,7 @@ export async function refreshCredentials(
 	if (!refresh) return creds;
 	const body = await post(`${config.worker.replace(/\/$/, '')}/oauth/${provider}/refresh`, {
 		refresh_token: refresh,
-		redirect_uri: redirectUri,
+		...(provider === 'bitbucket' ? {} : { redirect_uri: redirectUri }),
 	});
 	const tokens = toTokenSet(provider, body);
 	return credentialsFrom({ ...tokens, refreshToken: tokens.refreshToken ?? refresh });

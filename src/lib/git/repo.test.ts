@@ -91,6 +91,29 @@ describe('GitRepo', () => {
 		}
 	});
 
+	it('clones Bitbucket with a repository access token (x-token-auth after a retry)', async () => {
+		const server = await startGitServer(
+			'scoped',
+			{ 's.org': '#+title: S\n' },
+			{ auth: 'x-token-auth:ATCTT-repo-token' },
+		);
+		try {
+			const repo = new GitRepo(
+				{ promises: fs.promises },
+				http,
+				join(root, 'scoped'),
+				{ ...config(), provider: 'bitbucket', url: `${server.url}/scoped.git` },
+				() => ({ token: 'ATCTT-repo-token' }),
+			);
+			await repo.clone();
+			expect([...(await repo.files(() => true)).keys()]).toEqual(['s.org']);
+			await repo.commit([{ path: 's.org', content: '#+title: S2\n' }], 'Edit');
+			expect(await repo.push()).toEqual({ status: 'pushed', commits: 1 });
+		} finally {
+			server.close();
+		}
+	});
+
 	it('explains a branch that does not exist', async () => {
 		const repo = new GitRepo(
 			{ promises: fs.promises },

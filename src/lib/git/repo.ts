@@ -91,7 +91,8 @@ export class GitRepo {
 		const provider = PROVIDERS[this.config.provider];
 		return {
 			onAuth: () => (creds ? provider.auth(creds) : { cancel: true }),
-			onAuthFailure: () => ({ cancel: true }),
+			onAuthFailure: (_url: string, failed: { username?: string | undefined }) =>
+				(creds && provider.retryAuth?.(creds, failed)) || { cancel: true },
 		};
 	}
 
