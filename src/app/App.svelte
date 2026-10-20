@@ -218,7 +218,8 @@
 					{error}
 				/>{/await}
 		{:else if router.route.name === 'settings'}
-			{#await views.settings() then { default: SettingsView }}{#key app.activeId}<SettingsView
+			<!-- Settings copies the vault's settings into its forms: build it once they've loaded. -->
+			{#await views.settings() then { default: SettingsView }}{#key `${app.activeId}:${app.ready}`}<SettingsView
 					/>{/key}{:catch error}<LoadError {error} />{/await}
 		{:else}
 			<div class="nf">
