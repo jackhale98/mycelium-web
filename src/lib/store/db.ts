@@ -34,8 +34,16 @@ export interface VaultRecord {
 	autoCommit?: boolean;
 	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */
 	keywordTones?: Record<string, KeywordTone>;
+	/** Named agenda filters (an encoded filter query each), shown as chips on the agenda. */
+	agendaViews?: SavedAgendaView[];
 	/** `folder`: a directory on this computer opened with the File System Access API (no git here). */
 	kind?: 'git' | 'folder';
+}
+
+export interface SavedAgendaView {
+	id: string;
+	name: string;
+	query: string;
 }
 
 /** A local folder's directory handle (kept apart so vault records stay plain data). */

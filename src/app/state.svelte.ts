@@ -34,7 +34,7 @@ import {
 	type Change,
 } from '$lib/org';
 import type { FileConflict, FileStatus, LoadProgress, Workspace } from '$lib/git/workspace';
-import type { KeywordTone, VaultRecord } from '$lib/store/db';
+import type { KeywordTone, SavedAgendaView, VaultRecord } from '$lib/store/db';
 import type { FolderWorkspace } from '$lib/vault/folder';
 import {
 	dailyDate,
@@ -577,6 +577,11 @@ class AppState {
 		if (patch.keywords) await ws.clearCache();
 		if (patch.layout || patch.keywords) await this.openVault(ws.record.id);
 		if (patch.log) this.logSettings = { ...this.logSettings, ...patch.log };
+	}
+
+	/** Save, rename or delete named agenda views for the open vault. */
+	async saveAgendaViews(views: SavedAgendaView[]) {
+		await this.updateVault({ agendaViews: $state.snapshot(views) as SavedAgendaView[] });
 	}
 
 	/** Remove a vault's local copy. Uncommitted and unpushed work is lost; the remote is untouched. */

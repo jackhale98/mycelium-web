@@ -62,6 +62,15 @@
 		},
 	];
 
+	const viewCommands = $derived(
+		(app.activeVault?.agendaViews ?? []).map((v): Item => ({
+			key: `view:${v.id}`,
+			label: `Agenda: ${v.name}`,
+			icon: 'agenda',
+			run: () => router.go(href.agenda(v.query)),
+		})),
+	);
+
 	const items = $derived.by((): Item[] => {
 		void app.rev;
 		const q = query.trim();
@@ -79,6 +88,7 @@
 					run: () => router.go(href.node(n.id)),
 				})),
 				...commands,
+				...viewCommands,
 			];
 		}
 		const hits = app.search.search(q, 12).map((hit) => {
@@ -96,7 +106,9 @@
 				run: () => router.go(href.node(hit.id)),
 			};
 		});
-		const cmds = commands.filter((c) => c.label.toLowerCase().includes(q.toLowerCase()));
+		const cmds = [...commands, ...viewCommands].filter((c) =>
+			c.label.toLowerCase().includes(q.toLowerCase()),
+		);
 		const exists = app.vault.titles.has(q.toLowerCase());
 		const extra: Item[] = [
 			{

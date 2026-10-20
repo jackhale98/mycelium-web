@@ -313,6 +313,74 @@ test('agenda filters: tags, org match strings, text and URL', async ({ page }) =
 	expect((await titles()).length).toBe(before.length);
 });
 
+test('agenda views can be named, saved, renamed and opened from the palette', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	const all = await page.locator('.agenda .item').count();
+	await page.getByRole('searchbox', { name: /Filter by text/ }).fill('flash|graph');
+	await expect(page.locator('.agenda .item')).toHaveCount(2);
+	await page.getByRole('button', { name: 'Save view…' }).click();
+	await page.getByLabel('View name').fill('Field work');
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	const view = page.getByRole('button', { name: 'Field work', exact: true });
+	await expect(view).toHaveAttribute('aria-pressed', 'true');
+
+	await page.getByRole('button', { name: 'Rename Field work' }).click();
+	await page.getByLabel('View name').fill('Lab');
+	await page.keyboard.press('Enter');
+	const lab = page.getByRole('button', { name: 'Lab', exact: true });
+	await expect(lab).toBeVisible();
+
+	// Clear the filters, then return through the saved view and the palette.
+	await page.getByRole('button', { name: 'Clear', exact: true }).click();
+	await expect(page.locator('.agenda .item')).toHaveCount(all);
+	await lab.click();
+	await expect(page.locator('.agenda .item')).toHaveCount(2);
+	await page.keyboard.press('|');
+	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.type('Agenda: Lab');
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.agenda .item')).toHaveCount(2);
+	await expectAccessible(page);
+
+	// Saved views belong to the vault, so they survive a reload with no filter in the URL.
+	await open(page, 'app#/agenda');
+	await page.reload();
+	await expect(lab).toBeVisible();
+	await lab.click();
+	page.once('dialog', (d) => d.accept());
+	await page.getByRole('button', { name: 'Delete Lab' }).click();
+	await expect(lab).toHaveCount(0);
+});
+
+test('lists continue on Enter and indent with Tab in the editor', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editor = page.locator('.cm-content');
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+End');
+	const last = (n: number) =>
+		expect.poll(async () =>
+			(await editor.locator('.cm-line').allInnerTexts()).slice(-n).map((t) => t.trimEnd()),
+		);
+	await page.keyboard.type('\n- [ ] milk');
+	await page.keyboard.press('Enter');
+	await last(1).toEqual(['- [ ]']);
+	await page.keyboard.type('oat');
+	await page.keyboard.press('Tab');
+	await last(1).toEqual(['  - [ ] oat']);
+	await page.keyboard.press('Enter');
+	await last(1).toEqual(['  - [ ]']);
+	await page.keyboard.type('eggs');
+	await page.keyboard.press('Shift+Tab');
+	await last(1).toEqual(['- [ ] eggs']);
+	await page.keyboard.press('Enter');
+	await last(1).toEqual(['- [ ]']);
+	await page.keyboard.press('Enter');
+	await last(1).toEqual(['']);
+	await page.keyboard.type('done');
+	await last(4).toEqual(['- [ ] milk', '  - [ ] oat', '- [ ] eggs', 'done']);
+});
+
 test('org tables render with caption, header, groups and alignment', async ({ page }) => {
 	await open(page, 'app#/node/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d13');
 	const table = page.locator('table#reading-log');

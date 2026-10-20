@@ -2,6 +2,7 @@
 	import type { AgendaItem } from '$lib/vault/vault';
 	import AgendaFilters from '../components/AgendaFilters.svelte';
 	import AgendaList from '../components/AgendaList.svelte';
+	import SavedViews from '../components/SavedViews.svelte';
 	import {
 		activeFilters,
 		compileFilter,
@@ -14,6 +15,7 @@
 	import { href } from '../router.svelte';
 	import { app, localNow } from '../state.svelte';
 	import { longDate } from '../util';
+	import { untrack } from 'svelte';
 
 	let { query = '' }: { query?: string } = $props();
 
@@ -31,10 +33,19 @@
 		return emptyFilter();
 	}
 	let filter = $state<AgendaFilter>(initial());
+	const encoded = $derived(encodeFilter(filter));
+
+	// Following a link to the agenda while it's open (a saved view from the palette).
+	let lastQuery = query;
+	$effect(() => {
+		if (query === lastQuery) return;
+		lastQuery = query;
+		if (query !== untrack(() => encoded)) filter = decodeFilter(query, app.vault);
+	});
 
 	// Keep the address bar and this browser's memory in step with the filters.
 	$effect(() => {
-		const q = encodeFilter(filter);
+		const q = encoded;
 		const hash = href.agenda(q);
 		if (location.hash !== hash) history.replaceState(null, '', hash);
 		try {
@@ -131,6 +142,7 @@
 		<p class="eyebrow">{longDate(today)}</p>
 		<h1>Agenda</h1>
 	</header>
+	<SavedViews query={encoded} onpick={(v) => (filter = decodeFilter(v.query, app.vault))} />
 	<AgendaFilters
 		bind:filter
 		tags={tagOptions}

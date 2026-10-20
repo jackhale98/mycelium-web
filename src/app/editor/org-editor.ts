@@ -12,6 +12,7 @@ import {
 	type CompletionContext,
 	type CompletionResult,
 } from '@codemirror/autocomplete';
+import { continueList, indentItem, outdentItem, toggleItemCheckbox } from './list-commands';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Annotation, EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
@@ -374,6 +375,12 @@ export function createEditor(
 				autocompletion({ override: [linkCompletion(hooks)], icons: false }),
 				keymap.of([
 					{ key: 'Alt-Enter', run: newHeading },
+					{ key: 'Enter', run: continueList },
+					{ key: 'Tab', run: indentItem },
+					{ key: 'Shift-Tab', run: outdentItem },
+					{ key: 'Alt-ArrowRight', run: indentItem },
+					{ key: 'Alt-ArrowLeft', run: outdentItem },
+					{ key: 'Ctrl-c Ctrl-c', run: toggleItemCheckbox },
 					...closeBracketsKeymap,
 					...completionKeymap,
 					...searchKeymap,
