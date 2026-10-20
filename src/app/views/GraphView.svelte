@@ -38,10 +38,27 @@
 	let headings = $state(prefs['headings'] === true);
 	let depth = $state(typeof prefs['depth'] === 'number' ? (prefs['depth'] as number) : 2);
 	let local = $state(true);
+	/** Phones: the controls live in a collapsible footer. */
+	let expanded = $state(prefs['expanded'] === true);
+	let narrow = $state(
+		typeof matchMedia !== 'undefined' && matchMedia('(max-width: 720px)').matches,
+	);
+	/** Phones have no hover: the first tap selects a node, the second (or Open) opens it. */
+	let selected = $state<SimNode | null>(null);
+	let controlsEl: HTMLDivElement | undefined = $state();
+	$effect(() => {
+		const mq = matchMedia('(max-width: 720px)');
+		const on = () => (narrow = mq.matches);
+		mq.addEventListener('change', on);
+		return () => mq.removeEventListener('change', on);
+	});
 	let filter = $state('');
 	$effect(() => {
 		try {
-			localStorage.setItem(PREFS_KEY, JSON.stringify({ dailies, orphans, headings, depth }));
+			localStorage.setItem(
+				PREFS_KEY,
+				JSON.stringify({ dailies, orphans, headings, depth, expanded }),
+			);
 		} catch {
 			/* per-session only */
 		}
@@ -356,6 +373,7 @@
 			}
 		};
 		const leave = () => {
+			if (narrow) return;
 			hovered = null;
 			redraw();
 		};
@@ -365,7 +383,14 @@
 			if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
 			const rect = el.getBoundingClientRect();
 			const n = nodeAt(e.clientX - rect.left, e.clientY - rect.top);
-			if (n) router.go(href.node(n.id));
+			if (narrow) {
+				if (n && selected === n) router.go(href.node(n.id));
+				else {
+					selected = n;
+					hovered = n;
+					redraw();
+				}
+			} else if (n) router.go(href.node(n.id));
 		};
 		el.addEventListener('pointermove', move);
 		el.addEventListener('pointerleave', leave);
@@ -407,14 +432,16 @@
 		const xs = nodes.map((n) => n.x ?? 0);
 		const ys = nodes.map((n) => n.y ?? 0);
 		const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-		// Leave room for the controls panel on wide screens.
+		// Leave room for the controls: a side panel on wide screens, a footer on phones.
 		const left = size.w > 900 ? 300 : 0;
+		const bottom = narrow ? (controlsEl?.offsetHeight ?? 56) + 16 : 0;
 		const w = size.w - left;
-		const k = Math.min(2.4, 0.86 / Math.max((x1 - x0 + 80) / w, (y1 - y0 + 80) / size.h));
+		const h = size.h - bottom;
+		const k = Math.min(2.4, 0.86 / Math.max((x1 - x0 + 80) / w, (y1 - y0 + 80) / h));
 		zoomer.transform(
 			select(canvas),
 			zoomIdentity
-				.translate(left + w / 2, size.h / 2)
+				.translate(left + w / 2, h / 2)
 				.scale(k)
 				.translate(-(x0 + x1) / 2, -(y0 + y1) / 2),
 		);
@@ -428,64 +455,114 @@
 		aria-label={`Link graph: ${graph.nodes.length} notes and ${graph.links.length} connections. A list of the notes follows.`}
 	></canvas>
 
-	<div class="panel controls">
+	<div class="panel controls" class:narrow bind:this={controlsEl}>
 		<div class="title-row">
 			<h1>Graph</h1>
 			<span class="stats">{graph.nodes.length} notes · {graph.links.length} links</span>
-		</div>
-		{#if focusNode}
-			<div class="seg" role="radiogroup" aria-label="Scope">
-				<button type="button" role="radio" aria-checked={local} onclick={() => (local = true)}
-					>Around {focusNode.title.length > 22
-						? `${focusNode.title.slice(0, 20)}…`
-						: focusNode.title}</button
-				>
-				<button type="button" role="radio" aria-checked={!local} onclick={() => (local = false)}
-					>Whole vault</button
-				>
-			</div>
-			{#if local}
-				<label class="depth"
-					>Depth
-					<input type="range" min="1" max="4" bind:value={depth} />
-					<span>{depth}</span></label
+			{#if narrow}
+				<button
+					type="button"
+					class="expand"
+					aria-expanded={expanded}
+					aria-controls="graph-options"
+					aria-label={expanded ? 'Hide graph options' : 'Show graph options'}
+					onclick={() => (expanded = !expanded)}
+					><span class="chev" class:up={expanded}><Icon name="chevronDown" size={18} /></span
+					></button
 				>
 			{/if}
-		{/if}
-		<label class="find">
-			<Icon name="search" size={14} />
-			<span class="sr-only">Highlight notes</span>
-			<input type="search" placeholder="Highlight…" bind:value={filter} />
-		</label>
-		<div class="toggles">
-			<label><input type="checkbox" bind:checked={dailies} /> Dailies</label>
-			<label
-				><input type="checkbox" bind:checked={orphans} disabled={local && !!focusNode} /> Orphans</label
-			>
-			<label><input type="checkbox" bind:checked={headings} /> Heading nodes</label>
 		</div>
-		{#if topTags.length}
-			<ul class="legend" aria-label="Colours by tag">
-				{#each topTags as tag, i (tag)}
-					<li>
-						<span class="sw" style:background={palette.tags[i % palette.tags.length]}></span>#{tag}
-					</li>
-				{/each}
-			</ul>
+		{#if narrow && selected}
+			<div class="info" role="status">
+				<div class="info-text">
+					<strong>{selected.title}</strong>
+					<span>{selected.degree} {selected.degree === 1 ? 'link' : 'links'} · {selected.file}</span
+					>
+				</div>
+				<a class="btn small primary" href={href.node(selected.id)}>Open</a>
+				<button
+					type="button"
+					class="expand"
+					aria-label="Clear selection"
+					onclick={() => {
+						selected = null;
+						hovered = null;
+						redraw();
+					}}><Icon name="close" size={15} /></button
+				>
+			</div>
 		{/if}
-		<button type="button" class="btn small" onclick={fit}
-			><Icon name="monitor" size={14} />Fit</button
-		>
+		<div class="options" id="graph-options" hidden={narrow && !expanded}>
+			{#if focusNode}
+				<div class="seg" role="radiogroup" aria-label="Scope">
+					<button type="button" role="radio" aria-checked={local} onclick={() => (local = true)}
+						>Around {focusNode.title.length > 22
+							? `${focusNode.title.slice(0, 20)}…`
+							: focusNode.title}</button
+					>
+					<button type="button" role="radio" aria-checked={!local} onclick={() => (local = false)}
+						>Whole vault</button
+					>
+				</div>
+				{#if local}
+					<label class="depth"
+						>Depth
+						<input type="range" min="1" max="4" bind:value={depth} />
+						<span>{depth}</span></label
+					>
+				{/if}
+			{/if}
+			<label class="find">
+				<Icon name="search" size={14} />
+				<span class="sr-only">Highlight notes</span>
+				<input type="search" placeholder="Highlight…" bind:value={filter} />
+			</label>
+			<div class="toggles">
+				<label><input type="checkbox" bind:checked={dailies} /> Dailies</label>
+				<label
+					><input type="checkbox" bind:checked={orphans} disabled={local && !!focusNode} /> Orphans</label
+				>
+				<label><input type="checkbox" bind:checked={headings} /> Heading nodes</label>
+			</div>
+			{#if topTags.length}
+				<ul class="legend" aria-label="Colours by tag">
+					{#each topTags as tag, i (tag)}
+						<li>
+							<span class="sw" style:background={palette.tags[i % palette.tags.length]}
+							></span>#{tag}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			<button
+				type="button"
+				class="btn small"
+				onclick={() => {
+					userMoved = false;
+					fit();
+				}}><Icon name="monitor" size={14} />Fit</button
+			>
+			{#if narrow}
+				<details class="in-list">
+					<summary>Notes in view ({ranked.length})</summary>
+					<ol>
+						{#each ranked.slice(0, 300) as n (n.id)}
+							<li><a href={href.node(n.id)}>{n.title}</a> <span>{n.degree}</span></li>
+						{/each}
+					</ol>
+				</details>
+			{/if}
+		</div>
 	</div>
 
-	{#if hovered}
+	{#if hovered && !narrow}
 		<div class="panel tip" aria-hidden="true">
 			<strong>{hovered.title}</strong>
 			<span>{hovered.degree} {hovered.degree === 1 ? 'link' : 'links'} · {hovered.file}</span>
 		</div>
 	{/if}
 
-	<details class="panel list">
+	<details class="panel list" hidden={narrow}>
 		<summary>Notes in view ({ranked.length})</summary>
 		<ol>
 			{#each ranked.slice(0, 300) as n (n.id)}
@@ -678,6 +755,100 @@
 	}
 	.list a {
 		color: var(--text);
+	}
+	.options {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+	}
+	.options[hidden] {
+		display: none;
+	}
+	.expand {
+		display: grid;
+		place-items: center;
+		width: 2.4rem;
+		height: 2.4rem;
+		margin-left: 0.25rem;
+		border: 0;
+		border-radius: 8px;
+		background: none;
+		color: var(--text-muted);
+	}
+	.chev {
+		display: grid;
+		transform: rotate(180deg);
+		transition: transform 0.18s var(--ease);
+	}
+	.chev.up {
+		transform: none;
+	}
+	.info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--border);
+	}
+	.info-text {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		flex-direction: column;
+	}
+	.info-text strong {
+		overflow: hidden;
+		font-family: var(--font-read);
+		font-size: 1.05rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.info-text span {
+		overflow: hidden;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.in-list summary {
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.in-list ol {
+		margin: 0.4rem 0 0;
+		padding-left: 1.2rem;
+	}
+	.in-list a {
+		color: var(--text);
+	}
+	.list[hidden] {
+		display: none;
+	}
+	/* Phones: a footer bar that expands into a sheet. */
+	.controls.narrow {
+		/* Pinned above the phone navigation bar. */
+		position: fixed;
+		top: auto;
+		right: 0.75rem;
+		bottom: calc(5rem + env(safe-area-inset-bottom));
+		left: 0.75rem;
+		z-index: 5;
+		width: auto;
+		max-height: 58dvh;
+		overflow-y: auto;
+		gap: 0.6rem;
+		padding: 0.55rem 0.6rem 0.55rem 1rem;
+		overscroll-behavior: contain;
+	}
+	.controls.narrow .title-row {
+		align-items: center;
+	}
+	.controls.narrow h1 {
+		font-size: 1.15rem;
+	}
+	.controls.narrow .stats {
+		margin-left: auto;
 	}
 	@media (max-width: 960px) {
 		.graph {

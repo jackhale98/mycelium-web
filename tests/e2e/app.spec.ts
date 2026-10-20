@@ -161,10 +161,11 @@ test('new note dialog creates a note and opens the editor', async ({ page }) => 
 	await expect(page.locator('.cm-content')).toContainText('#+filetags: :biology:');
 });
 
-test('graph view draws the vault', async ({ page }) => {
+test('graph view draws the vault', async ({ page, isMobile }) => {
 	await open(page, 'app#/graph');
 	await expect(page.getByRole('img', { name: /Link graph: \d+ notes/ })).toBeVisible();
-	await page.getByText(/Notes in view/).click();
+	if (isMobile) await page.getByRole('button', { name: 'Show graph options' }).click();
+	await page.locator('summary:visible', { hasText: /Notes in view/ }).click();
 	await expect(page.getByRole('link', { name: 'Mycelial networks' }).last()).toBeVisible();
 	await expectAccessible(page);
 });
@@ -235,4 +236,21 @@ test('edit a heading from the agenda: date chip and heading sheet', async ({ pag
 	const diff = page.getByRole('region', { name: /Diff of .*mycelium_web\.org$/ });
 	await expect(diff).toContainText('* NEXT [#A] Ship the design tokens');
 	await expect(diff).toContainText('DEADLINE: <2026-11-05 Thu>');
+});
+
+test('graph controls are a collapsible footer on phones', async ({ page, isMobile }) => {
+	test.skip(!isMobile, 'phone layout');
+	await open(page, 'app#/graph');
+	const toggle = page.getByRole('button', { name: 'Show graph options' });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.getByRole('checkbox', { name: 'Dailies' })).toBeHidden();
+	const share = await page.evaluate(() => {
+		const panel = document.querySelector('.controls')!.getBoundingClientRect();
+		return panel.height / innerHeight;
+	});
+	expect(share).toBeLessThan(0.12);
+	await toggle.click();
+	await expect(page.getByRole('checkbox', { name: 'Dailies' })).toBeVisible();
+	await page.getByRole('button', { name: 'Hide graph options' }).click();
+	await expect(page.getByRole('checkbox', { name: 'Dailies' })).toBeHidden();
 });
