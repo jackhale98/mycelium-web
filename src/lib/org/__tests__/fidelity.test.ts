@@ -10,7 +10,7 @@ import { scanHeadline, setHeadlineTags, setPriority, setTodoKeyword } from '../h
 import { fileTodoKeywords } from '../keywords';
 import { setPlanning } from '../planning';
 import { setProperty } from '../properties';
-import { indexFile } from '../roam';
+import { scanFile as indexFile } from '../scan';
 import { applyChanges, splitLines, type Change } from '../text';
 import { makeTimestamp } from '../timestamp';
 import { DEFAULT_KEYWORD_CONFIG } from '../types';

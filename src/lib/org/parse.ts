@@ -29,6 +29,9 @@ export function parseOrg(
 ): OrgData {
 	const processor = unified().use(uniorgParse, {
 		trackPosition: true,
+		// Only `a_{b}` is a subscript: snake_case words and ROAM_REFS stay as written,
+		// matching how org-roam titles and Emacs (without org-pretty-entities) show them.
+		useSubSuperscripts: '{}',
 		todoKeywords: [...keywords.todoKeywords, ...keywords.doneKeywords],
 	});
 	if (!source.includes('\r\n')) return processor.parse(source) as OrgData;

@@ -1,4 +1,4 @@
-/// org-roam extraction: nodes, links, tags, aliases, refs and every headline
+/// org-roam extraction from the uniorg tree: nodes, links, tags, aliases, refs and every headline
 /// (for the agenda), from one file. Mirrors what org-roam's database records.
 
 import type { Headline, Keyword, OrgNode, Planning, PropertyDrawer, Section } from 'uniorg';
@@ -118,7 +118,7 @@ const CONTEXT_TYPES = new Set(['paragraph', 'headline', 'list-item', 'table-row'
 const MAX_CONTEXT = 400;
 
 /** Index one org file. `path` is repo-relative. */
-export function indexFile(
+export function indexFileTree(
 	path: string,
 	source: string,
 	globalKeywords: KeywordConfig = DEFAULT_KEYWORD_CONFIG,

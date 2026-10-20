@@ -12,4 +12,6 @@ export * from './checkbox';
 export * from './todo';
 export * from './parse';
 export * from './roam';
+export * from './scan';
+export { scanFile as indexFile } from './scan';
 export * from './capture';
