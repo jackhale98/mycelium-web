@@ -1,3 +1,15 @@
+<script module lang="ts">
+	import type { Account, RemoteRepo, TokenSet } from '$lib/auth/oauth';
+
+	// Module-level, so the result of signing in survives the page being rebuilt
+	// while the app starts up (it arrives straight after the redirect back).
+	const s = $state<{
+		session: { tokens: TokenSet; account: Account; repos: RemoteRepo[] } | null;
+		busy: boolean;
+		error: string | null;
+	}>({ session: null, busy: false, error: null });
+</script>
+
 <script lang="ts">
 	import {
 		availableProviders,
@@ -6,10 +18,7 @@
 		fetchAccount,
 		fetchRepos,
 		takeSignInResult,
-		type Account,
 		type OAuthProvider,
-		type RemoteRepo,
-		type TokenSet,
 	} from '$lib/auth/oauth';
 	import { PROVIDERS } from '$lib/git/providers';
 	import { OAUTH_CONFIG, OAUTH_REDIRECT, WORKER_URL } from '../config';
@@ -19,50 +28,48 @@
 
 	const providers = availableProviders(OAUTH_CONFIG);
 
-	let session = $state<{ tokens: TokenSet; account: Account; repos: RemoteRepo[] } | null>(null);
-	let busy = $state(false);
-	let error = $state<string | null>(null);
 	let filter = $state('');
 
 	const shown = $derived(
-		session?.repos.filter((r) => r.slug.toLowerCase().includes(filter.trim().toLowerCase())) ?? [],
+		s.session?.repos.filter((r) => r.slug.toLowerCase().includes(filter.trim().toLowerCase())) ??
+			[],
 	);
 
 	// Back from the provider: load the account and its repositories.
 	$effect(() => {
 		const tokens = takeSignInResult();
 		if (!tokens) return;
-		busy = true;
+		s.busy = true;
 		void Promise.all([
 			fetchAccount(tokens.provider, tokens.accessToken),
 			fetchRepos(tokens.provider, tokens.accessToken),
 		])
-			.then(([account, repos]) => (session = { tokens, account, repos }))
-			.catch((e: unknown) => (error = e instanceof Error ? e.message : String(e)))
-			.finally(() => (busy = false));
+			.then(([account, repos]) => (s.session = { tokens, account, repos }))
+			.catch((e: unknown) => (s.error = e instanceof Error ? e.message : String(e)))
+			.finally(() => (s.busy = false));
 	});
 
 	async function signIn(provider: OAuthProvider) {
-		error = null;
+		s.error = null;
 		try {
 			await beginSignIn(provider, OAUTH_CONFIG, OAUTH_REDIRECT(), 'app#/vaults');
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			s.error = e instanceof Error ? e.message : String(e);
 		}
 	}
 
 	async function open(repo: RemoteRepo) {
-		if (!session) return;
+		if (!s.session) return;
 		const ok = await app.connect({
 			url: repo.cloneUrl,
-			provider: session.tokens.provider,
+			provider: s.session.tokens.provider,
 			slug: repo.slug,
 			branch: repo.defaultBranch,
 			token: '',
 			username: '',
 			corsProxy: WORKER_URL || null,
-			author: { name: session.account.name, email: session.account.email },
-			credentials: credentialsFrom(session.tokens),
+			author: { name: s.session.account.name, email: s.session.account.email },
+			credentials: credentialsFrom(s.session.tokens),
 		});
 		if (ok) router.go(href.home());
 	}
@@ -70,24 +77,24 @@
 
 {#if providers.length}
 	<section class="panel stack" aria-labelledby="signin-h">
-		{#if session}
+		{#if s.session}
 			<div class="row between">
 				<h2 id="signin-h">
 					Choose a repository <span class="who"
-						>{PROVIDERS[session.tokens.provider].name} · {session.account.login}</span
+						>{PROVIDERS[s.session.tokens.provider].name} · {s.session.account.login}</span
 					>
 				</h2>
-				<button type="button" class="btn small" onclick={() => (session = null)}>Sign out</button>
+				<button type="button" class="btn small" onclick={() => (s.session = null)}>Sign out</button>
 			</div>
-			{#if session.repos.length > 8}
+			{#if s.session.repos.length > 8}
 				<input class="input" type="search" placeholder="Filter repositories" bind:value={filter} />
 			{/if}
-			{#if session.repos.length === 0}
+			{#if s.session.repos.length === 0}
 				<p class="notice info">
 					<Icon name="info" size={16} />
 					<span
 						>No repositories yet.
-						{#if session.tokens.provider === 'github' && OAUTH_CONFIG.githubAppSlug}
+						{#if s.session.tokens.provider === 'github' && OAUTH_CONFIG.githubAppSlug}
 							<a
 								href={`https://github.com/apps/${OAUTH_CONFIG.githubAppSlug}/installations/new`}
 								target="_blank"
@@ -113,7 +120,7 @@
 						</li>
 					{/each}
 				</ul>
-				{#if session.tokens.provider === 'github' && OAUTH_CONFIG.githubAppSlug}
+				{#if s.session.tokens.provider === 'github' && OAUTH_CONFIG.githubAppSlug}
 					<p class="hint">
 						Missing one? <a
 							href={`https://github.com/apps/${OAUTH_CONFIG.githubAppSlug}/installations/new`}
@@ -131,15 +138,15 @@
 			</p>
 			<div class="row">
 				{#each providers as p (p)}
-					<button type="button" class="btn" disabled={busy} onclick={() => signIn(p)}
+					<button type="button" class="btn" disabled={s.busy} onclick={() => signIn(p)}
 						><Icon name="git" size={16} />Sign in with {PROVIDERS[p].name}</button
 					>
 				{/each}
 			</div>
 		{/if}
-		{#if busy}<p class="hint" role="status">Loading your repositories…</p>{/if}
-		{#if error}<p class="notice warn" role="alert">
-				<Icon name="alert" size={16} /><span>{error}</span>
+		{#if s.busy}<p class="hint" role="status">Loading your repositories…</p>{/if}
+		{#if s.error}<p class="notice warn" role="alert">
+				<Icon name="alert" size={16} /><span>{s.error}</span>
 			</p>{/if}
 	</section>
 {/if}
