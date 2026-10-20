@@ -97,9 +97,8 @@
 						{#if s.session.tokens.provider === 'github' && OAUTH_CONFIG.githubAppSlug}
 							<a
 								href={`https://github.com/apps/${OAUTH_CONFIG.githubAppSlug}/installations/new`}
-								target="_blank"
 								rel="noopener noreferrer">Install on repositories</a
-							>, then sign in again.
+							> and pick your notes repository; you'll come straight back here.
 						{:else if s.session.tokens.provider === 'github'}
 							The GitHub App has to be installed on your notes repository first: open the app's page
 							on GitHub (Settings → Developer settings → GitHub Apps → your app → Install App),
@@ -128,7 +127,6 @@
 					<p class="hint">
 						Missing one? <a
 							href={`https://github.com/apps/${OAUTH_CONFIG.githubAppSlug}/installations/new`}
-							target="_blank"
 							rel="noopener noreferrer">Install on repositories</a
 						>.
 					</p>

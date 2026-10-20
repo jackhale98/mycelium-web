@@ -17,13 +17,22 @@ import BrandLoader from '../../app/components/BrandLoader.svelte';
 </Base>
 
 <script>
-	import { completeSignIn } from '$lib/auth/oauth';
-	import { OAUTH_CONFIG, siteUrl } from '../../app/config';
+	import { beginSignIn, completeSignIn, hasPendingSignIn } from '$lib/auth/oauth';
+	import { OAUTH_CONFIG, OAUTH_REDIRECT, siteUrl } from '../../app/config';
 
 	const params = new URLSearchParams(location.search);
 	// Drop the code from the address bar and history straight away.
 	history.replaceState(null, '', location.pathname);
-	completeSignIn(params, OAUTH_CONFIG)
+	// Back from installing the GitHub App on repositories: GitHub sends its own code
+	// (no state of ours to check), so start a normal sign-in; it returns at once.
+	const fromInstall =
+		!hasPendingSignIn() && params.has('setup_action') && !!OAUTH_CONFIG.clientIds.github;
+	(fromInstall
+		? beginSignIn('github', OAUTH_CONFIG, OAUTH_REDIRECT(), 'app#/vaults').then(
+				() => new Promise<string>(() => {}),
+			)
+		: completeSignIn(params, OAUTH_CONFIG)
+	)
 		.then((next) => location.replace(siteUrl(next)))
 		.catch((e: unknown) => {
 			document.getElementById('cb-status')!.hidden = true;

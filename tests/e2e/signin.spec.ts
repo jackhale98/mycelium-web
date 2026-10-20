@@ -82,3 +82,20 @@ test('sign in with GitHub while a git vault is open', async ({ page }) => {
 	).toBeVisible({ timeout: 30_000 });
 	await signIn(page);
 });
+
+test('coming back from installing the GitHub App signs in and lists repositories', async ({
+	page,
+}) => {
+	await page.goto('app#/vaults');
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	test.skip(
+		(await page.getByRole('button', { name: 'Sign in with GitHub' }).count()) === 0,
+		'build has no GitHub client id',
+	);
+	await fakeGitHub(page);
+	// GitHub's own redirect after installation: a code, but no state of ours.
+	await page.goto('auth/callback/?code=from-install&installation_id=7&setup_action=install');
+	await expect(page).toHaveURL(/app#\/vaults/, { timeout: 15_000 });
+	await expect(page.getByText('octo/roam')).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText(/sign-in has expired/)).toHaveCount(0);
+});

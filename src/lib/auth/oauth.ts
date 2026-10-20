@@ -179,6 +179,15 @@ export async function completeSignIn(
 	return pending.returnTo;
 }
 
+/** Is a sign-in started from Mycelium waiting for its callback (in this tab)? */
+export function hasPendingSignIn(): boolean {
+	try {
+		return sessionStorage.getItem(PENDING_KEY) !== null;
+	} catch {
+		return false;
+	}
+}
+
 /** Pick up tokens left by the callback page (once). */
 export function takeSignInResult(): TokenSet | null {
 	try {
