@@ -274,3 +274,41 @@ test('rename a TODO keyword across the vault from Settings', async ({ page }) =>
 		page.getByRole('button', { name: /^DOING\. Change task state/ }).first(),
 	).toBeVisible();
 });
+
+test('agenda filters: tags, org match strings, text and URL', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	const titles = () => page.locator('.agenda .item .title').allInnerTexts();
+	const before = await titles();
+	expect(before.length).toBeGreaterThan(2);
+
+	await page.getByRole('button', { name: /^Filters/ }).click();
+	// Include a tag, then exclude it (org's + and -).
+	const tagChip = page.locator('.chips button', { hasText: '#design' });
+	await tagChip.click();
+	expect(await titles()).toEqual(
+		expect.arrayContaining([expect.stringContaining('Ship the design')]),
+	);
+	expect((await titles()).every((t) => t.includes('design'))).toBe(true);
+	await expect(page).toHaveURL(/#\/agenda\?tag=%2Bdesign/);
+	await tagChip.click();
+	expect((await titles()).some((t) => t.includes('Ship the design'))).toBe(false);
+	await tagChip.click();
+
+	// An org match string: open TODOs only, and in the TODO state.
+	await page.getByLabel('Match', { exact: true }).fill('/!TODO');
+	await expect(page.getByRole('button', { name: /^NEXT\. Change/ })).toHaveCount(0);
+	await page.getByLabel('Match', { exact: true }).fill('PRIORITY=');
+	await expect(page.getByRole('alert')).toContainText(/Expected a value/);
+	await page.getByLabel('Match', { exact: true }).fill('');
+
+	// The text filter is a case-insensitive regexp.
+	await page.getByRole('searchbox', { name: /Filter by text/ }).fill('flash|graph');
+	await expect(page.locator('.agenda .item')).toHaveCount(2);
+
+	// Filters survive a reload through the URL.
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.locator('.agenda .item')).toHaveCount(2);
+	await page.keyboard.press('|');
+	expect((await titles()).length).toBe(before.length);
+});

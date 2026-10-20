@@ -11,7 +11,14 @@
 		items,
 		today,
 		empty = 'Nothing here.',
-	}: { items: AgendaItem[]; today: string; empty?: string } = $props();
+		onTop,
+	}: {
+		items: AgendaItem[];
+		today: string;
+		empty?: string;
+		/** Offer "only items under this top-level heading" (org's `^` filter). */
+		onTop?: (item: AgendaItem) => void;
+	} = $props();
 
 	const keywordsFor = (file: string) => app.vault.file(file)?.index.keywords ?? app.vault.keywords;
 
@@ -91,6 +98,15 @@
 							{overdue}
 							label={`${relativeDay(due.date, today)}${due.time ? ` · ${due.time}` : ''}`}
 						/>
+					{/if}
+					{#if onTop}
+						<button
+							type="button"
+							class="more"
+							aria-label={`Only items under the top heading of “${item.title}”`}
+							title="Only items under this top-level heading"
+							onclick={() => onTop(item)}><Icon name="flag" size={14} /></button
+						>
 					{/if}
 					<button
 						type="button"

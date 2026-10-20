@@ -67,6 +67,10 @@ class MyceliumDB extends Dexie {
 			files: 'key, vaultId',
 		});
 		this.version(2).stores({ handles: 'id' });
+		// v3: headline entries gained category, effort and topPos; re-index once.
+		this.version(3)
+			.stores({})
+			.upgrade((tx) => tx.table('files').clear());
 	}
 }
 

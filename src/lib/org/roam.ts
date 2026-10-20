@@ -7,6 +7,7 @@ import { bracketLinks, roamTitle } from './scan';
 import { effectiveKeywords, endOf, parseOrg, plainText, startOf } from './parse';
 import { splitPropertyValues } from './properties';
 import { parseTimestamp } from './timestamp';
+import { durationToMinutes } from './duration';
 import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig, type OrgTimestamp } from './types';
 
 export interface RoamRef {
@@ -63,6 +64,12 @@ export interface HeadlineEntry {
 	/** The innermost node containing the headline (itself, an ancestor, or the file). */
 	ownerId: string | null;
 	olp: string[];
+	/** Agenda category: inherited `CATEGORY` property, `#+CATEGORY:`, or the file name. */
+	category: string;
+	/** The `Effort` property in minutes. */
+	effort: number | null;
+	/** Position of the level-1 headline this one sits under (itself, at level 1). */
+	topPos: number;
 }
 
 export interface FileIndex {
@@ -108,6 +115,11 @@ export function parseRefs(value: string | undefined): RoamRef[] {
 		else if (cite) refs.push({ ref: cite[1]!, type: 'cite' });
 	}
 	return refs;
+}
+
+/** org-get-category at file level: file `CATEGORY` property, `#+CATEGORY:`, else the file name. */
+export function fileCategory(path: string, property?: string, keyword?: string): string {
+	return property?.trim() || keyword?.trim() || basename(path);
 }
 
 function basename(path: string): string {
@@ -178,6 +190,8 @@ export function indexFileTree(
 		olp: string[];
 		tags: string[];
 		ownerId: string | null;
+		category: string;
+		top: number | null;
 	}
 
 	const visitSection = (section: Section, parent: Frame) => {
@@ -199,6 +213,8 @@ export function indexFileTree(
 		const ts = (t: { rawValue: string } | null | undefined) =>
 			t ? parseTimestamp(t.rawValue) : null;
 		const pos = startOf(headline);
+		const category = props['CATEGORY']?.trim() || parent.category;
+		const top = parent.top ?? pos;
 
 		if (id) {
 			nodes.push({
@@ -231,9 +247,18 @@ export function indexFileTree(
 			id,
 			ownerId: id ?? parent.ownerId,
 			olp: parent.olp,
+			category,
+			effort: durationToMinutes(props['EFFORT']),
+			topPos: top,
 		});
 		text.push(htitle);
-		const frame: Frame = { olp: [...parent.olp, htitle], tags, ownerId: id ?? parent.ownerId };
+		const frame: Frame = {
+			olp: [...parent.olp, htitle],
+			tags,
+			ownerId: id ?? parent.ownerId,
+			category,
+			top,
+		};
 		// Links in a headline's title belong to the headline's own node.
 		collect(headline, frame, headline);
 		collect(section, frame);
@@ -311,7 +336,13 @@ export function indexFileTree(
 		}
 	};
 
-	const root: Frame = { olp: [], tags: filetags, ownerId: fileId };
+	const root: Frame = {
+		olp: [],
+		tags: filetags,
+		ownerId: fileId,
+		category: fileCategory(path, fileProps['CATEGORY'], fileKeywords.get('CATEGORY')),
+		top: null,
+	};
 	collect(tree, root);
 
 	return {

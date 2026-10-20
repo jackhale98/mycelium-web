@@ -11,12 +11,14 @@ import { parseTagList } from './keywords';
 import { effectiveKeywords } from './parse';
 import { splitPropertyValues } from './properties';
 import {
+	fileCategory,
 	parseRefs,
 	type FileIndex,
 	type HeadlineEntry,
 	type RoamLink,
 	type RoamNode,
 } from './roam';
+import { durationToMinutes } from './duration';
 import { escapeRegExp, splitLines } from './text';
 import { readTimestamp } from './timestamp';
 import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig, type OrgTimestamp } from './types';
@@ -198,7 +200,15 @@ export function scanFile(
 	}
 
 	// Outline stack: one frame per open headline.
-	const stack: { level: number; title: string; tags: string[]; ownerId: string | null }[] = [];
+	const stack: {
+		level: number;
+		title: string;
+		tags: string[];
+		ownerId: string | null;
+		category: string;
+		top: number;
+	}[] = [];
+	const rootCategory = fileCategory(path, fileProps['CATEGORY'], fileKeywords.get('CATEGORY'));
 	const owner = () => stack.at(-1)?.ownerId ?? fileId;
 	const inheritedTags = () => stack.at(-1)?.tags ?? filetags;
 	const olp = () => stack.map((f) => f.title);
@@ -334,6 +344,8 @@ export function scanFile(
 					properties: props,
 				});
 			}
+			const category = props['CATEGORY']?.trim() || stack.at(-1)?.category || rootCategory;
+			const top = stack[0]?.top ?? line.from;
 			headlines.push({
 				pos: line.from,
 				level,
@@ -347,8 +359,11 @@ export function scanFile(
 				id,
 				ownerId: id ?? parentOwner,
 				olp: parentOlp,
+				category,
+				effort: durationToMinutes(props['EFFORT']),
+				topPos: top,
 			});
-			stack.push({ level, title: htitle, tags, ownerId: id ?? parentOwner });
+			stack.push({ level, title: htitle, tags, ownerId: id ?? parentOwner, category, top });
 			text.push(htitle);
 			collectLinks(n);
 			if (drawer) collectPropertyLinks(k + 1, drawer.end - 1);

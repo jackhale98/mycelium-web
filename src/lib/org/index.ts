@@ -11,6 +11,8 @@ export * from './keywords';
 export * from './checkbox';
 export * from './log';
 export * from './highlight';
+export * from './duration';
+export * from './match';
 export * from './todo';
 export * from './parse';
 export * from './roam';

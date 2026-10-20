@@ -155,3 +155,34 @@ describe('citations', () => {
 		expect(source.slice(first.pos, first.end)).toBe('@smith2020');
 	});
 });
+
+describe('agenda fields', () => {
+	const source = [
+		'#+CATEGORY: Home',
+		'* Garden',
+		':PROPERTIES:',
+		':CATEGORY: Outdoors',
+		':END:',
+		'** TODO Plant garlic',
+		':PROPERTIES:',
+		':Effort:   1:30',
+		':END:',
+		'* TODO Pay bills',
+		'',
+	].join('\n');
+
+	it('inherits CATEGORY like org-get-category and reads Effort', () => {
+		for (const index of [scanFile('house.org', source), indexFileTree('house.org', source)]) {
+			const [garden, garlic, bills] = index.headlines;
+			expect([garden!.category, garlic!.category, bills!.category]).toEqual([
+				'Outdoors',
+				'Outdoors',
+				'Home',
+			]);
+			expect(garlic!.effort).toBe(90);
+			expect(garlic!.topPos).toBe(garden!.pos);
+			expect(bills!.topPos).toBe(bills!.pos);
+		}
+		expect(scanFile('notes/house.org', '* TODO x\n').headlines[0]!.category).toBe('house');
+	});
+});

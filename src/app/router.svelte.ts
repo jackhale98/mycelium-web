@@ -4,7 +4,7 @@ export type Route =
 	| { name: 'home' }
 	| { name: 'node'; id: string }
 	| { name: 'daily'; date: string | null }
-	| { name: 'agenda' }
+	| { name: 'agenda'; query: string }
 	| { name: 'tags'; tag: string | null }
 	| { name: 'vaults' }
 	| { name: 'settings' }
@@ -15,7 +15,11 @@ export type Route =
 	| { name: 'notfound'; path: string };
 
 export function parseHash(hash: string): Route {
-	const path = decodeURIComponent(hash.replace(/^#\/?/, ''));
+	const raw = hash.replace(/^#\/?/, '');
+	// A query (`#/agenda?tag=work`) is kept as-is for the page to decode.
+	const at = raw.indexOf('?');
+	const query = at === -1 ? '' : raw.slice(at + 1);
+	const path = decodeURIComponent(at === -1 ? raw : raw.slice(0, at));
 	const [head = '', ...rest] = path.split('/');
 	const tail = rest.join('/');
 	switch (head) {
@@ -26,7 +30,7 @@ export function parseHash(hash: string): Route {
 		case 'daily':
 			return { name: 'daily', date: /^\d{4}-\d{2}-\d{2}$/.test(tail) ? tail : null };
 		case 'agenda':
-			return { name: 'agenda' };
+			return { name: 'agenda', query };
 		case 'tags':
 			return { name: 'tags', tag: tail || null };
 		case 'vaults':
@@ -50,7 +54,7 @@ export const href = {
 	home: () => '#/',
 	node: (id: string) => `#/node/${encodeURIComponent(id)}`,
 	daily: (date?: string) => (date ? `#/daily/${date}` : '#/daily'),
-	agenda: () => '#/agenda',
+	agenda: (query = '') => (query ? `#/agenda?${query}` : '#/agenda'),
 	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),
 	vaults: () => '#/vaults',
 	settings: () => '#/settings',

@@ -146,7 +146,7 @@
 		{:else if router.route.name === 'daily'}
 			<DailyView date={router.route.date} />
 		{:else if router.route.name === 'agenda'}
-			<AgendaView />
+			{#key router.route.name}<AgendaView query={router.route.query} />{/key}
 		{:else if router.route.name === 'tags'}
 			<TagsView tag={router.route.tag} />
 		{:else if router.route.name === 'vaults'}
