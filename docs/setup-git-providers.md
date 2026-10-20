@@ -62,7 +62,7 @@ assets; `wrangler.jsonc` at the repository root tells Cloudflare to upload
    | Root directory | Leave empty (the repository root)                      |
 
 3. Select **Deploy**. The site appears at
-   `https://mycelium-web.<your-subdomain>.workers.dev`.
+   `https://my-celium.<your-subdomain>.workers.dev`.
 4. Attach the domain: open the worker → **Settings → Domains & Routes → Add →
    Custom domain**, enter `my-celium.org`, and repeat for `www.my-celium.org`
    if you want it. Cloudflare creates the DNS records and certificate.
@@ -294,7 +294,7 @@ Step 0 item 6. For the GitHub Pages copy, in `jackhale98/mycelium-web` on GitHub
 Use **Variables**, not Secrets: these values end up in the published
 JavaScript anyway, and the build reads them as variables.
 
-**Redeploy.** On Cloudflare, retry the latest build of `mycelium-web` (its
+**Redeploy.** On Cloudflare, retry the latest build of `my-celium` (its
 **Deployments** tab); for the GitHub Pages copy, open **Actions → Deploy to
 GitHub Pages → Run workflow** on `main`. Vaults you've already added keep their old proxy; change it under
 Settings → Sync proxy in the app.

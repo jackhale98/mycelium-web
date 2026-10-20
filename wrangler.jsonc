@@ -2,7 +2,7 @@
 // Cloudflare runs `npm run build`, then `npx wrangler deploy` uploads dist/.
 // (The git sync worker is a separate project in worker/.)
 {
-	"name": "mycelium-web",
+	"name": "my-celium",
 	"compatibility_date": "2026-10-01",
 	"assets": {
 		"directory": "./dist",
