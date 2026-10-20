@@ -14,6 +14,9 @@ export default defineConfig({
 	site,
 	base,
 	output: 'static',
+	// Small per-page stylesheets would each block rendering; inline them (Astro hashes
+	// them into the CSP). Assets stay files (see vite.build below).
+	build: { inlineStylesheets: 'always' },
 	trailingSlash: 'ignore',
 	integrations: [svelte()],
 	// Strict CSP: Astro hashes its own inline scripts and styles. connect-src

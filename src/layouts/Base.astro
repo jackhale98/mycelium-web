@@ -1,7 +1,6 @@
 ---
 import '../styles/global.css';
 import inter from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
-import mono from '@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url';
 import newsreader from '@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2?url';
 
 interface Props {
@@ -31,10 +30,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 		<link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
 		<link rel="apple-touch-icon" href={`${base}/icons/apple-touch-icon.png`} />
 		<link rel="manifest" href={`${base}/manifest.webmanifest`} />
-		<!-- Fetch the fonts with the page so text doesn't shift when they swap in. -->
+		<!-- Fetch the text fonts with the page so text doesn't shift when they swap in
+		     (the monospace font is used sparingly and loads on demand). -->
 		<link rel="preload" href={inter} as="font" type="font/woff2" crossorigin />
 		<link rel="preload" href={newsreader} as="font" type="font/woff2" crossorigin />
-		<link rel="preload" href={mono} as="font" type="font/woff2" crossorigin />
 		<title>{title}</title>
 		<script is:inline>
 			// Apply the saved theme before first paint so there is no flash.
