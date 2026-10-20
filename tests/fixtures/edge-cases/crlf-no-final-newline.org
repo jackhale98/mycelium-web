@@ -1,0 +1,18 @@
+:PROPERTIES:
+:ID:       crlf-file
+:ROAM_ALIASES: "Windows note" crlf
+:END:
+#+title: CRLF Note
+#+filetags: :windows:
+
+* TODO [#B] Fix line endings                                         :bug:
+SCHEDULED: <2024-05-01 Wed +1w>
+:PROPERTIES:
+:ID:       crlf-head
+:END:
+See [[id:20240115-rust][Rust]] and =[[id:not-a-link]]=.
+#+begin_src org
+,* Not a headline [[id:fake]]
+#+end_src
+- [ ] first [0/0]
+- [X] second

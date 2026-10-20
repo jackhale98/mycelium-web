@@ -1,0 +1,25 @@
+# -*- mode: org -*-
+:PROPERTIES:
+:ID: custom-kw
+:ROAM_REFS: https://example.com/paper cite:smith2020 @doe2021
+:END:
+#+TITLE: Custom Workflow
+#+TODO: TODO(t) WAITING(w) | DONE(d) CANCELED(c)
+#+FILETAGS: work
+
+* WAITING Response from vendor  :email:
+DEADLINE: <2024-02-01 Thu -3d>
+** CANCELED Old plan
+CLOSED: [2024-01-20 Sat 09:12]
+** Notes with unicode tag :日本語:
+   :PROPERTIES:
+   :ID: unicode-node
+   :ROAM_EXCLUDE: nil
+   :END:
+   Indented body mentioning [[id:custom-kw][itself]] and a [[https://example.com][web link]].
+* COMMENT Hidden section
+* Excluded child
+:PROPERTIES:
+:ID: excluded-node
+:ROAM_EXCLUDE: t
+:END:
