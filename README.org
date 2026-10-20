@@ -1,0 +1,8 @@
+#+title: Mycelium demo vault
+
+A small org-roam vault for trying [[https://jackhale98.github.io/mycelium-web/][Mycelium]].
+Open the app, choose *Vaults → Try the public demo repo*, and explore.
+
+- Notes use org-roam's file naming (=%Y%m%d%H%M%S-slug.org=) and =:ID:= drawers.
+- Daily notes live in =daily/= as =YYYY-MM-DD.org=.
+- Anyone can clone it read-only; pushing needs write access to this repository.

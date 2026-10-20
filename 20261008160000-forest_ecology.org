@@ -1,0 +1,17 @@
+:PROPERTIES:
+:ID:       2d4e6f80-1a3c-4e5b-9d7f-8a9b0c1d2e05
+:END:
+#+title: Forest ecology
+#+filetags: :biology:forest:
+
+The study of how trees, fungi, animals and soil interact. Old-growth
+forests are dominated by a few large "hub" trees that are densely connected
+through [[id:8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01][mycelial networks]].
+
+* Succession
+Disturbance → pioneer species → mixed forest → old growth. Each stage
+changes the soil chemistry for the next.
+
+* Further reading
+- [[id:5e1f9a20-7c3d-4b9e-8a2f-0c1d2e3f4a03][The wood wide web]]
+- [[id:b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d14][Finding the Mother Tree]]
