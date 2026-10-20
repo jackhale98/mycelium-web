@@ -84,6 +84,12 @@
 		<article class="node" aria-labelledby="node-title">
 			<header class="node-header">
 				<div class="toolbar">
+					<a
+						class="btn small icon-only"
+						href={href.graph(node.id)}
+						title="Graph around this note"
+						aria-label="Graph around this note"><Icon name="graph" size={15} /></a
+					>
 					{#if node.level > 0 && !app.editing}
 						<button
 							type="button"

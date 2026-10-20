@@ -10,7 +10,7 @@ export type Route =
 	| { name: 'settings' }
 	| { name: 'changes' }
 	| { name: 'search'; q: string }
-	| { name: 'graph' }
+	| { name: 'graph'; id: string | null }
 	| { name: 'notfound'; path: string };
 
 export function parseHash(hash: string): Route {
@@ -37,7 +37,7 @@ export function parseHash(hash: string): Route {
 		case 'search':
 			return { name: 'search', q: tail };
 		case 'graph':
-			return { name: 'graph' };
+			return { name: 'graph', id: tail || null };
 		default:
 			return { name: 'notfound', path };
 	}
@@ -53,7 +53,7 @@ export const href = {
 	settings: () => '#/settings',
 	changes: () => '#/changes',
 	search: (q = '') => (q ? `#/search/${encodeURIComponent(q)}` : '#/search'),
-	graph: () => '#/graph',
+	graph: (id?: string) => (id ? `#/graph/${encodeURIComponent(id)}` : '#/graph'),
 };
 
 class Router {

@@ -5,6 +5,7 @@
 	import CommandPalette from './components/CommandPalette.svelte';
 	import Icon from './components/Icon.svelte';
 	import MobileBar from './components/MobileBar.svelte';
+	import NewNoteDialog from './components/NewNoteDialog.svelte';
 	import Sidebar from './components/Sidebar.svelte';
 	import SyncDialog from './components/SyncDialog.svelte';
 	import { href, router } from './router.svelte';
@@ -14,6 +15,8 @@
 	import DailyView from './views/DailyView.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
+	import SearchView from './views/SearchView.svelte';
+	import GraphView from './views/GraphView.svelte';
 	import SettingsView from './views/SettingsView.svelte';
 	import TagsView from './views/TagsView.svelte';
 	import VaultsView from './views/VaultsView.svelte';
@@ -64,6 +67,12 @@
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			app.paletteOpen = !app.paletteOpen;
+		} else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+			e.preventDefault();
+			router.go(href.search());
+		} else if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 'n') {
+			e.preventDefault();
+			app.newNote = { title: '' };
 		} else if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
 			e.preventDefault();
 			app.panelOpen = !app.panelOpen;
@@ -127,6 +136,10 @@
 			<TagsView tag={router.route.tag} />
 		{:else if router.route.name === 'vaults'}
 			<VaultsView />
+		{:else if router.route.name === 'graph'}
+			{#key router.route.id}<GraphView focus={router.route.id} />{/key}
+		{:else if router.route.name === 'search'}
+			<SearchView q={router.route.q} />
 		{:else if router.route.name === 'changes'}
 			<ChangesView />
 		{:else if router.route.name === 'settings'}
@@ -143,6 +156,7 @@
 <MobileBar />
 <CommandPalette />
 <SyncDialog />
+<NewNoteDialog />
 
 {#if app.sync.kind === 'done' || app.sync.kind === 'error'}
 	<div

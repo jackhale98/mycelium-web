@@ -31,6 +31,14 @@
 		},
 		{ key: 'cmd:home', label: 'Go home', icon: 'home', run: () => router.go(href.home()) },
 		{ key: 'cmd:tags', label: 'Browse tags', icon: 'tag', run: () => router.go(href.tags()) },
+		{ key: 'cmd:new', label: 'New note', icon: 'plus', run: () => (app.newNote = { title: '' }) },
+		{ key: 'cmd:graph', label: 'Open graph', icon: 'graph', run: () => router.go(href.graph()) },
+		{
+			key: 'cmd:changes',
+			label: 'Review changes and commit',
+			icon: 'commit',
+			run: () => router.go(href.changes()),
+		},
 		{
 			key: 'cmd:theme',
 			label: 'Toggle dark mode',
@@ -80,7 +88,26 @@
 			};
 		});
 		const cmds = commands.filter((c) => c.label.toLowerCase().includes(q.toLowerCase()));
-		return [...hits, ...cmds];
+		const exists = app.vault.titles.has(q.toLowerCase());
+		const extra: Item[] = [
+			{
+				key: 'cmd:fulltext',
+				label: `Search text for “${q}”`,
+				icon: 'search',
+				run: () => router.go(href.search(q)),
+			},
+			...(exists
+				? []
+				: [
+						{
+							key: 'cmd:create',
+							label: `Create note “${q}”`,
+							icon: 'plus' as const,
+							run: () => (app.newNote = { title: q }),
+						},
+					]),
+		];
+		return [...hits, ...cmds, ...extra];
 	});
 
 	$effect(() => {

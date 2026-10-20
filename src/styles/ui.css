@@ -192,3 +192,10 @@ select.input {
 	align-items: center;
 	gap: 0.6rem;
 }
+.btn.icon-only {
+	width: 2.4rem;
+	padding: 0;
+}
+.btn.small.icon-only {
+	width: 2rem;
+}

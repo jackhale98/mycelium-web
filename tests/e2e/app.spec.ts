@@ -138,3 +138,30 @@ test('heading actions set priority, tags and dates', async ({ page }) => {
 	await expect(section.locator('.htags')).toContainText('#urgent');
 	await expect(section.locator('.prio')).toHaveText('B');
 });
+
+test('full-text search finds words inside notes', async ({ page }) => {
+	await open(page, 'app#/search/hyphae');
+	await expect(page.getByRole('status')).toContainText(/match/);
+	await expect(page.locator('mark').first()).toHaveText(/hyphae/i);
+	await page.getByRole('searchbox', { name: 'Search notes' }).fill('"wood wide web"');
+	await expect(page.getByRole('link', { name: 'The wood wide web' }).first()).toBeVisible();
+});
+
+test('new note dialog creates a note and opens the editor', async ({ page }) => {
+	await open(page, 'app#/');
+	await page.keyboard.press('ControlOrMeta+k');
+	await page.keyboard.type('Lichen symbiosis');
+	await page.getByRole('option', { name: /Create note “Lichen symbiosis”/ }).click();
+	await page.getByRole('textbox', { name: /^Tags/ }).fill('biology');
+	await page.getByRole('button', { name: 'Create and edit' }).click();
+	await expect(page.locator('.cm-content')).toContainText('#+title: Lichen symbiosis');
+	await expect(page.locator('.cm-content')).toContainText('#+filetags: :biology:');
+});
+
+test('graph view draws the vault', async ({ page }) => {
+	await open(page, 'app#/graph');
+	await expect(page.getByRole('img', { name: /Link graph: \d+ notes/ })).toBeVisible();
+	await page.getByText(/Notes in view/).click();
+	await expect(page.getByRole('link', { name: 'Mycelial networks' }).last()).toBeVisible();
+	await expectAccessible(page);
+});
