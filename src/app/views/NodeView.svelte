@@ -3,12 +3,13 @@
 	import { startOf } from '$lib/org';
 	import Backlinks from '../components/Backlinks.svelte';
 	import OrgEditor from '../editor/OrgEditor.svelte';
+	import DateChip from '../org/DateChip.svelte';
+	import HeadingActions from '../org/HeadingActions.svelte';
 	import Icon from '../components/Icon.svelte';
 	import Blocks from '../org/OrgBlocks.svelte';
 	import TodoChip from '../org/TodoChip.svelte';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
-	import { tsLabel } from '../util';
 
 	let { id, eyebrow, displayTitle }: { id: string; eyebrow?: string; displayTitle?: string } =
 		$props();
@@ -45,6 +46,14 @@
 	});
 
 	const refs = $derived(node?.refs ?? []);
+	let actions = $state(false);
+	/** The heading's own tags (a node's `tags` include inherited ones). */
+	const ownTags = $derived.by(() => {
+		void app.rev;
+		if (!node || node.level === 0) return [];
+		const line = app.vault.file(node.file)?.source.slice(node.pos).split('\n', 1)[0] ?? '';
+		return /[ \t](:(?:[^\s:]+:)+)[ \t]*$/.exec(line)?.[1]?.split(':').filter(Boolean) ?? [];
+	});
 	const done = $derived(!!node?.todo && keywords.doneKeywords.includes(node.todo));
 
 	$effect(() => {
@@ -75,6 +84,15 @@
 		<article class="node" aria-labelledby="node-title">
 			<header class="node-header">
 				<div class="toolbar">
+					{#if node.level > 0 && !app.editing}
+						<button
+							type="button"
+							class="btn small"
+							aria-expanded={actions}
+							onclick={() => (actions = !actions)}
+							><Icon name="settings" size={14} />Properties</button
+						>
+					{/if}
 					<button
 						type="button"
 						class="btn small"
@@ -118,12 +136,20 @@
 				{/if}
 				<div class="meta" hidden={app.editing}>
 					{#each node.tags as tag (tag)}<a class="chip tag" href={href.tags(tag)}>#{tag}</a>{/each}
-					{#if node.deadline}<span class="chip deadline"
-							><Icon name="alert" size={13} />Due {tsLabel(node.deadline)}</span
-						>{/if}
-					{#if node.scheduled}<span class="chip scheduled"
-							><Icon name="calendar" size={13} />{tsLabel(node.scheduled)}</span
-						>{/if}
+					{#if node.deadline}<DateChip
+							path={node.file}
+							offset={node.pos}
+							kind="DEADLINE"
+							ts={node.deadline}
+							editable={node.level > 0}
+						/>{/if}
+					{#if node.scheduled}<DateChip
+							path={node.file}
+							offset={node.pos}
+							kind="SCHEDULED"
+							ts={node.scheduled}
+							editable={node.level > 0}
+						/>{/if}
 					{#each refs as ref (ref.ref)}
 						{#if ref.type === 'http' || ref.type === 'https'}
 							<a
@@ -142,6 +168,21 @@
 				</div>
 			</header>
 
+			{#if actions && node.level > 0 && !app.editing}
+				<HeadingActions
+					path={node.file}
+					offset={node.pos}
+					todo={node.todo}
+					priority={node.priority}
+					tags={ownTags}
+					scheduled={node.scheduled}
+					deadline={node.deadline}
+					id={node.id}
+					nodeAction={false}
+					{keywords}
+					onclose={() => (actions = false)}
+				/>
+			{/if}
 			{#if app.editing}
 				{#key node.file}
 					<OrgEditor

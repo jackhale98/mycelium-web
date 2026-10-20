@@ -6,6 +6,8 @@
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import Blocks from './OrgBlocks.svelte';
+	import DateChip from './DateChip.svelte';
+	import HeadingActions from './HeadingActions.svelte';
 	import Inline from './OrgInline.svelte';
 	import TodoChip from './TodoChip.svelte';
 	import type { RenderContext } from './context';
@@ -33,6 +35,14 @@
 	);
 
 	let open = $state(true);
+	let editing = $state(false);
+
+	const offset = $derived(headline ? startOf(headline) : 0);
+	const dates = $derived({
+		SCHEDULED: planning?.scheduled ? parseTimestamp(planning.scheduled.rawValue) : null,
+		DEADLINE: planning?.deadline ? parseTimestamp(planning.deadline.rawValue) : null,
+		CLOSED: planning?.closed ? parseTimestamp(planning.closed.rawValue) : null,
+	});
 
 	const when = (raw: string) => {
 		const ts = parseTimestamp(raw);
@@ -75,6 +85,17 @@
 					>
 				{/if}
 			</svelte:element>
+			{#if ctx.interactive}
+				<button
+					type="button"
+					class="more"
+					class:on={editing}
+					aria-expanded={editing}
+					aria-label="Edit heading: state, priority, tags and dates"
+					title="State, priority, tags, dates"
+					onclick={() => (editing = !editing)}><Icon name="settings" size={15} /></button
+				>
+			{/if}
 			{#if headline.tags.length}
 				<span class="htags"
 					>{#each headline.tags as tag (tag)}<a class="tag" href={href.tags(tag)}>#{tag}</a
@@ -82,21 +103,31 @@
 				>
 			{/if}
 		</div>
+		{#if editing}
+			<HeadingActions
+				path={ctx.path}
+				{offset}
+				todo={headline.todoKeyword ?? null}
+				priority={headline.priority ?? null}
+				tags={headline.tags}
+				scheduled={dates.SCHEDULED}
+				deadline={dates.DEADLINE}
+				id={id ?? null}
+				{keywords}
+				onclose={() => (editing = false)}
+			/>
+		{/if}
 		{#if open}
 			{#if planning}
 				<div class="planning">
-					{#if planning.deadline}<span class="plan deadline"
-							><Icon name="alert" size={13} />Due
-							<time>{when(planning.deadline.rawValue)}</time></span
-						>{/if}
-					{#if planning.scheduled}<span class="plan scheduled"
-							><Icon name="calendar" size={13} />Scheduled
-							<time>{when(planning.scheduled.rawValue)}</time></span
-						>{/if}
-					{#if planning.closed}<span class="plan closed"
-							><Icon name="check" size={13} />Closed
-							<time>{when(planning.closed.rawValue)}</time></span
-						>{/if}
+					{#each ['DEADLINE', 'SCHEDULED', 'CLOSED'] as const as kind (kind)}
+						{@const ts = dates[kind]}
+						{#if ts}
+							<DateChip path={ctx.path} {offset} {kind} {ts} editable={ctx.interactive} />
+						{:else if kind === 'DEADLINE' && planning.deadline}
+							<span class="plan">{when(planning.deadline.rawValue)}</span>
+						{/if}
+					{/each}
 				</div>
 			{/if}
 			<div class="section-body"><Blocks nodes={body} {ctx} /></div>

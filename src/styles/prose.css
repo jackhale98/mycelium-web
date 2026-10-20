@@ -238,6 +238,40 @@
 	color: var(--accent);
 }
 
+.prose .more {
+	display: inline-grid;
+	align-self: center;
+	place-items: center;
+	width: 1.6rem;
+	height: 1.6rem;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	color: var(--text-faint);
+	opacity: 0;
+	transition: opacity 0.15s var(--ease);
+}
+
+.prose .heading-row:hover .more,
+.prose .more:focus-visible,
+.prose .more.on {
+	opacity: 1;
+}
+
+.prose .more:hover,
+.prose .more.on {
+	background: var(--surface-2);
+	color: var(--accent);
+}
+
+@media (hover: none) {
+	.prose .more,
+	.prose .node-link {
+		opacity: 0.7;
+	}
+}
+
 .prose .htags {
 	display: inline-flex;
 	gap: 0.35em;

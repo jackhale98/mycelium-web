@@ -62,7 +62,7 @@ test('completing a task stamps CLOSED', async ({ page }) => {
 		.getByRole('button', { name: /^NEXT\. Change task state/ })
 		.last()
 		.click();
-	await expect(page.locator('.plan.closed')).toBeVisible();
+	await expect(page.getByText(/^Closed /)).toBeVisible();
 });
 
 test('search finds notes by alias', async ({ page, isMobile }) => {
@@ -110,7 +110,7 @@ test.describe('dark theme', () => {
 
 test('the editor saves edits and links to new notes', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
-	await page.getByRole('button', { name: 'Edit' }).click();
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const editor = page.locator('.cm-content');
 	await expect(editor).toBeVisible();
 	await editor.click();
@@ -119,9 +119,22 @@ test('the editor saves edits and links to new notes', async ({ page }) => {
 	await page.getByRole('option', { name: 'Zettelkasten' }).click();
 	await page.keyboard.type(' and [[Fungal computing');
 	await page.getByRole('option', { name: /Create “Fungal computing”/ }).click();
-	await page.getByRole('button', { name: 'Read' }).click();
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
 	await expect(page.getByText('Every edit saves.')).toBeVisible();
 	await page.locator('.node-body').getByRole('link', { name: 'Fungal computing' }).click();
 	await expect(page.getByRole('heading', { level: 1, name: 'Fungal computing' })).toBeVisible();
 	await expect(page.locator('a:visible', { hasText: 'Mycelium Web' }).first()).toBeVisible();
+});
+
+test('heading actions set priority, tags and dates', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
+	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await page.getByRole('radio', { name: 'B', exact: true }).click();
+	await page.getByLabel('Tags', { exact: true }).fill('urgent');
+	await page.keyboard.press('Enter');
+	await page.getByRole('textbox', { name: 'Scheduled', exact: true }).fill('2026-11-02');
+	await expect(section.getByRole('button', { name: /Scheduled Mon, Nov 2/ })).toBeVisible();
+	await expect(section.locator('.htags')).toContainText('#urgent');
+	await expect(section.locator('.prio')).toHaveText('B');
 });
