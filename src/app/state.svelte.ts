@@ -147,8 +147,11 @@ function demoRecord(): VaultRecord {
 	};
 }
 
+/** The vault opened last time, if it wasn't the demo: start blank and load it, never show the demo meanwhile. */
+const resumeId = ((id) => (id && id !== DEMO_ID ? id : null))(readLocal(ACTIVE_KEY));
+
 class AppState {
-	vault: Vault = $state.raw(Vault.fromSources(demoSources, DEMO_KEYWORDS));
+	vault: Vault = $state.raw(Vault.fromSources(resumeId ? {} : demoSources, DEMO_KEYWORDS));
 	/** Bumped on every vault change. */
 	rev = $state(0);
 	theme = $state<ThemeChoice>(readTheme());
@@ -172,11 +175,11 @@ class AppState {
 	/** A folder vault waiting for the person to grant access again (needs a click). */
 	folderAccess = $state<{ id: string; name: string } | null>(null);
 	vaults = $state<VaultRecord[]>([]);
-	activeId = $state<string>(DEMO_ID);
+	activeId = $state<string>(resumeId ?? DEMO_ID);
 	layout = $state<VaultLayout>(DEFAULT_LAYOUT);
 	logSettings: LogSettings = $state(detectLogSettings(Object.values(demoSources)));
 	/** Non-null while a vault is being cloned or indexed. */
-	loading = $state<LoadProgress | null>(null);
+	loading = $state<LoadProgress | null>(resumeId ? { phase: 'Opening vault', ratio: null } : null);
 	loadError = $state<string | null>(null);
 	sync = $state<SyncState>({ kind: 'idle' });
 	git = $state<GitState>({ branch: 'main', changes: [], ahead: 0, behind: 0, hasRemote: false });
@@ -293,14 +296,15 @@ class AppState {
 		}
 		const active = readLocal(ACTIVE_KEY);
 		if (active && active !== DEMO_ID && this.vaults.some((v) => v.id === active))
+			// On failure (or a folder awaiting access) the vault stays blank with a notice:
+			// never the demo, which would look like part of this vault.
 			await this.openVault(active);
-		else if (this.vaults.some((v) => v.id === DEMO_ID)) await this.openDemo();
-		else this.#startDemo();
-		// A folder waiting for access: show the demo meanwhile, but reopen the folder next time.
-		if (this.folderAccess) {
-			await this.openDemo();
-			writeLocal(ACTIVE_KEY, this.folderAccess.id);
+		else {
+			if (resumeId) this.#showDemo();
+			if (this.vaults.some((v) => v.id === DEMO_ID)) await this.openDemo();
+			else this.#startDemo();
 		}
+		this.loading = null;
 		this.ready = true;
 	}
 
@@ -361,6 +365,16 @@ class AppState {
 			this.loading = null;
 		}
 		writeLocal(ACTIVE_KEY, DEMO_ID);
+	}
+
+	/** Put the in-memory demo on screen (the last vault is gone). */
+	#showDemo() {
+		this.workspace = null;
+		this.folder = null;
+		this.activeId = DEMO_ID;
+		this.layout = DEFAULT_LAYOUT;
+		this.vault = Vault.fromSources(demoSources, DEMO_KEYWORDS);
+		this.rev += 1;
 	}
 
 	#demoReady: Promise<void> | null = null;

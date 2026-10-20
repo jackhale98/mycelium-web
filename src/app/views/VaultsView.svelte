@@ -88,7 +88,11 @@
 			url: parsed.url,
 			provider: parsed.provider,
 			slug: parsed.slug,
-			branch: branch.trim() || null,
+			// The demo lives on its own branch; this repository's main branch is the app's
+			// source code (with test fixtures), never a vault.
+			branch:
+				branch.trim() ||
+				(parsed.slug.toLowerCase() === DEMO_REPO.slug.toLowerCase() ? DEMO_REPO.branch : null),
 			token: token.trim(),
 			username: username.trim(),
 			corsProxy: proxy.trim() || null,

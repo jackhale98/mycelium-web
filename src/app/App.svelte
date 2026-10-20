@@ -132,6 +132,22 @@
 	></button>
 
 	<main id="main-content" bind:this={main} tabindex="-1">
+		{#if (app.loadError || app.folderAccess) && router.route.name !== 'vaults'}
+			<div class="vault-notice" role="alert">
+				{#if app.folderAccess}
+					<span>Mycelium needs permission again to read “{app.folderAccess.name}”.</span>
+					<button type="button" class="btn small primary" onclick={() => app.grantFolder()}
+						>Allow access</button
+					>
+				{:else}
+					<span>Couldn't open {app.activeVault?.name ?? 'this vault'}: {app.loadError}</span>
+					<button type="button" class="btn small" onclick={() => app.openVault(app.activeId)}
+						>Try again</button
+					>
+				{/if}
+				<a href={href.vaults()}>Manage vaults</a>
+			</div>
+		{/if}
 		{#if app.demo && router.route.name !== 'vaults'}
 			<div class="demo-banner" role="note">
 				<Icon name="zap" size={14} />
@@ -239,6 +255,25 @@
 	}
 	.scrim {
 		display: none;
+	}
+	.vault-notice {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem 1rem;
+		margin: 1rem;
+		padding: 0.8rem 1rem;
+		border: 1px solid var(--danger);
+		border-radius: var(--radius);
+		background: var(--danger-soft);
+		color: var(--text);
+		font-size: 0.88rem;
+	}
+	.vault-notice span {
+		flex: 1 1 16rem;
+	}
+	.vault-notice a {
+		color: var(--link);
 	}
 	.demo-banner {
 		display: flex;
