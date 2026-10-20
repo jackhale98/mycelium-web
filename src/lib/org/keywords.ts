@@ -167,3 +167,93 @@ export function fileTodoKeywords(source: string): KeywordConfig | null {
 		? { todoKeywords: todo, doneKeywords: done, log }
 		: { todoKeywords: todo, doneKeywords: done };
 }
+
+// ---------------------------------------------------------------------------
+// Editable keyword sequences (org-todo-keywords / #+TODO: lines)
+
+/** One state in a sequence: `WAIT(w@/!)` is name WAIT, key w, note on enter, time on leave. */
+export interface KeywordState {
+	name: string;
+	/** Fast-access key, e.g. `t` in `TODO(t)`. */
+	key: string | null;
+	/** Logging when entering the state: `!` timestamp, `@` note. */
+	enter: '!' | '@' | null;
+	/** Logging when leaving the state (`/!`, `/@`). */
+	leave: '!' | '@' | null;
+}
+
+export interface KeywordSequence {
+	todo: KeywordState[];
+	done: KeywordState[];
+}
+
+/** A valid keyword name: no whitespace, parentheses or `|`. */
+export function isValidKeyword(name: string): boolean {
+	return /^[^\s()|]+$/u.test(name);
+}
+
+function parseState(word: string): KeywordState {
+	const m = /^(.*?)\(([^)]*)\)$/.exec(word);
+	if (!m) return { name: word, key: null, enter: null, leave: null };
+	const spec = /^([^!@/])?([!@])?(?:\/([!@]))?$/.exec(m[2]!);
+	return {
+		name: m[1]!,
+		key: spec?.[1] ?? null,
+		enter: (spec?.[2] as '!' | '@' | undefined) ?? null,
+		leave: (spec?.[3] as '!' | '@' | undefined) ?? null,
+	};
+}
+
+/** Parse the value of a `#+TODO:` line (or one `org-todo-keywords` sequence). */
+export function parseTodoLine(value: string): KeywordSequence {
+	const words = value.split(/\s+/).filter(Boolean);
+	const bar = words.indexOf('|');
+	const states = (ws: string[]) => ws.map(parseState);
+	if (bar === -1) {
+		const all = states(words);
+		return { todo: all.slice(0, -1), done: all.slice(-1) };
+	}
+	return { todo: states(words.slice(0, bar)), done: states(words.slice(bar + 1)) };
+}
+
+function formatState(s: KeywordState): string {
+	const log = `${s.enter ?? ''}${s.leave ? `/${s.leave}` : ''}`;
+	const spec = `${s.key ?? ''}${log}`;
+	return spec ? `${s.name}(${spec})` : s.name;
+}
+
+/** The `#+TODO:` value for a sequence: `TODO(t) NEXT | DONE(d!)`. */
+export function formatTodoLine(seq: KeywordSequence): string {
+	return [...seq.todo.map(formatState), '|', ...seq.done.map(formatState)].join(' ');
+}
+
+/** Flatten sequences into the config the rest of the app reads. */
+export function sequencesToConfig(sequences: readonly KeywordSequence[]): KeywordConfig {
+	const todo: string[] = [];
+	const done: string[] = [];
+	const log: NonNullable<KeywordConfig['log']> = {};
+	for (const seq of sequences) {
+		for (const s of seq.todo) if (!todo.includes(s.name)) todo.push(s.name);
+		for (const s of seq.done) if (!done.includes(s.name)) done.push(s.name);
+		for (const s of [...seq.todo, ...seq.done])
+			if (s.enter || s.leave) log[s.name] = { enter: !!s.enter, leave: !!s.leave };
+	}
+	const config: KeywordConfig = {
+		todoKeywords: todo,
+		doneKeywords: done,
+		sequences: [...sequences],
+	};
+	if (Object.keys(log).length) config.log = log;
+	return config;
+}
+
+/** The editable sequences behind a config (a single sequence when none were stored). */
+export function configToSequences(config: KeywordConfig): KeywordSequence[] {
+	if (config.sequences?.length)
+		return config.sequences.map((s) => ({ todo: [...s.todo], done: [...s.done] }));
+	const state = (name: string): KeywordState => {
+		const log = config.log?.[name];
+		return { name, key: null, enter: log?.enter ? '!' : null, leave: log?.leave ? '!' : null };
+	};
+	return [{ todo: config.todoKeywords.map(state), done: config.doneKeywords.map(state) }];
+}

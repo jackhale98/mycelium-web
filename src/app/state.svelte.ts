@@ -25,6 +25,8 @@ import {
 	setProperty,
 	getProperty,
 	toggleCheckbox,
+	setTodoKeyword,
+	fileTodoKeywords,
 	type KeywordConfig,
 	type LogSettings,
 	type OrgData,
@@ -32,7 +34,7 @@ import {
 	type Change,
 } from '$lib/org';
 import type { FileConflict, FileStatus, LoadProgress, Workspace } from '$lib/git/workspace';
-import type { VaultRecord } from '$lib/store/db';
+import type { KeywordTone, VaultRecord } from '$lib/store/db';
 import type { FolderWorkspace } from '$lib/vault/folder';
 import {
 	dailyDate,
@@ -195,6 +197,82 @@ class AppState {
 
 	get search() {
 		return this.#search;
+	}
+
+	/** Chip colours chosen for TODO keywords in this vault. */
+	get keywordTones(): Record<string, KeywordTone> {
+		return this.activeVault?.keywordTones ?? {};
+	}
+
+	/**
+	 * How keywords are used: headings per configured keyword, frequent
+	 * heading-starting words that aren't keywords yet, and files that set
+	 * their own `#+TODO:` (and so ignore the vault's keywords).
+	 */
+	keywordUsage() {
+		void this.rev;
+		const counts = new Map<string, number>();
+		const words = new Map<string, number>();
+		const ownFiles: string[] = [];
+		const known = new Set([
+			...this.vault.keywords.todoKeywords,
+			...this.vault.keywords.doneKeywords,
+		]);
+		const re = /^\*+[ \t]+([A-Z][A-Z_-]{1,})(?=[ \t]|$)/gm;
+		for (const file of this.vault.files.values()) {
+			if (fileTodoKeywords(file.source)) ownFiles.push(file.path);
+			for (const h of file.index.headlines)
+				if (h.todo) counts.set(h.todo, (counts.get(h.todo) ?? 0) + 1);
+			re.lastIndex = 0;
+			for (let m = re.exec(file.source); m; m = re.exec(file.source))
+				if (!known.has(m[1]!)) words.set(m[1]!, (words.get(m[1]!) ?? 0) + 1);
+		}
+		const candidates = [...words.entries()]
+			.filter(([, n]) => n >= 2)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 8);
+		return { counts, candidates, ownFiles: ownFiles.sort() };
+	}
+
+	/** Save the vault's TODO keywords (and chip colours) and re-index with them. */
+	async saveKeywords(keywords: KeywordConfig, tones: Record<string, KeywordTone>) {
+		const ws = this.workspace ?? this.folder;
+		const snapshot = JSON.parse(JSON.stringify(keywords)) as KeywordConfig;
+		if (ws) {
+			await ws.updateRecord({ keywords: snapshot, keywordTones: { ...tones } });
+			await ws.clearCache();
+			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
+		}
+		const sources = Object.fromEntries([...this.vault.files].map(([p, f]) => [p, f.source]));
+		this.vault = Vault.fromSources(sources, snapshot);
+		this.#trees.clear();
+		this.rev += 1;
+	}
+
+	/**
+	 * Rename a keyword on every heading that uses it, in files that follow the
+	 * vault's keywords (files with their own `#+TODO:` are left alone). The
+	 * edits are ordinary uncommitted changes. Returns what was changed.
+	 */
+	renameKeyword(from: string, to: string): { files: number; headings: number } {
+		let files = 0;
+		let headings = 0;
+		for (const file of [...this.vault.files.values()]) {
+			if (fileTodoKeywords(file.source)) continue;
+			const heads = file.index.headlines.filter((h) => h.todo === from);
+			if (!heads.length) continue;
+			const changes = heads.flatMap((h) =>
+				setTodoKeyword(file.source, h.pos, to, file.index.keywords),
+			);
+			this.#write(
+				file.path,
+				applyChanges(file.source, changes),
+				`Rename TODO keyword ${from} → ${to}`,
+			);
+			files += 1;
+			headings += heads.length;
+		}
+		return { files, headings };
 	}
 
 	get activeVault(): VaultRecord | null {

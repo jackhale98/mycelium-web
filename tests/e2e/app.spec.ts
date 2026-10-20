@@ -254,3 +254,23 @@ test('graph controls are a collapsible footer on phones', async ({ page, isMobil
 	await page.getByRole('button', { name: 'Hide graph options' }).click();
 	await expect(page.getByRole('checkbox', { name: 'Dailies' })).toBeHidden();
 });
+
+test('rename a TODO keyword across the vault from Settings', async ({ page }) => {
+	await open(page, 'app#/settings');
+	const editor = page.locator('.kw-editor');
+	await expect(editor.locator('pre')).toContainText('#+TODO: TODO NEXT | DONE');
+	const next = editor.locator('.state', { hasText: 'NEXT' }).getByRole('textbox', { name: 'Name' });
+	await next.fill('DOING');
+	await expect(editor.locator('pre')).toContainText('#+TODO: TODO DOING | DONE');
+	await editor.getByRole('button', { name: 'Save keywords' }).click();
+	await expect(editor.getByText(/NEXT → DOING/)).toBeVisible();
+	await editor.getByRole('button', { name: 'Confirm and save' }).click();
+	await expect(editor.getByRole('status')).toContainText(/Updated \d+ heading/);
+
+	await open(page, 'app#/changes');
+	await expect(page.locator('.diff').first()).toContainText('DOING');
+	await open(page, 'app#/agenda');
+	await expect(
+		page.getByRole('button', { name: /^DOING\. Change task state/ }).first(),
+	).toBeVisible();
+});

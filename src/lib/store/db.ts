@@ -8,6 +8,8 @@ import type { Credentials, ProviderId } from '$lib/git/providers';
 import type { Author } from '$lib/git/repo';
 import type { VaultLayout } from '$lib/vault/layout';
 
+export type KeywordTone = 'todo' | 'next' | 'wait' | 'done' | 'neutral';
+
 export interface VaultRecord {
 	id: string;
 	name: string;
@@ -30,6 +32,8 @@ export interface VaultRecord {
 	dirty?: string[];
 	/** Commit every edit immediately with a generated message (off: you write each commit). */
 	autoCommit?: boolean;
+	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */
+	keywordTones?: Record<string, KeywordTone>;
 	/** `folder`: a directory on this computer opened with the File System Access API (no git here). */
 	kind?: 'git' | 'folder';
 }

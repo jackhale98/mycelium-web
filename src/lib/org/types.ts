@@ -53,6 +53,8 @@ export interface KeywordConfig {
 	 * as timestamps.
 	 */
 	log?: Record<string, { enter: boolean; leave: boolean }>;
+	/** The sequences as written, with fast keys and logging markers (for editing). */
+	sequences?: import('./keywords').KeywordSequence[];
 }
 
 /** How state changes are recorded, mirroring org's logging options. */

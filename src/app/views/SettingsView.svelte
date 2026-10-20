@@ -2,6 +2,7 @@
 	import type { CommitSummary } from '$lib/git/repo';
 	import { PROVIDERS } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
+	import KeywordEditor from '../components/KeywordEditor.svelte';
 	import { href, router } from '../router.svelte';
 	import { app, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
 
@@ -14,8 +15,6 @@
 	let roamDir = $state(app.layout.roamDir);
 	let dailyDir = $state(app.layout.dailyDir);
 	let dailyFormat = $state(app.layout.dailyFormat);
-	let todoKeywords = $state(app.vault.keywords.todoKeywords.join(' '));
-	let doneKeywords = $state(app.vault.keywords.doneKeywords.join(' '));
 	let saved = $state<string | null>(null);
 	let history = $state<CommitSummary[] | null>(null);
 
@@ -46,14 +45,12 @@
 
 	async function saveLayout(e: SubmitEvent) {
 		e.preventDefault();
-		const words = (s: string) => s.split(/[\s,]+/).filter(Boolean);
 		await app.updateVault({
 			layout: {
 				roamDir: roamDir.trim().replace(/^\/+|\/+$/g, ''),
 				dailyDir: dailyDir.trim().replace(/^\/+|\/+$/g, '') || 'daily',
 				dailyFormat,
 			},
-			keywords: { todoKeywords: words(todoKeywords), doneKeywords: words(doneKeywords) },
 		});
 		flash('Vault layout saved');
 	}
@@ -110,6 +107,11 @@
 				>
 			</p>
 		</div>
+	</section>
+
+	<section class="panel stack" aria-labelledby="workflow-h">
+		<h2 id="workflow-h">Workflow: TODO keywords</h2>
+		{#key app.activeId}<KeywordEditor />{/key}
 	</section>
 
 	<section class="panel stack" aria-labelledby="logging-h">
@@ -224,20 +226,7 @@
 					<option value="YYYYMMDD">20261020.org</option>
 				</select>
 			</div>
-			<div class="row two">
-				<div class="field">
-					<label for="s-todo">Open keywords</label>
-					<input id="s-todo" class="input" bind:value={todoKeywords} />
-				</div>
-				<div class="field">
-					<label for="s-done">Done keywords</label>
-					<input id="s-done" class="input" bind:value={doneKeywords} />
-				</div>
-			</div>
-			<p class="hint">
-				Global <code>org-todo-keywords</code>. Files with their own <code>#+TODO:</code> line keep using
-				it.
-			</p>
+
 			<div class="row"><button class="btn primary" type="submit">Save and re-index</button></div>
 		</form>
 

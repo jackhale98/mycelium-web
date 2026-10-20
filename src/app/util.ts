@@ -1,4 +1,4 @@
-import type { OrgTimestamp } from '$lib/org';
+import type { KeywordConfig, OrgTimestamp } from '$lib/org';
 import { addDays, dayNameFor } from '$lib/org';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -49,6 +49,19 @@ export function relativeDay(iso: string, today: string): string {
 
 export function tsLabel(ts: OrgTimestamp): string {
 	return `${shortDate(ts.date)}${ts.time ? ` · ${ts.time}` : ''}`;
+}
+
+/** Chip colour for a TODO keyword: the vault's choice, else a guess from its name. */
+export function keywordTone(
+	keyword: string,
+	config: KeywordConfig,
+	tones: Record<string, string> = {},
+): string {
+	if (tones[keyword]) return tones[keyword]!;
+	if (config.doneKeywords.includes(keyword)) return 'done';
+	if (/^(NEXT|DOING|STARTED|IN-?PROGRESS|ACTIVE)$/.test(keyword)) return 'next';
+	if (/WAIT|HOLD|BLOCK|SOMEDAY|MAYBE|REVIEW/.test(keyword)) return 'wait';
+	return 'todo';
 }
 
 /** The combining marks `org-roam-node-slugify` removes (and only these). */

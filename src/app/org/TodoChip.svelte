@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { nextTodoKeyword, type KeywordConfig } from '$lib/org';
+	import { app } from '../state.svelte';
+	import { keywordTone } from '../util';
 
 	let {
 		keyword,
@@ -11,10 +13,7 @@
 		onchange?: ((next: string | null) => void) | undefined;
 	} = $props();
 
-	const done = $derived(config.doneKeywords.includes(keyword));
-	const tone = $derived(
-		done ? 'done' : keyword === 'NEXT' ? 'next' : /WAIT|HOLD/.test(keyword) ? 'wait' : 'todo',
-	);
+	const tone = $derived(keywordTone(keyword, config, app.keywordTones));
 </script>
 
 {#if onchange}
@@ -61,6 +60,10 @@
 	.wait {
 		background: var(--wait-soft);
 		color: var(--wait);
+	}
+	.neutral {
+		background: var(--surface-2);
+		color: var(--text-2);
 	}
 	.done {
 		background: var(--done-soft);
