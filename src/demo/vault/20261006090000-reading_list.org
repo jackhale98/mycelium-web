@@ -1,0 +1,21 @@
+:PROPERTIES:
+:ID:       b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d13
+:END:
+#+title: Reading list
+#+filetags: :books:
+
+* NEXT [#A] Finding the Mother Tree                                    :forest:
+:PROPERTIES:
+:ID:       b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d14
+:AUTHOR:   Suzanne Simard
+:END:
+By [[id:7a2b3c40-9d8e-4f1a-b2c3-d4e5f6a7b804][Suzanne Simard]]. The book behind the [[id:5e1f9a20-7c3d-4b9e-8a2f-0c1d2e3f4a03][wood wide web]].
+
+* TODO [#B] How to Take Smart Notes                                       :pkm:
+Sönke Ahrens on the [[id:3c9d7e10-2f4b-4a8e-b1c6-7d8e9f0a1b02][Zettelkasten]] method.
+
+* TODO Entangled Life                                             :fungi:forest:
+Merlin Sheldrake. On [[id:8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01][mycelium]], lichens and what fungi tell us about life.
+
+* DONE The Hidden Life of Trees                                        :forest:
+CLOSED: [2026-09-28 Mon 21:40]

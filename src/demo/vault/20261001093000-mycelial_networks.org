@@ -1,0 +1,36 @@
+:PROPERTIES:
+:ID:       8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01
+:ROAM_ALIASES: "Mycelium" "Fungal networks"
+:END:
+#+title: Mycelial networks
+#+filetags: :biology:networks:
+
+Mycelium is the branching, thread-like body of a fungus. Individual threads
+(/hyphae/) are only a few microns wide, yet a single network can span
+hectares and live for centuries.
+
+* Why it matters
+Mycelial networks are the original *distributed system*: there is no centre,
+every junction can route resources, and damage is healed by growing around it.
+That's the metaphor behind [[id:3c9d7e10-2f4b-4a8e-b1c6-7d8e9f0a1b02][Zettelkasten]] style note-taking — value lives in the
+connections, not the individual notes.
+
+#+begin_quote
+A forest is not a collection of trees; it is a network that happens to have trees in it.
+#+end_quote
+
+* Key properties
+- Decentralised :: no single point of failure
+- Adaptive :: strengthens heavily used paths, prunes idle ones
+- Cooperative :: exchanges carbon, water and signals between plants
+
+| Property     | Mycelium          | Knowledge base          |
+|--------------+-------------------+-------------------------|
+| Unit         | Hypha             | Atomic note             |
+| Connection   | Anastomosis       | Link / backlink         |
+| Growth       | Toward nutrients  | Toward questions        |
+
+* Related
+- [[id:5e1f9a20-7c3d-4b9e-8a2f-0c1d2e3f4a03][The wood wide web]]
+- [[id:7a2b3c40-9d8e-4f1a-b2c3-d4e5f6a7b804][Suzanne Simard]]
+- [[id:2d4e6f80-1a3c-4e5b-9d7f-8a9b0c1d2e05][Forest ecology]]

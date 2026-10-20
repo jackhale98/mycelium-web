@@ -1,0 +1,11 @@
+:PROPERTIES:
+:ID:       7a2b3c40-9d8e-4f1a-b2c3-d4e5f6a7b804
+:END:
+#+title: Suzanne Simard
+#+filetags: :person:
+
+Forest ecologist at the University of British Columbia, known for research
+on the [[id:5e1f9a20-7c3d-4b9e-8a2f-0c1d2e3f4a03][wood wide web]] and "mother trees".
+
+- Wrote [[id:b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d14][Finding the Mother Tree]] (2021)
+- Leads the Mother Tree Project

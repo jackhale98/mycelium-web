@@ -1,0 +1,11 @@
+---
+import Base from '../layouts/Base.astro';
+import App from '../app/App.svelte';
+---
+
+<Base title="Mycelium" description="Your org-roam notes, anywhere.">
+	<App client:only="svelte" />
+	<noscript>
+		<p class="noscript">Mycelium runs entirely in your browser and needs JavaScript enabled.</p>
+	</noscript>
+</Base>

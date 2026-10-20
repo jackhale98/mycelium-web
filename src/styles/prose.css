@@ -1,0 +1,592 @@
+/* Reading typography for rendered org content. */
+
+.prose {
+	font-family: var(--font-read);
+	font-size: 1.1875rem;
+	line-height: 1.68;
+	color: var(--text);
+	font-optical-sizing: auto;
+	overflow-wrap: break-word;
+	hanging-punctuation: first;
+}
+
+.prose p {
+	margin: 0 0 1em;
+}
+
+.prose strong {
+	font-weight: 640;
+}
+
+.prose em {
+	font-style: italic;
+}
+
+.prose .u {
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+
+.prose s {
+	color: var(--text-muted);
+}
+
+.prose code {
+	padding: 0.1em 0.35em;
+	border-radius: 5px;
+	background: var(--code-bg);
+	font-family: var(--font-mono);
+	font-size: 0.8em;
+}
+
+.prose a.ilink,
+.prose a.xlink {
+	color: var(--link);
+	text-decoration: underline;
+	text-decoration-color: var(--link-underline);
+	text-decoration-thickness: 1.5px;
+	text-underline-offset: 0.18em;
+	transition:
+		text-decoration-color 0.15s var(--ease),
+		background-color 0.15s var(--ease);
+	border-radius: 3px;
+}
+
+.prose a.ilink:hover,
+.prose a.xlink:hover {
+	text-decoration-color: currentColor;
+	background: var(--accent-softer);
+}
+
+.prose a.xlink::after {
+	content: '↗';
+	display: inline-block;
+	margin-left: 0.12em;
+	font-family: var(--font-ui);
+	font-size: 0.7em;
+	vertical-align: 0.25em;
+	opacity: 0.7;
+}
+
+.prose .blink {
+	color: var(--danger);
+	text-decoration: underline wavy;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+
+.prose .olink {
+	color: var(--text-muted);
+	border-bottom: 1px dotted currentColor;
+}
+
+.prose time.ts {
+	display: inline-block;
+	padding: 0 0.4em;
+	border-radius: 5px;
+	background: var(--accent-softer);
+	color: var(--accent-strong);
+	font-family: var(--font-ui);
+	font-size: 0.72em;
+	font-weight: 550;
+	font-variant-numeric: tabular-nums;
+	vertical-align: 0.12em;
+}
+
+.prose time.ts.inactive {
+	background: var(--surface-2);
+	color: var(--text-muted);
+}
+
+.prose .cookie {
+	padding: 0 0.4em;
+	border-radius: 999px;
+	background: var(--surface-2);
+	color: var(--text-muted);
+	font-family: var(--font-ui);
+	font-size: 0.68em;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	vertical-align: 0.2em;
+}
+
+.prose .cite {
+	color: var(--text-muted);
+	font-family: var(--font-ui);
+	font-size: 0.85em;
+}
+
+/* ---- headings and sections */
+
+.prose .org-section {
+	margin-top: 1.6em;
+}
+
+.prose .org-section .org-section {
+	margin-top: 1.1em;
+}
+
+.prose .heading-row {
+	position: relative;
+	display: flex;
+	align-items: baseline;
+	gap: 0.6em;
+	flex-wrap: wrap;
+}
+
+.prose .fold {
+	position: absolute;
+	left: -1.8rem;
+	top: 0.35em;
+	display: grid;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	color: var(--text-faint);
+	opacity: 0;
+	transition:
+		opacity 0.15s var(--ease),
+		background-color 0.15s var(--ease);
+}
+
+.prose .heading-row:hover .fold,
+.prose .fold:focus-visible,
+.prose .fold[aria-expanded='false'] {
+	opacity: 1;
+}
+
+.prose .fold:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+.prose .fold-icon {
+	display: grid;
+	transition: transform 0.18s var(--ease);
+}
+
+.prose .fold-icon.closed {
+	transform: rotate(-90deg);
+}
+
+.prose .heading {
+	margin: 0;
+	font-family: var(--font-read);
+	font-weight: 600;
+	letter-spacing: -0.012em;
+	line-height: 1.25;
+	color: var(--text);
+}
+
+.prose h2.heading {
+	font-size: 1.5em;
+}
+.prose h3.heading {
+	font-size: 1.25em;
+}
+.prose h4.heading,
+.prose h5.heading,
+.prose h6.heading {
+	font-size: 1.08em;
+}
+
+.prose .heading.done .heading-text {
+	color: var(--text-muted);
+	text-decoration: line-through;
+	text-decoration-color: color-mix(in oklab, var(--text-muted) 50%, transparent);
+	text-decoration-thickness: 1.5px;
+}
+
+.prose .prio {
+	display: inline-grid;
+	place-items: center;
+	width: 1.45em;
+	height: 1.45em;
+	margin-right: 0.15em;
+	border: 1.5px solid var(--border-strong);
+	border-radius: 50%;
+	color: var(--text-muted);
+	font: 700 0.5em/1 var(--font-ui);
+	vertical-align: 0.35em;
+}
+
+.prose .node-link {
+	display: inline-grid;
+	place-items: center;
+	width: 1.6rem;
+	height: 1.6rem;
+	margin-left: 0.15em;
+	border-radius: 6px;
+	color: var(--text-faint);
+	vertical-align: middle;
+	opacity: 0;
+	transition: opacity 0.15s var(--ease);
+}
+
+.prose .heading-row:hover .node-link,
+.prose .node-link:focus-visible {
+	opacity: 1;
+}
+
+.prose .node-link:hover {
+	background: var(--surface-2);
+	color: var(--accent);
+}
+
+.prose .htags {
+	display: inline-flex;
+	gap: 0.35em;
+	margin-left: auto;
+	font-family: var(--font-ui);
+}
+
+.prose .tag {
+	color: var(--text-faint);
+	font-size: 0.72rem;
+	font-weight: 550;
+	text-decoration: none;
+}
+
+.prose .tag:hover {
+	color: var(--accent);
+}
+
+.prose .planning {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin: 0.45rem 0 0.2rem;
+	font-family: var(--font-ui);
+}
+
+.prose .plan {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	padding: 0.15em 0.55em;
+	border-radius: 6px;
+	font-size: 0.75rem;
+	font-weight: 550;
+	font-variant-numeric: tabular-nums;
+}
+
+.prose .plan.deadline {
+	background: var(--danger-soft);
+	color: var(--danger);
+}
+.prose .plan.scheduled {
+	background: var(--next-soft);
+	color: var(--next);
+}
+.prose .plan.closed {
+	background: var(--done-soft);
+	color: var(--done);
+}
+
+.prose .section-body {
+	margin-top: 0.6em;
+}
+
+/* ---- lists */
+
+.prose ul,
+.prose ol {
+	margin: 0 0 1em;
+	padding-left: 1.4em;
+}
+
+.prose li {
+	margin: 0.2em 0;
+	padding-left: 0.15em;
+}
+
+.prose li::marker {
+	color: var(--text-faint);
+}
+
+.prose li > .li-body > p {
+	margin: 0;
+}
+
+.prose li > .li-body > ul,
+.prose li > .li-body > ol {
+	margin: 0.2em 0 0.2em;
+}
+
+.prose ul.checklist {
+	list-style: none;
+	padding-left: 0.1em;
+}
+
+.prose li.has-box {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.6em;
+}
+
+.prose li.has-box > .li-body {
+	flex: 1;
+}
+
+.prose li.checked > .li-body > p {
+	color: var(--text-muted);
+	text-decoration: line-through;
+	text-decoration-color: color-mix(in oklab, var(--text-muted) 45%, transparent);
+}
+
+.prose input.box {
+	appearance: none;
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 1.05em;
+	height: 1.05em;
+	margin: 0.33em 0 0;
+	border: 1.5px solid var(--border-strong);
+	border-radius: 5px;
+	background: var(--surface);
+	cursor: pointer;
+	transition:
+		background-color 0.15s var(--ease),
+		border-color 0.15s var(--ease);
+}
+
+.prose input.box:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+.prose input.box:checked,
+.prose input.box:indeterminate {
+	border-color: var(--accent);
+	background: var(--accent);
+}
+
+.prose input.box:checked::after {
+	content: '';
+	width: 0.28em;
+	height: 0.55em;
+	margin-top: -0.12em;
+	border: solid var(--on-accent);
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+
+.prose input.box:indeterminate::after {
+	content: '';
+	width: 0.55em;
+	height: 2px;
+	background: var(--on-accent);
+}
+
+.prose input.box:disabled {
+	cursor: default;
+}
+
+.prose dl {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 0.35em 1.2em;
+	margin: 0 0 1.1em;
+}
+
+.prose dt {
+	font-weight: 600;
+}
+
+.prose dd {
+	margin: 0;
+	color: var(--text-2);
+}
+
+.prose dd > p {
+	margin: 0;
+}
+
+/* ---- blocks */
+
+.prose blockquote {
+	margin: 1.3em 0;
+	padding: 0.1em 0 0.1em 1.1em;
+	border-left: 3px solid var(--accent);
+	color: var(--text-2);
+	font-style: italic;
+	font-size: 1.06em;
+}
+
+.prose blockquote p:last-child {
+	margin-bottom: 0;
+}
+
+.prose figure.code {
+	position: relative;
+	margin: 1.2em 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--code-bg);
+	overflow: hidden;
+}
+
+.prose figure.code figcaption {
+	position: absolute;
+	right: 0.75rem;
+	top: 0.5rem;
+	color: var(--text-faint);
+	font: 550 0.68rem/1 var(--font-ui);
+	letter-spacing: 0.04em;
+	text-transform: lowercase;
+}
+
+.prose pre {
+	margin: 0;
+	padding: 0.95rem 1.1rem;
+	overflow-x: auto;
+	font-family: var(--font-mono);
+	font-size: 0.8rem;
+	line-height: 1.6;
+	tab-size: 4;
+}
+
+.prose pre code {
+	padding: 0;
+	background: none;
+	font-size: inherit;
+}
+
+.prose pre.block {
+	margin: 1.2em 0;
+	border-radius: var(--radius);
+	background: var(--code-bg);
+}
+
+.prose .table-wrap {
+	margin: 1.2em 0;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.prose table {
+	width: 100%;
+	border-collapse: collapse;
+	font-family: var(--font-ui);
+	font-size: 0.85rem;
+	line-height: 1.45;
+}
+
+.prose th,
+.prose td {
+	padding: 0.55rem 0.85rem;
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+	vertical-align: top;
+}
+
+.prose th {
+	background: var(--surface-2);
+	color: var(--text-2);
+	font-weight: 600;
+}
+
+.prose tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.prose td:has(> :only-child) {
+	font-variant-numeric: tabular-nums;
+}
+
+.prose hr {
+	margin: 2em auto;
+	width: 30%;
+	border: 0;
+	border-top: 1px solid var(--border-strong);
+}
+
+.prose .verse {
+	white-space: pre-line;
+	font-style: italic;
+}
+
+.prose .center {
+	text-align: center;
+}
+
+.prose aside.special {
+	margin: 1.2em 0;
+	padding: 0.85rem 1.1rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+.prose .special-label {
+	display: block;
+	margin-bottom: 0.3em;
+	color: var(--text-muted);
+	font: 650 0.7rem/1 var(--font-ui);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.prose details.drawer {
+	margin: 0.6em 0;
+	font-family: var(--font-ui);
+	font-size: 0.82rem;
+	color: var(--text-muted);
+}
+
+.prose details.drawer summary {
+	cursor: pointer;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
+.prose .footnote {
+	display: flex;
+	gap: 0.6em;
+	font-size: 0.88em;
+	color: var(--text-2);
+}
+
+/* Compact variant used for backlink context snippets. */
+.prose a.ilink.self {
+	padding: 0 0.15em;
+	background: var(--accent-soft);
+	color: var(--accent-strong);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.prose.compact {
+	font-size: 0.95rem;
+	line-height: 1.55;
+	color: var(--text-2);
+}
+
+.prose.compact p,
+.prose.compact ul,
+.prose.compact ol {
+	margin: 0;
+}
+
+.prose.compact .org-section {
+	margin: 0;
+}
+
+.prose.compact .fold,
+.prose.compact .node-link,
+.prose.compact .htags,
+.prose.compact .planning {
+	display: none;
+}
+
+.prose.compact h2.heading,
+.prose.compact h3.heading,
+.prose.compact h4.heading {
+	font-size: 1em;
+}

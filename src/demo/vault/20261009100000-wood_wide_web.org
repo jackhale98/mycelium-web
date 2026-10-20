@@ -1,0 +1,19 @@
+:PROPERTIES:
+:ID:       5e1f9a20-7c3d-4b9e-8a2f-0c1d2e3f4a03
+:ROAM_ALIASES: "Common mycorrhizal network" CMN
+:END:
+#+title: The wood wide web
+#+filetags: :biology:forest:networks:
+
+The *wood wide web* is the popular name for common mycorrhizal networks:
+fungi that connect the roots of different plants and shuttle carbon,
+nitrogen and chemical signals between them.
+
+[[id:7a2b3c40-9d8e-4f1a-b2c3-d4e5f6a7b804][Suzanne Simard]]'s 1997 /Nature/ paper showed carbon moving between birch
+and Douglas fir through these links.
+
+* Open questions
+- How much transfer is cooperation versus fungal self-interest?
+- Do the effects in the lab hold at forest scale?
+
+Builds on [[id:8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01][Mycelial networks]] and [[id:2d4e6f80-1a3c-4e5b-9d7f-8a9b0c1d2e05][Forest ecology]].

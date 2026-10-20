@@ -1,0 +1,56 @@
+/// Hash-based routing: works on GitHub Pages without server rewrites.
+
+export type Route =
+	| { name: 'home' }
+	| { name: 'node'; id: string }
+	| { name: 'daily'; date: string | null }
+	| { name: 'agenda' }
+	| { name: 'tags'; tag: string | null }
+	| { name: 'notfound'; path: string };
+
+export function parseHash(hash: string): Route {
+	const path = decodeURIComponent(hash.replace(/^#\/?/, ''));
+	const [head = '', ...rest] = path.split('/');
+	const tail = rest.join('/');
+	switch (head) {
+		case '':
+			return { name: 'home' };
+		case 'node':
+			return tail ? { name: 'node', id: tail } : { name: 'notfound', path };
+		case 'daily':
+			return { name: 'daily', date: /^\d{4}-\d{2}-\d{2}$/.test(tail) ? tail : null };
+		case 'agenda':
+			return { name: 'agenda' };
+		case 'tags':
+			return { name: 'tags', tag: tail || null };
+		default:
+			return { name: 'notfound', path };
+	}
+}
+
+export const href = {
+	home: () => '#/',
+	node: (id: string) => `#/node/${encodeURIComponent(id)}`,
+	daily: (date?: string) => (date ? `#/daily/${date}` : '#/daily'),
+	agenda: () => '#/agenda',
+	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),
+};
+
+class Router {
+	route = $state<Route>({ name: 'home' });
+
+	start() {
+		const sync = () => {
+			this.route = parseHash(location.hash);
+		};
+		sync();
+		addEventListener('hashchange', sync);
+		return () => removeEventListener('hashchange', sync);
+	}
+
+	go(hash: string) {
+		location.hash = hash;
+	}
+}
+
+export const router = new Router();
