@@ -139,7 +139,7 @@ select.input {
 	background: var(--danger-soft);
 	color: var(--text);
 }
-.notice :global(svg),
+
 .notice svg {
 	flex: none;
 	margin-top: 0.12rem;

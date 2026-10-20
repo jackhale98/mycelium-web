@@ -32,21 +32,32 @@ import BrandLoader from '../app/components/BrandLoader.svelte';
 		'Counting spores…',
 	].sort(() => Math.random() - 0.5);
 	let k = 0;
-	const timer = setInterval(() => {
-		if (span) span.textContent = lines[k++ % lines.length] ?? '';
-	}, 2600);
+	// Rotate only when loading is genuinely slow: every text swap is a new paint,
+	// and quick loads should finish on the first line.
+	let timer: ReturnType<typeof setInterval> | undefined;
+	const delay = setTimeout(() => {
+		timer = setInterval(() => {
+			if (span) span.textContent = lines[k++ % lines.length] ?? '';
+		}, 2600);
+	}, 4000);
 	const start = performance.now();
 	const INTRO_MS = 2664;
+	const MAX_HOLD_MS = 350;
 	(window as unknown as { MyceliumLoader: unknown }).MyceliumLoader = {
-		/** Fade out; by default first let the cap finish linking up. */
+		/** Fade out; by default first let the cap finish linking up (briefly). */
 		done(opts?: { immediate?: boolean }) {
 			if (!root || !root.isConnected || root.classList.contains('myc-done')) return;
 			const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-			const wait = opts?.immediate || reduce ? 0 : INTRO_MS - (performance.now() - start);
+			// Let the cap finish linking up, but never hold a ready page back for long.
+			const wait =
+				opts?.immediate || reduce
+					? 0
+					: Math.min(MAX_HOLD_MS, INTRO_MS - (performance.now() - start));
 			setTimeout(
 				() => {
 					root.classList.add('myc-done');
 					setTimeout(() => {
+						clearTimeout(delay);
 						clearInterval(timer);
 						root.remove();
 					}, 750);

@@ -61,7 +61,10 @@ export const href = {
 };
 
 class Router {
-	route = $state<Route>({ name: 'home' });
+	// Start on the requested page, so nothing renders the home page first.
+	route = $state<Route>(
+		typeof location === 'undefined' ? { name: 'home' } : parseHash(location.hash),
+	);
 
 	start() {
 		const sync = () => {

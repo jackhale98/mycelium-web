@@ -196,7 +196,8 @@ class AppState {
 		const active = readLocal(ACTIVE_KEY);
 		if (active && active !== DEMO_ID && this.vaults.some((v) => v.id === active))
 			await this.openVault(active);
-		else await this.openDemo();
+		else if (this.vaults.some((v) => v.id === DEMO_ID)) await this.openDemo();
+		else this.#startDemo();
 		// A folder waiting for access: show the demo meanwhile, but reopen the folder next time.
 		if (this.folderAccess) {
 			await this.openDemo();
@@ -247,6 +248,44 @@ class AppState {
 			this.loading = null;
 		}
 		writeLocal(ACTIVE_KEY, DEMO_ID);
+	}
+
+	#demoReady: Promise<void> | null = null;
+
+	/**
+	 * First visit: the in-memory demo is already on screen, so build its git
+	 * repository when the browser is idle instead of during startup.
+	 */
+	#startDemo() {
+		writeLocal(ACTIVE_KEY, DEMO_ID);
+		const idle = (cb: () => void) =>
+			'requestIdleCallback' in window
+				? requestIdleCallback(cb, { timeout: 4000 })
+				: setTimeout(cb, 1200);
+		this.#demoReady = new Promise<void>((resolve) =>
+			idle(() => void this.#attachDemo().finally(resolve)),
+		);
+	}
+
+	async #attachDemo() {
+		try {
+			const { Workspace } = await import('$lib/git/workspace');
+			const ws = await Workspace.createLocal(demoRecord(), demoSources, 'Demo vault');
+			this.vaults = [...this.vaults.filter((v) => v.id !== DEMO_ID), ws.record];
+			if (this.activeId !== DEMO_ID || this.workspace || this.folder) return;
+			// Keep anything edited while the repository was being built.
+			const changes: { path: string; source: string | null }[] = [];
+			for (const [path, file] of this.vault.files)
+				if (demoSources[path] !== file.source) changes.push({ path, source: file.source });
+			for (const path of Object.keys(demoSources))
+				if (!this.vault.file(path)) changes.push({ path, source: null });
+			if (changes.length) await ws.save(changes);
+			this.workspace = ws;
+			this.layout = ws.record.layout;
+			await this.refreshGit();
+		} catch (e) {
+			console.warn('Demo vault stays in memory:', e);
+		}
 	}
 
 	/** Throw the demo away and start it fresh. */
@@ -465,7 +504,19 @@ class AppState {
 		const [file] = this.vault.apply([{ path, source: text }]);
 		this.rev += 1;
 		const ws = this.workspace ?? this.folder;
-		if (!ws) return;
+		if (!ws) {
+			// The demo's repository is still being built: save once it exists.
+			const ready = this.#demoReady;
+			if (ready)
+				this.#saving = this.#saving
+					.then(() => ready)
+					.then(async () => {
+						await this.workspace?.save([{ path, source: text, ...(file ? { file } : {}) }]);
+						this.#scheduleStatus();
+					})
+					.catch(() => undefined);
+			return;
+		}
 		this.#saving = this.#saving
 			.then(async () => {
 				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { plainText, type OrgNode } from '$lib/org';
 	import AgendaList from '../components/AgendaList.svelte';
 	import Icon from '../components/Icon.svelte';
 	import { groupAgenda } from '../agenda';
@@ -28,23 +27,17 @@
 			.slice(0, 6);
 	});
 
-	/** The first paragraph of a file, as plain text. */
+	/** First line of body text, from the index (no parsing). */
 	const excerpt = (file: string) => {
-		const tree = app.tree(file);
-		let text = '';
-		const visit = (nodes: readonly OrgNode[]): boolean => {
-			for (const n of nodes) {
-				if (n.type === 'paragraph') {
-					text = plainText(n);
-					return true;
-				}
-				if ('children' in n && Array.isArray(n.children) && visit(n.children as OrgNode[]))
-					return true;
-			}
-			return false;
-		};
-		if (tree) visit(tree.children as OrgNode[]);
-		return text.replace(/\s+/g, ' ').trim().slice(0, 160);
+		const index = app.vault.file(file)?.index;
+		if (!index) return '';
+		const heads = new Set(index.headlines.map((h) => h.title));
+		const line =
+			index.text
+				.split('\n')
+				.slice(1)
+				.find((l) => l.trim() && !heads.has(l)) ?? '';
+		return line.replace(/\s+/g, ' ').trim().slice(0, 160);
 	};
 
 	const tags = $derived.by(() => {

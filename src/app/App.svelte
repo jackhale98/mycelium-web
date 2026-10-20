@@ -11,18 +11,22 @@
 	import { href, router } from './router.svelte';
 	import { app } from './state.svelte';
 	import AgendaView from './views/AgendaView.svelte';
-	import ChangesView from './views/ChangesView.svelte';
-	import DailiesView from './views/DailiesView.svelte';
 	import DailyView from './views/DailyView.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
-	import SearchView from './views/SearchView.svelte';
-	import GraphView from './views/GraphView.svelte';
-	import SettingsView from './views/SettingsView.svelte';
 	import TagsView from './views/TagsView.svelte';
-	import VaultsView from './views/VaultsView.svelte';
 
 	let main: HTMLElement | undefined = $state();
+
+	// Heavier pages load on first visit, keeping the startup bundle small.
+	const views = {
+		changes: () => import('./views/ChangesView.svelte'),
+		dailies: () => import('./views/DailiesView.svelte'),
+		graph: () => import('./views/GraphView.svelte'),
+		search: () => import('./views/SearchView.svelte'),
+		settings: () => import('./views/SettingsView.svelte'),
+		vaults: () => import('./views/VaultsView.svelte'),
+	};
 
 	$effect(() => router.start());
 	$effect(() => {
@@ -137,17 +141,20 @@
 		{:else if router.route.name === 'tags'}
 			<TagsView tag={router.route.tag} />
 		{:else if router.route.name === 'vaults'}
-			<VaultsView />
+			{#await views.vaults() then { default: VaultsView }}<VaultsView />{/await}
 		{:else if router.route.name === 'graph'}
-			{#key router.route.id}<GraphView focus={router.route.id} />{/key}
+			{#await views.graph() then { default: GraphView }}{#key router.route.id}<GraphView
+						focus={router.route.id}
+					/>{/key}{/await}
 		{:else if router.route.name === 'search'}
-			<SearchView q={router.route.q} />
+			{#await views.search() then { default: SearchView }}<SearchView q={router.route.q} />{/await}
 		{:else if router.route.name === 'dailies'}
-			<DailiesView />
+			{#await views.dailies() then { default: DailiesView }}<DailiesView />{/await}
 		{:else if router.route.name === 'changes'}
-			<ChangesView />
+			{#await views.changes() then { default: ChangesView }}<ChangesView />{/await}
 		{:else if router.route.name === 'settings'}
-			{#key app.activeId}<SettingsView />{/key}
+			{#await views.settings() then { default: SettingsView }}{#key app.activeId}<SettingsView
+					/>{/key}{/await}
 		{:else}
 			<div class="nf">
 				<h1>Page not found</h1>

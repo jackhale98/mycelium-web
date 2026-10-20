@@ -151,8 +151,11 @@
 		}
 	}
 
+	// Keep the highlighted result in view — only while open, since scrolling
+	// forces a layout of the whole page.
 	$effect(() => {
-		document.getElementById(`cp-${active}`)?.scrollIntoView({ block: 'nearest' });
+		const id = `cp-${active}`;
+		if (app.paletteOpen) document.getElementById(id)?.scrollIntoView({ block: 'nearest' });
 	});
 </script>
 
