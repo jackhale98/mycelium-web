@@ -138,8 +138,18 @@ async function oauth(request: Request, env: Env, url: URL, origin: string): Prom
 	const clientId = env[`${prefix}_CLIENT_ID`];
 	const secret = env[`${prefix}_CLIENT_SECRET`];
 	// GitLab apps can be public (PKCE, no secret); GitHub and Bitbucket need one.
-	if (!clientId || (!secret && provider !== 'gitlab'))
-		return deny(501, `${provider} sign-in is not configured on this worker`, origin);
+	if (!clientId || (!secret && provider !== 'gitlab')) {
+		// Name what's missing (never the values) so a misplaced setting is easy to spot.
+		const missing = [
+			!clientId && `${prefix}_CLIENT_ID`,
+			!secret && provider !== 'gitlab' && `${prefix}_CLIENT_SECRET`,
+		].filter(Boolean);
+		return deny(
+			501,
+			`${provider} sign-in is not configured on this worker (missing at runtime: ${missing.join(', ')})`,
+			origin,
+		);
+	}
 
 	let input: Record<string, unknown>;
 	try {
