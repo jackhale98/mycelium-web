@@ -1,10 +1,10 @@
 {
-  "name": "mycelium-sync-worker",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
-    "test": "vitest run"
-  }
+	"name": "mycelium-sync-worker",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"test": "vitest run"
+	}
 }

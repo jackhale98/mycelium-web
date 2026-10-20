@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker, { isGitRequest, type Env } from './index';
 
-const env: Env = { ALLOWED_ORIGINS: 'https://app.example, http://localhost:4321', GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'shh' };
+const env: Env = {
+	ALLOWED_ORIGINS: 'https://app.example, http://localhost:4321',
+	GITHUB_CLIENT_ID: 'id',
+	GITHUB_CLIENT_SECRET: 'shh',
+};
 const ORIGIN = 'https://app.example';
 const call = (path: string, init: RequestInit & { origin?: string | null } = {}) => {
 	const headers = new Headers(init.headers);
@@ -22,11 +26,22 @@ describe('git proxy', () => {
 	});
 
 	it('rejects unknown origins, hosts and paths', async () => {
-		expect((await call('/github.com/a/b.git/info/refs?service=git-upload-pack', { origin: null })).status).toBe(403);
-		expect((await call('/github.com/a/b.git/info/refs?service=git-upload-pack', { origin: 'https://evil.example' })).status).toBe(403);
+		expect(
+			(await call('/github.com/a/b.git/info/refs?service=git-upload-pack', { origin: null }))
+				.status,
+		).toBe(403);
+		expect(
+			(
+				await call('/github.com/a/b.git/info/refs?service=git-upload-pack', {
+					origin: 'https://evil.example',
+				})
+			).status,
+		).toBe(403);
 		expect((await call('/example.com/a/b.git/info/refs?service=git-upload-pack')).status).toBe(403);
 		expect((await call('/github.com/settings/profile')).status).toBe(403);
-		expect((await call('/github.com/a/../../b.git/info/refs?service=git-upload-pack')).status).toBe(403);
+		expect((await call('/github.com/a/../../b.git/info/refs?service=git-upload-pack')).status).toBe(
+			403,
+		);
 	});
 
 	it('answers preflight with CORS headers', async () => {
@@ -37,12 +52,22 @@ describe('git proxy', () => {
 	});
 
 	it('forwards only git headers and streams the response back', async () => {
-		const upstream = vi.fn(async () => new Response('pack', { status: 200, headers: { 'Content-Type': 'application/x-git-upload-pack-result', 'Set-Cookie': 'x=1' } }));
+		const upstream = vi.fn(
+			async () =>
+				new Response('pack', {
+					status: 200,
+					headers: { 'Content-Type': 'application/x-git-upload-pack-result', 'Set-Cookie': 'x=1' },
+				}),
+		);
 		vi.stubGlobal('fetch', upstream);
 		const res = await call('/github.com/a/b.git/git-upload-pack', {
 			method: 'POST',
 			body: 'want',
-			headers: { Authorization: 'Basic abc', Cookie: 'session=1', 'Content-Type': 'application/x-git-upload-pack-request' },
+			headers: {
+				Authorization: 'Basic abc',
+				Cookie: 'session=1',
+				'Content-Type': 'application/x-git-upload-pack-request',
+			},
 		});
 		expect(await res.text()).toBe('pack');
 		expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
@@ -57,9 +82,19 @@ describe('git proxy', () => {
 
 describe('oauth', () => {
 	it('adds the client secret and relays the token response', async () => {
-		const upstream = vi.fn(async () => new Response('{"access_token":"t"}', { headers: { 'Content-Type': 'application/json' } }));
+		const upstream = vi.fn(
+			async () =>
+				new Response('{"access_token":"t"}', { headers: { 'Content-Type': 'application/json' } }),
+		);
 		vi.stubGlobal('fetch', upstream);
-		const res = await call('/oauth/github/token', { method: 'POST', body: JSON.stringify({ code: 'c', code_verifier: 'v', redirect_uri: 'https://app.example/cb' }) });
+		const res = await call('/oauth/github/token', {
+			method: 'POST',
+			body: JSON.stringify({
+				code: 'c',
+				code_verifier: 'v',
+				redirect_uri: 'https://app.example/cb',
+			}),
+		});
 		expect(await res.json()).toEqual({ access_token: 't' });
 		const [target, init] = upstream.mock.calls[0] as unknown as [string, RequestInit];
 		expect(target).toBe('https://github.com/login/oauth/access_token');
@@ -75,7 +110,9 @@ describe('oauth', () => {
 	});
 
 	it('reports unconfigured providers', async () => {
-		expect((await call('/oauth/gitlab/token', { method: 'POST', body: '{"code":"c"}' })).status).toBe(501);
+		expect(
+			(await call('/oauth/gitlab/token', { method: 'POST', body: '{"code":"c"}' })).status,
+		).toBe(501);
 		expect((await call('/oauth/nope/token', { method: 'POST', body: '{}' })).status).toBe(404);
 	});
 });
