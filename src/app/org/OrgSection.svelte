@@ -93,7 +93,12 @@
 					aria-expanded={editing}
 					aria-label="Edit heading: state, priority, tags and dates"
 					title="State, priority, tags, dates"
-					onclick={() => (editing = !editing)}><Icon name="settings" size={15} /></button
+					onclick={() => {
+						// Phones get the bottom sheet; wider screens the inline tray.
+						if (matchMedia('(max-width: 720px)').matches)
+							app.headingSheet = { path: ctx.path, pos: offset };
+						else editing = !editing;
+					}}><Icon name="settings" size={15} /></button
 				>
 			{/if}
 			{#if headline.tags.length}

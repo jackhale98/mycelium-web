@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { AgendaItem } from '$lib/vault/vault';
+	import DateChip from '../org/DateChip.svelte';
 	import TodoChip from '../org/TodoChip.svelte';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
@@ -13,6 +14,25 @@
 	}: { items: AgendaItem[]; today: string; empty?: string } = $props();
 
 	const keywordsFor = (file: string) => app.vault.file(file)?.index.keywords ?? app.vault.keywords;
+
+	const edit = (item: AgendaItem) => (app.headingSheet = { path: item.file, pos: item.pos });
+
+	// Touch: a long press on a row opens the heading sheet.
+	let press: ReturnType<typeof setTimeout> | null = null;
+	let pressed = false;
+	function startPress(e: PointerEvent, item: AgendaItem) {
+		if (e.pointerType !== 'touch') return;
+		pressed = false;
+		press = setTimeout(() => {
+			pressed = true;
+			navigator.vibrate?.(10);
+			edit(item);
+		}, 500);
+	}
+	function endPress() {
+		if (press) clearTimeout(press);
+		press = null;
+	}
 </script>
 
 {#if items.length === 0}
@@ -22,7 +42,22 @@
 		{#each items as item (`${item.file}:${item.pos}`)}
 			{@const due = item.deadline ?? item.scheduled}
 			{@const overdue = !!due && due.date < today && !app.vault.isDone(item.todo, item.file)}
-			<li class="item" class:done={app.vault.isDone(item.todo, item.file)}>
+			<li
+				class="item"
+				class:done={app.vault.isDone(item.todo, item.file)}
+				onpointerdown={(e) => startPress(e, item)}
+				onpointerup={endPress}
+				onpointercancel={endPress}
+				onpointermove={endPress}
+				onclickcapture={(e) => {
+					// The long press already opened the sheet; don't also follow the link.
+					if (pressed) {
+						e.preventDefault();
+						e.stopPropagation();
+						pressed = false;
+					}
+				}}
+			>
 				<div class="kw-col">
 					{#if item.todo}
 						<TodoChip
@@ -45,17 +80,27 @@
 							>{/each}
 					</span>
 				</div>
-				{#if due}
-					<span
-						class="when"
-						class:overdue
-						class:deadline={!!item.deadline}
-						title={shortDate(due.date)}
+				<div class="end">
+					{#if due}
+						<DateChip
+							path={item.file}
+							offset={item.pos}
+							kind={item.deadline ? 'DEADLINE' : 'SCHEDULED'}
+							ts={due}
+							compact
+							{overdue}
+							label={`${relativeDay(due.date, today)}${due.time ? ` · ${due.time}` : ''}`}
+						/>
+					{/if}
+					<button
+						type="button"
+						class="more"
+						aria-haspopup="dialog"
+						aria-label={`Edit “${item.title}”`}
+						title={`${shortDate(due?.date ?? today)} — edit heading`}
+						onclick={() => edit(item)}><Icon name="settings" size={15} /></button
 					>
-						<Icon name={item.deadline ? 'alert' : 'calendar'} size={13} />
-						{relativeDay(due.date, today)}{due.time ? ` · ${due.time}` : ''}
-					</span>
-				{/if}
+				</div>
 			</li>
 		{/each}
 	</ul>
@@ -136,32 +181,31 @@
 	.tag {
 		color: var(--text-faint);
 	}
-	.when {
-		display: inline-flex;
+	.end {
+		display: flex;
 		align-items: center;
-		gap: 0.3rem;
-		padding: 0.2rem 0.5rem;
-		border-radius: 6px;
-		background: var(--next-soft);
-		color: var(--next);
-		font-size: 0.74rem;
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
+		gap: 0.15rem;
 	}
-	.when.deadline {
-		background: var(--warn-soft);
-		color: var(--warn);
+	.more {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border: 0;
+		border-radius: 7px;
+		background: none;
+		color: var(--text-faint);
 	}
-	.when.overdue {
-		background: var(--danger-soft);
-		color: var(--danger);
+	.more:hover,
+	.more:focus-visible {
+		background: var(--surface-2);
+		color: var(--accent);
 	}
 	@media (max-width: 560px) {
 		.item {
 			grid-template-columns: auto minmax(0, 1fr);
 		}
-		.when {
+		.end {
 			grid-column: 2;
 			justify-self: start;
 		}

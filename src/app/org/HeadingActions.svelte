@@ -15,6 +15,7 @@
 		id,
 		keywords,
 		nodeAction = true,
+		variant = 'inline',
 		onclose,
 	}: {
 		path: string;
@@ -29,6 +30,8 @@
 		keywords: KeywordConfig;
 		/** Offer "make it a node" / "open as note". */
 		nodeAction?: boolean;
+		/** `inline`: a card under the heading; `sheet`: bare, inside the heading sheet. */
+		variant?: 'inline' | 'sheet';
 		onclose: () => void;
 	} = $props();
 
@@ -72,7 +75,14 @@
 	}
 </script>
 
-<div class="actions" role="group" aria-label="Heading properties" tabindex="-1" {onkeydown}>
+<div
+	class="actions"
+	class:sheet={variant === 'sheet'}
+	role="group"
+	aria-label="Heading properties"
+	tabindex="-1"
+	{onkeydown}
+>
 	<div class="row">
 		<span class="label" id={`${uid}-state`}>State</span>
 		<div class="seg" role="radiogroup" aria-labelledby={`${uid}-state`}>
@@ -195,18 +205,22 @@
 		</div>
 	</div>
 
-	<div class="row foot">
-		{#if !nodeAction}
-			<!-- already on the node's page -->
-		{:else if id}
-			<a class="btn small" href={href.node(id)}><Icon name="arrowRight" size={14} />Open as note</a>
-		{:else}
-			<button type="button" class="btn small" onclick={makeNode}
-				><Icon name="plus" size={14} />Make it a node</button
-			>
-		{/if}
-		<button type="button" class="btn small" onclick={onclose}>Done</button>
-	</div>
+	{#if variant === 'inline' || !id}
+		<div class="row foot">
+			{#if id && nodeAction}
+				<a class="btn small" href={href.node(id)}
+					><Icon name="arrowRight" size={14} />Open as note</a
+				>
+			{:else if !id}
+				<button type="button" class="btn small" onclick={makeNode}
+					><Icon name="plus" size={14} />Make it a node</button
+				>
+			{/if}
+			{#if variant === 'inline'}
+				<button type="button" class="btn small" onclick={onclose}>Done</button>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -223,6 +237,14 @@
 		font-family: var(--font-ui);
 		font-size: 0.82rem;
 		animation: open 0.16s var(--ease);
+	}
+	.actions.sheet {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		box-shadow: none;
+		font-size: 0.88rem;
+		animation: none;
 	}
 	@keyframes open {
 		from {

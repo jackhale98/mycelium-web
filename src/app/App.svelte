@@ -6,6 +6,7 @@
 	import Icon from './components/Icon.svelte';
 	import MobileBar from './components/MobileBar.svelte';
 	import NewNoteDialog from './components/NewNoteDialog.svelte';
+	import HeadingSheet from './org/HeadingSheet.svelte';
 	import Sidebar from './components/Sidebar.svelte';
 	import SyncDialog from './components/SyncDialog.svelte';
 	import { href, router } from './router.svelte';
@@ -176,6 +177,7 @@
 <CommandPalette />
 <SyncDialog />
 <NewNoteDialog />
+<HeadingSheet />
 
 {#if app.sync.kind === 'done' || app.sync.kind === 'error'}
 	<div

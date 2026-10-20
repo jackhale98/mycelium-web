@@ -4,7 +4,6 @@
 	import Backlinks from '../components/Backlinks.svelte';
 	import OrgEditor from '../editor/OrgEditor.svelte';
 	import DateChip from '../org/DateChip.svelte';
-	import HeadingActions from '../org/HeadingActions.svelte';
 	import Icon from '../components/Icon.svelte';
 	import Blocks from '../org/OrgBlocks.svelte';
 	import TodoChip from '../org/TodoChip.svelte';
@@ -46,18 +45,15 @@
 	});
 
 	const refs = $derived(node?.refs ?? []);
-	let actions = $state(false);
-	/** The heading's own tags (a node's `tags` include inherited ones). */
-	const ownTags = $derived.by(() => {
-		void app.rev;
-		if (!node || node.level === 0) return [];
-		const line = app.vault.file(node.file)?.source.slice(node.pos).split('\n', 1)[0] ?? '';
-		return /[ \t](:(?:[^\s:]+:)+)[ \t]*$/.exec(line)?.[1]?.split(':').filter(Boolean) ?? [];
-	});
 	const done = $derived(!!node?.todo && keywords.doneKeywords.includes(node.todo));
 
 	$effect(() => {
 		document.title = node ? `${node.title} · Mycelium` : 'Not found · Mycelium';
+	});
+
+	// The editor reads editAt once on open; clear it for next time.
+	$effect(() => {
+		if (!app.editing) app.editAt = null;
 	});
 
 	function onkeydown(e: KeyboardEvent) {
@@ -94,8 +90,8 @@
 						<button
 							type="button"
 							class="btn small"
-							aria-expanded={actions}
-							onclick={() => (actions = !actions)}
+							aria-haspopup="dialog"
+							onclick={() => (app.headingSheet = { path: node.file, pos: node.pos })}
 							><Icon name="settings" size={14} />Properties</button
 						>
 					{/if}
@@ -174,26 +170,11 @@
 				</div>
 			</header>
 
-			{#if actions && node.level > 0 && !app.editing}
-				<HeadingActions
-					path={node.file}
-					offset={node.pos}
-					todo={node.todo}
-					priority={node.priority}
-					tags={ownTags}
-					scheduled={node.scheduled}
-					deadline={node.deadline}
-					id={node.id}
-					nodeAction={false}
-					{keywords}
-					onclose={() => (actions = false)}
-				/>
-			{/if}
 			{#if app.editing}
 				{#key node.file}
 					<OrgEditor
 						path={node.file}
-						focusAt={node.level > 0 ? node.pos : null}
+						focusAt={app.editAt ?? (node.level > 0 ? node.pos : null)}
 						label={`Org source of ${node.title}`}
 					/>
 				{/key}

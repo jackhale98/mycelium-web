@@ -11,6 +11,8 @@
 		ts,
 		editable = true,
 		compact = false,
+		label,
+		overdue = false,
 	}: {
 		path: string;
 		offset: number;
@@ -18,6 +20,9 @@
 		ts: OrgTimestamp;
 		editable?: boolean;
 		compact?: boolean;
+		/** Replaces the date text (e.g. "Tomorrow · 09:00"). */
+		label?: string;
+		overdue?: boolean;
 	} = $props();
 
 	let input: HTMLInputElement | undefined = $state();
@@ -26,7 +31,7 @@
 	const ICON = { DEADLINE: 'alert', SCHEDULED: 'calendar', CLOSED: 'check' } as const;
 	const value = $derived(ts.time ? `${ts.date}T${ts.time}` : ts.date);
 	const text = $derived(
-		`${compact ? '' : `${LABEL[kind]} `}${tsLabel(ts)}${ts.repeater ? ` · ↻ ${ts.repeater}` : ''}`,
+		`${compact ? '' : `${LABEL[kind]} `}${label ?? tsLabel(ts)}${ts.repeater ? ` · ↻ ${ts.repeater}` : ''}`,
 	);
 
 	/** Open the platform's own date picker. */
@@ -42,7 +47,7 @@
 </script>
 
 {#if editable}
-	<span class="date {kind.toLowerCase()}">
+	<span class="date {kind.toLowerCase()}" class:overdue>
 		<button
 			type="button"
 			class="face"
@@ -148,6 +153,11 @@
 	.scheduled {
 		background: var(--next-soft);
 		color: var(--next);
+	}
+	.date.overdue {
+		background: var(--danger-soft);
+		color: var(--danger);
+		box-shadow: inset 0 0 0 1px currentColor;
 	}
 	.closed {
 		background: var(--done-soft);

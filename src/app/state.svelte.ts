@@ -18,6 +18,8 @@ import {
 	getPlanning,
 	roamFileName,
 	setHeadlineTags,
+	setHeadlineTitle,
+	headlineAt,
 	setPlanning,
 	setPriority,
 	setProperty,
@@ -155,6 +157,10 @@ class AppState {
 	navOpen = $state(false);
 	/** Notes open in the source editor instead of the reading view. */
 	editing = $state(false);
+	/** Where the editor should put the cursor when it next opens (a heading's offset). */
+	editAt = $state<number | null>(null);
+	/** The heading open in the heading sheet, if any. */
+	headingSheet = $state<{ path: string; pos: number } | null>(null);
 	/** Open the new-note dialog, optionally with a title. */
 	newNote = $state<{ title: string } | null>(null);
 
@@ -657,6 +663,48 @@ class AppState {
 			result.text,
 			`${result.repeated ? 'Repeat' : (result.keyword ?? 'Clear state')}: ${heading}`,
 		);
+	}
+
+	/** A heading's current state, read from its file (for the heading sheet). */
+	heading(path: string, pos: number) {
+		void this.rev;
+		const file = this.vault.file(path);
+		if (!file) return null;
+		const kw = file.index.keywords;
+		const h = headlineAt(file.source, pos, kw);
+		if (!h || h.line.from !== pos) return null;
+		const planning = getPlanning(file.source, pos, kw);
+		const entry = file.index.headlines.find((e) => e.pos === pos);
+		return {
+			level: h.level,
+			todo: h.keyword?.value ?? null,
+			priority: h.priority?.value ?? null,
+			title: h.title.value,
+			tags: h.tags?.values ?? [],
+			scheduled: planning.SCHEDULED,
+			deadline: planning.DEADLINE,
+			id: getProperty(file.source, pos, 'ID', kw),
+			ownerId: entry?.ownerId ?? null,
+			keywords: kw,
+		};
+	}
+
+	setTitle(path: string, offset: number, title: string) {
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#edit(
+			path,
+			(s) => setHeadlineTitle(s, offset, title, kw),
+			`Retitle heading in ${this.#title(path)}`,
+		);
+	}
+
+	/** Open the note that owns a heading in the editor, with the cursor on it. */
+	editHeading(path: string, pos: number): string | null {
+		const owner = this.vault.file(path)?.index.headlines.find((h) => h.pos === pos)?.ownerId;
+		if (!owner) return null;
+		this.editAt = pos;
+		this.editing = true;
+		return owner;
 	}
 
 	setPriority(path: string, offset: number, priority: string | null) {

@@ -215,3 +215,24 @@ test('text size setting scales the app and persists', async ({ page }) => {
 	await page.getByRole('radio', { name: 'Default' }).click();
 	expect(await root()).toBe(16);
 });
+
+test('edit a heading from the agenda: date chip and heading sheet', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	const row = page.locator('.agenda .item', { hasText: 'Ship the design system' }).first();
+	// The date chip opens the native picker; set the value as the picker would.
+	await row.locator('input[type="date"]').fill('2026-11-05');
+	await expect(row.getByRole('button', { name: /Due .*Change date/ })).toBeVisible();
+
+	await row.getByRole('button', { name: /Edit “Ship the design system”/ }).click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet).toBeVisible();
+	await sheet.getByRole('textbox', { name: 'Heading', exact: true }).fill('Ship the design tokens');
+	await sheet.getByRole('radio', { name: 'A', exact: true }).click();
+	await sheet.getByRole('button', { name: 'Done' }).click();
+	await expect(sheet).toBeHidden();
+
+	await open(page, 'app#/changes');
+	const diff = page.getByRole('region', { name: /Diff of .*mycelium_web\.org$/ });
+	await expect(diff).toContainText('* NEXT [#A] Ship the design tokens');
+	await expect(diff).toContainText('DEADLINE: <2026-11-05 Thu>');
+});
