@@ -7,9 +7,26 @@ Pages, installable on phones.
 
 Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/mycelium).
 
-> **Status:** early preview — see [the plan](docs/PLAN.md). Open any org-roam
-> git repository with an access token (OAuth sign-in comes next), or try the
-> public demo vault on the `demo-vault` branch of this repository.
+> **Status:** preview — see [the plan](docs/PLAN.md). Sign in with GitHub,
+> GitLab or Bitbucket (once [set up](docs/setup-git-providers.md)), paste an
+> access token, open a local folder (Chromium desktop), or try the built-in
+> demo vault.
+
+## What it does
+
+- **Read and edit** notes, rendered from org, with a live-preview source
+  editor (press <kbd>E</kbd>). Typing `[[` links to any note — or creates one.
+- **Headings at a click:** TODO state, priority, tags, and SCHEDULED/DEADLINE
+  dates through the native date picker. Click any date to change it.
+- **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
+  phrases and snippets, tags, backlinks, dailies and an agenda.
+- **Graph** of the whole vault or the neighbourhood of a note.
+- **Git, not a sync service.** Edits autosave to the working tree; you review
+  diffs, write commit messages, and pull/push/branch when you choose
+  (auto-commit is opt-in). Pulls never overwrite uncommitted work; conflicts
+  get a side-by-side resolver.
+- **Local folders** (Chrome, Edge and friends on desktop): edit an org-roam
+  directory in place and commit with your own tools.
 
 ## Principles
 
@@ -22,7 +39,7 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   lines, `CLOSED` stamps, all three repeater styles, checkbox cookies,
   `ROAM_ALIASES`, `ROAM_REFS` and `ROAM_EXCLUDE` behave as they do in Emacs.
 - **Private by design.** No backend holds your data. Tokens stay on your
-  device; the planned sync proxy is stateless and self-hostable.
+  device; the sync worker is stateless, logs nothing and is self-hostable.
 - **Fast and accessible.** Strict CSP, no third-party requests, self-hosted
   fonts, keyboard-first navigation and WCAG 2.1 AA checks in CI.
 
