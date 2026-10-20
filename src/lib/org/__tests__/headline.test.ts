@@ -116,10 +116,17 @@ describe('setHeadlineTags', () => {
 	});
 
 	it('keeps right-aligned tags ending in the same column', () => {
-		const src = '* Task                                                          :work:';
+		// org's default org-tags-column (-77) right-aligns the block to column 77.
+		const src = `* Task${' '.repeat(65)}:work:`;
+		expect(src.length).toBe(77);
 		const out = apply(src, setHeadlineTags(src, 0, ['work', 'home'], kw));
 		expect(out.length).toBe(src.length);
 		expect(out.endsWith(' :work:home:')).toBe(true);
+	});
+
+	it('leaves merely padded tags as written', () => {
+		const src = '* Task  :work:';
+		expect(apply(src, setHeadlineTags(src, 0, ['work', 'home'], kw))).toBe('* Task  :work:home:');
 	});
 
 	it('removes the block', () => {

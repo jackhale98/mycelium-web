@@ -15,7 +15,8 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test:e2e": "playwright test",
-		"screenshots": "node scripts/screenshots.mjs"
+		"screenshots": "node scripts/screenshots.mjs",
+		"corpus": "node scripts/fetch-corpus.mjs"
 	},
 	"dependencies": {
 		"@astrojs/svelte": "^9.1.0",

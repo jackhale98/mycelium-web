@@ -18,7 +18,8 @@ import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig, type Span } from './types';
 
 const DRAWER_START_RE = /^[ \t]*:PROPERTIES:[ \t]*$/i;
 const DRAWER_END_RE = /^[ \t]*:END:[ \t]*$/i;
-const PROPERTY_RE = /^([ \t]*):([^\s:]+):(?:([ \t]+)(.*?))?[ \t]*$/;
+/** `:KEY: value`; keys may themselves contain colons (`:header-args:emacs-lisp:`). */
+const PROPERTY_RE = /^([ \t]*):(\S+?):(?:([ \t]+)(.*?))?[ \t]*$/;
 
 export interface Property {
 	/** Key as written (case preserved). */

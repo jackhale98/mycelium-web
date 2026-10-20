@@ -3,3 +3,4 @@ node_modules
 .astro
 package-lock.json
 tests/fixtures
+tests/corpus/.cache

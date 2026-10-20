@@ -10,8 +10,29 @@ import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig, type Span } from './types';
 const TAG_RE = /^[\p{L}\p{N}_@#%]+$/u;
 const TAG_BLOCK_RE = /(^|[ \t]+)(:(?:[\p{L}\p{N}_@#%]+:)+)[ \t]*$/u;
 const PRIORITY_RE = /^\[#([A-Z0-9]+)\]/;
-/** Tag blocks ending at or beyond this column with padding before them are treated as aligned. */
-const ALIGNED_TAGS_MIN_COLUMN = 50;
+/** End column of right-aligned tags with org's default `org-tags-column` of -77. */
+const ORG_TAGS_COLUMN = 77;
+
+/**
+ * The column the file right-aligns tag blocks to: the most common end column
+ * among padded tag blocks (seen at least twice), else org's default.
+ */
+function tagsColumn(lines: readonly Line[], config: KeywordConfig): number {
+	const counts = new Map<number, number>();
+	for (const line of lines) {
+		if (!line.text.startsWith('*')) continue;
+		const h = scanHeadline(line, config);
+		if (!h?.tags) continue;
+		const gapFrom = Math.max(h.title.to, h.priority?.to ?? 0, h.keyword?.to ?? 0, h.contentFrom);
+		if (h.tags.from - gapFrom < 2) continue;
+		const end = [...line.text.slice(0, h.tags.to - line.from)].length;
+		counts.set(end, (counts.get(end) ?? 0) + 1);
+	}
+	let best = ORG_TAGS_COLUMN;
+	let bestCount = 1;
+	for (const [col, n] of counts) if (n > bestCount) [best, bestCount] = [col, n];
+	return best;
+}
 
 export interface HeadlineScan {
 	line: Line;
@@ -194,11 +215,11 @@ function removeToken(line: Line, span: Span, floor: number): Change {
 	if (end < text.length) {
 		to = end;
 	} else {
+		// Last token on the line: take the whitespace before it, keep any after it.
 		let start = from;
 		while (start > floor - line.from && (text[start - 1] === ' ' || text[start - 1] === '\t'))
 			start -= 1;
 		from = start;
-		to = text.length;
 	}
 	return { from: line.from + from, to: line.from + to, insert: '' };
 }
@@ -282,19 +303,21 @@ export function setHeadlineTags(
 	if (!h.tags) {
 		if (!block) return [];
 		const at = Math.max(h.title.to, h.priority?.to ?? 0, h.keyword?.to ?? 0, h.contentFrom);
-		// Any trailing whitespace is absorbed into the single separating space.
-		return [{ from: at, to: h.line.to, insert: `${at > h.contentFrom ? ' ' : ''}${block}` }];
+		// Inserted right after the title; any trailing whitespace stays after the block.
+		return [{ from: at, to: at, insert: `${at > h.contentFrom ? ' ' : ''}${block}` }];
 	}
 	if (h.tags.values.join(':') === clean.join(':')) return [];
 	if (!block) return [removeToken(h.line, h.tags, h.title.to)];
 
-	// Preserve right alignment (org-tags-column, -77 by default): when the block
-	// clearly sits at a far column, padding shrinks or grows to keep its end fixed.
+	// Preserve right alignment (org-tags-column): when the block ends exactly at
+	// the file's tags column, padding shrinks or grows to keep its end fixed.
 	const gapFrom = Math.max(h.title.to, h.priority?.to ?? 0, h.keyword?.to ?? 0, h.contentFrom);
 	const gap = h.tags.from - gapFrom;
 	const endColumn = [...h.line.text.slice(0, h.tags.to - h.line.from)].length;
 	const gapText = h.line.text.slice(gapFrom - h.line.from, h.tags.from - h.line.from);
-	if (gap > 1 && endColumn >= ALIGNED_TAGS_MIN_COLUMN && !gapText.includes('\t')) {
+	const aligned =
+		gap > 1 && !gapText.includes('\t') && endColumn === tagsColumn(splitLines(source), config);
+	if (aligned) {
 		const oldLen = h.tags.to - h.tags.from;
 		const newGap = Math.max(1, gap + oldLen - block.length);
 		return [{ from: gapFrom, to: h.tags.to, insert: `${' '.repeat(newGap)}${block}` }];

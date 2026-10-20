@@ -27,7 +27,8 @@ const BLOCK_START_RE = /^[ \t]*#\+begin_(\S+)/i;
 const DRAWER_START_RE = /^[ \t]*:PROPERTIES:[ \t]*$/i;
 const DRAWER_END_RE = /^[ \t]*:END:[ \t]*$/i;
 const ANY_DRAWER_RE = /^[ \t]*:([\w-]+):[ \t]*$/;
-const PROPERTY_RE = /^[ \t]*:([^\s:]+):(?:[ \t]+(.*?))?[ \t]*$/;
+/** `:KEY: value`; keys may themselves contain colons (`:header-args:emacs-lisp:`). */
+const PROPERTY_RE = /^[ \t]*:(\S+?):(?:[ \t]+(.*?))?[ \t]*$/;
 const PLANNING_RE = /^[ \t]*(?:(?:SCHEDULED|DEADLINE|CLOSED):[ \t]*[<[][^>\]\n]*[>\]][ \t]*)+$/;
 const PLANNING_ENTRY_RE = /(SCHEDULED|DEADLINE|CLOSED):[ \t]*/g;
 const TAGS_RE = /(?:^|[ \t]+)(:(?:[\p{L}\p{N}_@#%]+:)+)[ \t]*$/u;
@@ -45,6 +46,16 @@ const truthy = (v: string | undefined) =>
 
 function basename(path: string): string {
 	return (path.split('/').pop() ?? path).replace(/\.org$/i, '');
+}
+
+/**
+ * A heading's title the way org-roam records it: `org-get-heading` (keyword,
+ * priority, COMMENT and tags removed) passed through `org-link-display-format`
+ * — bracket links become their description (or the link itself), and
+ * everything else, markup and cookies included, stays as written.
+ */
+export function roamTitle(raw: string): string {
+	return raw.replace(LINK_REPLACE_RE, (_m, target: string, desc?: string) => desc ?? target).trim();
 }
 
 /** Strip org inline markup to readable text (links shown by description). */
@@ -250,7 +261,7 @@ export function scanFile(
 				ownTags = tm[1]!.split(':').filter((x) => x);
 				rest = rest.slice(0, tm.index);
 			}
-			const htitle = inlinePlain(rest).trim();
+			const htitle = roamTitle(rest);
 
 			// Planning on the next line, then a property drawer.
 			let k = n + 1;
@@ -340,15 +351,37 @@ export function scanFile(
 		collectLinks(n);
 	}
 
-	/** Record every bracket link on a line (outside inline verbatim/code). */
+	/**
+	 * Record every bracket link starting on a line (outside inline verbatim
+	 * and code). A description may wrap onto following lines of the same
+	 * paragraph — what `fill-paragraph` produces — so the search window
+	 * extends over them, and only matches starting on this line count.
+	 */
 	function collectLinks(index: number) {
 		const line = lines[index]!;
-		const masked = maskVerbatim(line.text);
+		let last = index;
+		if (!HEADLINE_RE.test(line.text) && /\[\[(?:(?!\]\]).)*$/.test(line.text)) {
+			while (last < index + 3 && last + 1 < lines.length) {
+				const next = lines[last + 1]!.text;
+				if (
+					next.trim() === '' ||
+					HEADLINE_RE.test(next) ||
+					/^[ \t]*#\+/.test(next) ||
+					ANY_DRAWER_RE.test(next)
+				)
+					break;
+				last += 1;
+				if (next.includes(']]')) break;
+			}
+		}
+		const window = last === index ? line.text : source.slice(line.from, lines[last]!.to);
+		const masked = window.split('\n').map(maskVerbatim).join('\n');
 		const base = line.from;
 		LINK_RE.lastIndex = 0;
 		const ownerId = owner();
 		if (!ownerId) return;
 		for (let m = LINK_RE.exec(masked); m; m = LINK_RE.exec(masked)) {
+			if (m.index >= line.text.length) break;
 			const target = m[1]!.replace(/\\(.)/g, '$1');
 			const colon = /^([a-zA-Z][\w+.-]*):(.*)$/s.exec(target);
 			const type = colon ? colon[1]!.toLowerCase() : 'fuzzy';

@@ -25,6 +25,13 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run check
+      - name: Cache real-world org corpus
+        uses: actions/cache@v4
+        with:
+          path: tests/corpus/.cache
+          key: org-corpus-${{ hashFiles('scripts/fetch-corpus.mjs') }}
+      - name: Fetch real-world org corpus
+        run: node scripts/fetch-corpus.mjs
       - run: npm test
       - run: npm run build
 

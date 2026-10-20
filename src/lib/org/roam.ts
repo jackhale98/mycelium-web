@@ -3,6 +3,7 @@
 
 import type { Headline, Keyword, OrgNode, Planning, PropertyDrawer, Section } from 'uniorg';
 import { parseTagList } from './keywords';
+import { roamTitle } from './scan';
 import { effectiveKeywords, endOf, parseOrg, plainText, startOf } from './parse';
 import { splitPropertyValues } from './properties';
 import { parseTimestamp } from './timestamp';
@@ -191,7 +192,7 @@ export function indexFileTree(
 		}
 		const drawer = next?.type === 'property-drawer' ? next : undefined;
 		const props = drawerProperties(drawer);
-		const htitle = plainText(headline.children).trim();
+		const htitle = roamTitle(headline.rawValue);
 		const tags = [...new Set([...parent.tags, ...headline.tags])];
 		const id =
 			!excluded && props['ID'] && !truthy(props['ROAM_EXCLUDE']) ? props['ID'].trim() : null;
