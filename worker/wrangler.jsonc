@@ -5,6 +5,9 @@
 	"name": "mycelium-sync",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-10-01",
+	// Keep variables set in the Cloudflare dashboard when deploying (secrets are always
+	// kept); otherwise every build would delete them.
+	"keep_vars": true,
 	// Stateless by design: no KV, D1, R2 or Durable Object bindings, and no logs.
 	"observability": { "enabled": false },
 	"vars": {
