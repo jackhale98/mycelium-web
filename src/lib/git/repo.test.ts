@@ -124,10 +124,58 @@ describe('GitRepo', () => {
 		expect(await b.readFile('a.org')).toContain('A (theirs)');
 	});
 
+	it('autosaves to the working tree without committing', async () => {
+		const a = open('clone-a');
+		const head = await a.head();
+		await a.write([{ path: 'draft.org', content: '#+title: Draft\n' }]);
+		expect(await a.head()).toBe(head);
+		expect(await a.readWorking('draft.org')).toBe('#+title: Draft\n');
+		await a.discard('draft.org');
+		expect(await a.readWorking('draft.org')).toBeNull();
+	});
+
+	it('refuses to pull over uncommitted edits to a file the remote changed', async () => {
+		const a = open('clone-a');
+		const b = open('clone-b');
+		await a.sync();
+		await b.sync();
+		await b.commit([{ path: 'new.org', content: '#+title: New (remote)\n' }], 'remote edit');
+		await b.sync();
+		await a.write([{ path: 'new.org', content: '#+title: New (local, uncommitted)\n' }]);
+		const result = await a.pull(new Set(['new.org']));
+		expect(result).toEqual({ status: 'blocked', paths: ['new.org'] });
+		expect(await a.readWorking('new.org')).toBe('#+title: New (local, uncommitted)\n');
+		await a.discard('new.org');
+		expect((await a.pull()).status).toBe('pulled');
+		expect(await a.readWorking('new.org')).toBe('#+title: New (remote)\n');
+	});
+
+	it('reports ahead and behind, and pushes explicitly', async () => {
+		const a = open('clone-a');
+		const b = open('clone-b');
+		await b.sync();
+		await a.commit([{ path: 'x.org', content: 'x\n' }], 'x');
+		expect(await a.aheadBehind()).toEqual({ ahead: 1, behind: 0 });
+		expect(await a.push()).toEqual({ status: 'pushed', commits: 1 });
+		expect(await b.fetch()).toEqual({ ahead: 0, behind: 1 });
+	});
+
+	it('creates and switches branches', async () => {
+		const a = open('clone-a');
+		await a.createBranch('experiment');
+		expect(await a.branch()).toBe('experiment');
+		await a.commit([{ path: 'exp.org', content: 'exp\n' }], 'experiment');
+		await a.switchBranch('main');
+		expect(await a.readWorking('exp.org')).toBeNull();
+		await a.switchBranch('experiment');
+		expect(await a.readWorking('exp.org')).toBe('exp\n');
+		await a.switchBranch('main');
+	});
+
 	it('exposes history and branches', async () => {
 		const a = open('clone-a');
 		const history = await a.log(10, 'new.org');
 		expect(history.at(-1)!.message).toBe('Add new');
-		expect(await a.branches()).toEqual(['main']);
+		expect(await a.branches()).toEqual(['experiment', 'main']);
 	});
 });

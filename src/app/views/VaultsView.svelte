@@ -96,7 +96,7 @@
 	async function remove(id: string, name: string) {
 		if (
 			!confirm(
-				`Remove the local copy of ${name}? Unsynced changes will be lost. The remote repository is not affected.`,
+				`Remove the local copy of ${name}? Uncommitted and unpushed work will be lost. The remote repository is not affected.`,
 			)
 		)
 			return;
@@ -112,7 +112,8 @@
 	<h1>Vaults</h1>
 	<p class="lede">
 		Open an org-roam repository from GitHub, GitLab, Bitbucket or any HTTPS git host. It's cloned
-		into this browser; you choose when to sync.
+		into this browser: edits save to the working tree, and you commit, pull and push when you
+		choose.
 	</p>
 
 	<ul class="vaults">
@@ -120,19 +121,19 @@
 			<span class="v-icon"><Icon name="zap" size={16} /></span>
 			<span class="v-text"
 				><span class="v-name">Demo vault</span><span class="v-sub"
-					>Built in · edits stay in this tab</span
+					>Local git repository · nothing leaves this browser</span
 				></span
 			>
 			{#if app.activeId === DEMO_ID}<span class="badge">Open</span>{:else}<button
 					type="button"
 					class="btn small"
 					onclick={() => {
-						app.useDemo();
+						void app.openDemo();
 						router.go(href.home());
 					}}>Open</button
 				>{/if}
 		</li>
-		{#each app.vaults as vault (vault.id)}
+		{#each app.vaults.filter((v) => v.id !== DEMO_ID) as vault (vault.id)}
 			<li class="vault" class:active={app.activeId === vault.id}>
 				<span class="v-icon"><Icon name="git" size={16} /></span>
 				<span class="v-text">

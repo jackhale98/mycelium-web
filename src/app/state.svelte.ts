@@ -1,9 +1,10 @@
 /// Application state shared across views. The vault is a mutable model, so a
 /// revision counter tells Svelte when derived views must recompute.
 ///
-/// Two kinds of vault exist: the bundled demo (edits stay in memory) and git
-/// vaults (every edit is a local commit; Sync pulls, merges and pushes). The
-/// git code is loaded on demand so the landing page and demo stay light.
+/// Every vault is a git repository in browser storage — the demo is a local
+/// one with no remote. Edits autosave to the working tree; the person reviews
+/// changes, writes a commit message, and pulls/pushes when they choose. The
+/// git code loads on demand so the first paint stays light.
 
 import {
 	appendToFile,
@@ -13,17 +14,34 @@ import {
 	detectLogSettings,
 	newNodeSource,
 	parseOrg,
+	parseTimestampInput,
+	getPlanning,
+	roamFileName,
+	setHeadlineTags,
+	setPlanning,
+	setPriority,
+	setProperty,
+	getProperty,
 	toggleCheckbox,
 	type KeywordConfig,
 	type LogSettings,
 	type OrgData,
+	type PlanningKind,
+	type Change,
 } from '$lib/org';
-import type { FileConflict, LoadProgress, Workspace } from '$lib/git/workspace';
+import type { FileConflict, FileStatus, LoadProgress, Workspace } from '$lib/git/workspace';
 import type { VaultRecord } from '$lib/store/db';
-import { dailyDate, dailyPath, DEFAULT_LAYOUT, type VaultLayout } from '$lib/vault/layout';
+import {
+	dailyDate,
+	dailyPath,
+	DEFAULT_LAYOUT,
+	nodePath,
+	type VaultLayout,
+} from '$lib/vault/layout';
 import { buildSearch } from '$lib/vault/search';
 import { Vault } from '$lib/vault/vault';
 import { demoSources } from './demo';
+import { slugify } from './util';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
@@ -71,6 +89,15 @@ export type SyncState =
 	| { kind: 'error'; message: string }
 	| { kind: 'done'; message: string };
 
+export interface GitState {
+	branch: string;
+	/** Uncommitted changes in the working tree. */
+	changes: FileStatus[];
+	ahead: number;
+	behind: number;
+	hasRemote: boolean;
+}
+
 export interface ConnectInput {
 	url: string;
 	provider: VaultRecord['provider'];
@@ -80,6 +107,26 @@ export interface ConnectInput {
 	username: string;
 	corsProxy: string | null;
 	author: VaultRecord['author'];
+	credentials?: VaultRecord['credentials'];
+}
+
+function demoRecord(): VaultRecord {
+	return {
+		id: DEMO_ID,
+		name: 'Demo vault',
+		provider: 'other',
+		url: null,
+		branch: 'main',
+		corsProxy: null,
+		author: { name: 'You', email: 'you@example.com' },
+		credentials: null,
+		layout: DEFAULT_LAYOUT,
+		keywords: DEMO_KEYWORDS,
+		log: {},
+		createdAt: Date.now(),
+		lastSync: null,
+		dirty: [],
+	};
 }
 
 class AppState {
@@ -90,6 +137,8 @@ class AppState {
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
+	/** Open the new-note dialog, optionally with a title. */
+	newNote = $state<{ title: string } | null>(null);
 
 	workspace: Workspace | null = $state.raw(null);
 	vaults = $state<VaultRecord[]>([]);
@@ -100,11 +149,11 @@ class AppState {
 	loading = $state<LoadProgress | null>(null);
 	loadError = $state<string | null>(null);
 	sync = $state<SyncState>({ kind: 'idle' });
-	/** Local commits not yet pushed (git vaults) or edited paths (demo). */
-	unsynced = $state(0);
+	git = $state<GitState>({ branch: 'main', changes: [], ahead: 0, behind: 0, hasRemote: false });
 	ready = $state(false);
 
 	#saving: Promise<void> = Promise.resolve();
+	#statusTimer: ReturnType<typeof setTimeout> | null = null;
 	#search = $derived.by(() => {
 		void this.rev;
 		return buildSearch(this.vault);
@@ -112,7 +161,7 @@ class AppState {
 	#trees = new Map<string, { source: string; tree: OrgData }>();
 
 	get demo() {
-		return this.workspace === null;
+		return this.activeId === DEMO_ID;
 	}
 
 	get search() {
@@ -123,7 +172,12 @@ class AppState {
 		return this.vaults.find((v) => v.id === this.activeId) ?? null;
 	}
 
-	/** Restore the last-used vault. */
+	/** Things not yet pushed: uncommitted files plus local commits. */
+	get unsynced(): number {
+		return this.git.changes.length + this.git.ahead;
+	}
+
+	/** Restore the last-used vault (the demo by default). */
 	async init() {
 		try {
 			const { db } = await import('$lib/store/db');
@@ -134,6 +188,7 @@ class AppState {
 		const active = readLocal(ACTIVE_KEY);
 		if (active && active !== DEMO_ID && this.vaults.some((v) => v.id === active))
 			await this.openVault(active);
+		else await this.openDemo();
 		this.ready = true;
 	}
 
@@ -157,28 +212,46 @@ class AppState {
 
 	// ------------------------------------------------------------------ vaults
 
-	useDemo() {
-		this.workspace = null;
-		this.activeId = DEMO_ID;
-		this.layout = DEFAULT_LAYOUT;
-		this.vault = Vault.fromSources(demoSources, DEMO_KEYWORDS);
-		this.logSettings = detectLogSettings(Object.values(demoSources));
-		this.unsynced = 0;
-		this.sync = { kind: 'idle' };
-		this.#trees.clear();
+	/** Open the demo: a local git repository (no remote) seeded with the demo notes. */
+	async openDemo() {
+		try {
+			const { Workspace } = await import('$lib/git/workspace');
+			const existing = this.vaults.find((v) => v.id === DEMO_ID);
+			const ws = existing
+				? Workspace.open($state.snapshot(existing) as VaultRecord)
+				: await Workspace.createLocal(demoRecord(), demoSources, 'Demo vault');
+			if (!existing) this.vaults = [...this.vaults, ws.record];
+			await this.#activate(ws);
+		} catch (e) {
+			// No IndexedDB (e.g. some private windows): the demo still works in memory.
+			console.warn('Demo vault falling back to memory:', e);
+			this.workspace = null;
+			this.activeId = DEMO_ID;
+			this.layout = DEFAULT_LAYOUT;
+			this.vault = Vault.fromSources(demoSources, DEMO_KEYWORDS);
+			this.rev += 1;
+		} finally {
+			this.loading = null;
+		}
 		writeLocal(ACTIVE_KEY, DEMO_ID);
-		this.rev += 1;
+	}
+
+	/** Throw the demo away and start it fresh. */
+	async resetDemo() {
+		const demo = this.vaults.find((v) => v.id === DEMO_ID);
+		if (demo) await this.removeVault(DEMO_ID, false);
+		await this.openDemo();
 	}
 
 	async openVault(id: string) {
+		if (id === DEMO_ID) return this.openDemo();
 		const record = this.vaults.find((v) => v.id === id);
 		if (!record) return;
 		this.loadError = null;
 		this.loading = { phase: 'Opening vault', ratio: null };
 		try {
 			const { Workspace } = await import('$lib/git/workspace');
-			const ws = Workspace.open($state.snapshot(record) as VaultRecord);
-			await this.#activate(ws);
+			await this.#activate(Workspace.open($state.snapshot(record) as VaultRecord));
 		} catch (e) {
 			this.loadError = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -200,20 +273,21 @@ class AppState {
 				branch: input.branch,
 				corsProxy: input.corsProxy,
 				author: input.author,
-				credentials: input.token
-					? { token: input.token, username: input.username || undefined }
-					: null,
+				credentials:
+					input.credentials ??
+					(input.token ? { token: input.token, username: input.username || undefined } : null),
 				layout: DEFAULT_LAYOUT,
 				keywords: DEMO_KEYWORDS,
 				log: {},
 				createdAt: Date.now(),
 				lastSync: Date.now(),
+				dirty: [],
 			};
 			const ws = await Workspace.create(
 				record,
 				(p) => (this.loading = { ...p, phase: `Cloning · ${p.phase}` }),
 			);
-			this.vaults = [...this.vaults, ws.record];
+			this.vaults = [...this.vaults.filter((v) => v.id !== ws.record.id), ws.record];
 			await this.#activate(ws);
 			return true;
 		} catch (e) {
@@ -226,32 +300,30 @@ class AppState {
 
 	async #activate(ws: Workspace) {
 		const files = await ws.load((p) => (this.loading = p));
-		const vault = Vault.fromIndexed(files, ws.record.keywords);
 		this.workspace = ws;
 		this.activeId = ws.record.id;
 		this.layout = ws.record.layout;
-		this.vault = vault;
+		this.vault = Vault.fromIndexed(files, ws.record.keywords);
 		this.logSettings = { ...detectLogSettings(files.map((f) => f.source)), ...ws.record.log };
 		this.#trees.clear();
 		this.sync = { kind: 'idle' };
-		this.unsynced = await ws.unpushed();
 		writeLocal(ACTIVE_KEY, ws.record.id);
 		this.rev += 1;
+		await this.refreshGit();
 	}
 
 	async updateVault(patch: Partial<VaultRecord>) {
-		if (!this.workspace) return;
-		await this.workspace.updateRecord(patch);
-		this.vaults = this.vaults.map((v) =>
-			v.id === this.workspace!.record.id ? { ...this.workspace!.record } : v,
-		);
-		if (patch.keywords) await this.workspace.clearCache();
-		if (patch.layout || patch.keywords) await this.openVault(this.workspace.record.id);
+		const ws = this.workspace;
+		if (!ws) return;
+		await ws.updateRecord(patch);
+		this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
+		if (patch.keywords) await ws.clearCache();
+		if (patch.layout || patch.keywords) await this.openVault(ws.record.id);
 		if (patch.log) this.logSettings = { ...this.logSettings, ...patch.log };
 	}
 
-	/** Remove a vault's local copy. Unsynced commits are lost; the remote is untouched. */
-	async removeVault(id: string) {
+	/** Remove a vault's local copy. Uncommitted and unpushed work is lost; the remote is untouched. */
+	async removeVault(id: string, reopen = true) {
 		const record = this.vaults.find((v) => v.id === id);
 		if (!record) return;
 		const { Workspace } = await import('$lib/git/workspace');
@@ -261,33 +333,48 @@ class AppState {
 				: Workspace.open($state.snapshot(record) as VaultRecord);
 		await ws.destroy();
 		this.vaults = this.vaults.filter((v) => v.id !== id);
-		if (this.activeId === id) this.useDemo();
+		if (this.activeId === id && reopen) await this.openDemo();
 	}
 
 	// ------------------------------------------------------------------ edits
 
-	/** Apply a new file text: update the model now, commit in the background. */
+	/**
+	 * Apply a new file text: update the model now, autosave to the working
+	 * tree in the background (and commit, if the vault auto-commits).
+	 */
 	#write(path: string, text: string | null, message: string) {
 		const [file] = this.vault.apply([{ path, source: text }]);
 		this.rev += 1;
 		const ws = this.workspace;
-		if (!ws) {
-			this.unsynced += 1;
-			return;
-		}
+		if (!ws) return;
 		this.#saving = this.#saving
 			.then(async () => {
-				await ws.save([{ path, source: text, ...(file ? { file } : {}) }], message);
-				this.unsynced = await ws.unpushed();
+				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);
+				if (ws.record.autoCommit) await ws.commit([path], message);
+				this.#scheduleStatus();
 			})
 			.catch((e) => {
 				this.sync = { kind: 'error', message: `Could not save ${path}: ${describeGitError(e)}` };
 			});
 	}
 
-	/** Resolves once every pending save has been committed. */
+	#edit(path: string, changes: (source: string) => Change[], message: string) {
+		const file = this.vault.file(path);
+		if (!file) return;
+		const next = applyChanges(file.source, changes(file.source));
+		if (next !== file.source) this.#write(path, next, message);
+	}
+
+	/** Resolves once every pending autosave has been written. */
 	flush(): Promise<void> {
 		return this.#saving;
+	}
+
+	/** Replace a file's text (the source editor; it sends only what changed). */
+	setSource(path: string, text: string) {
+		const file = this.vault.file(path);
+		if (!file || file.source === text) return;
+		this.#write(path, text, `Edit ${this.#title(path)}`);
 	}
 
 	dailyPath(date: string): string {
@@ -314,6 +401,22 @@ class AppState {
 		if (!this.vault.file(path))
 			this.#write(path, newNodeSource(date, crypto.randomUUID()), `Create daily note ${date}`);
 		return this.vault.fileNode(path)?.id ?? null;
+	}
+
+	/**
+	 * Create a new node file the way org-roam's default template does:
+	 * `%<%Y%m%d%H%M%S>-${slug}.org` with an `:ID:` drawer and `#+title:`.
+	 * Returns its id (an existing node with that title is reused).
+	 */
+	createNode(title: string, tags: string[] = []): string | null {
+		const clean = title.replace(/\s+/g, ' ').trim();
+		if (!clean) return null;
+		const existing = this.vault.titles.get(clean.toLowerCase());
+		if (existing) return existing;
+		const id = crypto.randomUUID();
+		const path = nodePath(this.layout, roamFileName(slugify(clean) || 'note', new Date()));
+		this.#write(path, newNodeSource(clean, id, { filetags: tags }), `Create ${clean}`);
+		return id;
 	}
 
 	/** Append a capture to today's daily note. */
@@ -356,19 +459,125 @@ class AppState {
 		);
 	}
 
+	setPriority(path: string, offset: number, priority: string | null) {
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#edit(
+			path,
+			(s) => setPriority(s, offset, priority, kw),
+			`Set priority in ${this.#title(path)}`,
+		);
+	}
+
+	setTags(path: string, offset: number, tags: string[]) {
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#edit(path, (s) => setHeadlineTags(s, offset, tags, kw), `Tag ${this.#title(path)}`);
+	}
+
+	/** Set or clear a SCHEDULED/DEADLINE date (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`), keeping repeaters. */
+	setPlanningDate(path: string, offset: number, kind: PlanningKind, input: string | null) {
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#edit(
+			path,
+			(s) => {
+				if (!input) return setPlanning(s, offset, kind, null, kw);
+				const base = getPlanning(s, offset, kw)[kind];
+				const ts = parseTimestampInput(input, base, { active: kind !== 'CLOSED' });
+				return ts ? setPlanning(s, offset, kind, ts, kw) : [];
+			},
+			`${input ? 'Set' : 'Clear'} ${kind.toLowerCase()} in ${this.#title(path)}`,
+		);
+	}
+
+	/** Give a heading an `:ID:` so org-roam treats it as a node. Returns the id. */
+	makeNode(path: string, offset: number): string | null {
+		const file = this.vault.file(path);
+		if (!file) return null;
+		const existing = getProperty(file.source, offset, 'ID', file.index.keywords);
+		if (existing) return existing;
+		const id = crypto.randomUUID();
+		this.#edit(
+			path,
+			(s) => setProperty(s, offset, 'ID', id, file.index.keywords),
+			`Make a node in ${this.#title(path)}`,
+		);
+		return id;
+	}
+
 	#title(path: string) {
 		return this.vault.file(path)?.index.title ?? path;
 	}
 
-	// ------------------------------------------------------------------ sync
+	// ------------------------------------------------------------------ git
 
-	async syncNow(resolutions?: Map<string, string>) {
+	#scheduleStatus() {
+		if (this.#statusTimer) clearTimeout(this.#statusTimer);
+		this.#statusTimer = setTimeout(() => void this.refreshGit(), 250);
+	}
+
+	/** Re-read branch, uncommitted changes and ahead/behind (no network). */
+	async refreshGit() {
 		const ws = this.workspace;
-		if (!ws || this.sync.kind === 'busy') return;
-		this.sync = { kind: 'busy', phase: 'Saving' };
+		if (!ws) return;
+		const [changes, counts, branch] = await Promise.all([
+			ws.status(),
+			ws.aheadBehind(),
+			ws.repo.branch(),
+		]);
+		this.git = { branch, changes, ...counts, hasRemote: ws.repo.hasRemote() };
+	}
+
+	async commit(paths: string[], message: string): Promise<boolean> {
+		const ws = this.workspace;
+		if (!ws || !message.trim() || paths.length === 0) return false;
+		await this.flush();
+		await ws.commit(paths, message.trim());
+		await this.refreshGit();
+		this.sync = {
+			kind: 'done',
+			message: `Committed ${paths.length} ${paths.length === 1 ? 'file' : 'files'}`,
+		};
+		return true;
+	}
+
+	async discard(path: string) {
+		const ws = this.workspace;
+		if (!ws) return;
+		await this.flush();
+		const text = await ws.discard(path);
+		const [file] = this.vault.apply([{ path, source: text }]);
+		await ws.cache([{ path, source: text, ...(file ? { file } : {}) }]);
+		this.rev += 1;
+		await this.refreshGit();
+	}
+
+	async #run<T>(phase: string, task: (ws: Workspace) => Promise<T>): Promise<T | undefined> {
+		const ws = this.workspace;
+		if (!ws || this.sync.kind === 'busy') return undefined;
+		this.sync = { kind: 'busy', phase };
 		try {
 			await this.flush();
-			const result = await ws.sync(
+			return await task(ws);
+		} catch (e) {
+			const readOnly =
+				!ws.record.credentials && (e as { code?: string }).code === 'UserCanceledError';
+			this.sync = {
+				kind: 'error',
+				message: readOnly
+					? 'This vault is read-only: your commits stay here. Add an access token in Settings to push them.'
+					: describeGitError(e),
+			};
+			return undefined;
+		} finally {
+			if (this.sync.kind === 'busy') this.sync = { kind: 'idle' };
+			await this.refreshGit().catch(() => undefined);
+			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
+		}
+	}
+
+	/** Fetch, then fast-forward or merge. Conflicts open the resolver; uncommitted files are never overwritten. */
+	async pull(resolutions?: Map<string, string>) {
+		await this.#run('Pulling', async (ws) => {
+			const result = await ws.pull(
 				resolutions,
 				(p) => (this.sync = { kind: 'busy', phase: p.phase }),
 			);
@@ -376,11 +585,20 @@ class AppState {
 				case 'conflict':
 					this.sync = { kind: 'conflict', conflicts: result.conflicts };
 					return;
+				case 'blocked':
+					this.sync = {
+						kind: 'error',
+						message: `The remote changed ${result.paths.join(', ')}, which you've edited but not committed. Commit (or discard) those first, then pull.`,
+					};
+					return;
 				case 'unsupported-conflict':
 					this.sync = {
 						kind: 'error',
-						message: `A file was deleted on one side and edited on the other: ${result.paths.join(', ')}. Resolve it with another git client, then sync again.`,
+						message: `A file was deleted on one side and edited on the other: ${result.paths.join(', ')}. Resolve it with another git client.`,
 					};
+					return;
+				case 'no-remote':
+					this.sync = { kind: 'done', message: 'This vault has no remote' };
 					return;
 				case 'pulled':
 				case 'merged': {
@@ -394,34 +612,65 @@ class AppState {
 						})),
 					);
 					this.rev += 1;
+					const n = result.changes.length;
 					this.sync = {
 						kind: 'done',
-						message: `${result.status === 'merged' ? 'Merged' : 'Pulled'} ${result.changes.length} ${result.changes.length === 1 ? 'file' : 'files'}`,
+						message:
+							result.status === 'merged'
+								? `Merged ${n} ${n === 1 ? 'file' : 'files'} — push when ready`
+								: `Pulled ${n} ${n === 1 ? 'file' : 'files'}`,
 					};
-					break;
+					return;
 				}
-				case 'pushed':
-					this.sync = {
-						kind: 'done',
-						message: `Pushed ${result.commits} ${result.commits === 1 ? 'change' : 'changes'}`,
-					};
-					break;
 				default:
-					this.sync = { kind: 'done', message: 'Up to date' };
+					this.sync = { kind: 'done', message: 'Already up to date' };
 			}
-			this.unsynced = await ws.unpushed();
-			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
-		} catch (e) {
-			const readOnly =
-				!ws.record.credentials && (e as { code?: string }).code === 'UserCanceledError';
+		});
+	}
+
+	async push() {
+		await this.#run('Pushing', async (ws) => {
+			const result = await ws.push((p) => (this.sync = { kind: 'busy', phase: p.phase }));
 			this.sync = {
-				kind: 'error',
-				message: readOnly
-					? 'This vault is read-only, so your changes are saved here but not pushed. Add an access token in Settings to sync them.'
-					: describeGitError(e),
+				kind: 'done',
+				message:
+					result.status === 'pushed'
+						? `Pushed ${result.commits} ${result.commits === 1 ? 'commit' : 'commits'}`
+						: result.status === 'no-remote'
+							? 'This vault has no remote'
+							: 'Nothing to push',
 			};
-			this.unsynced = await ws.unpushed().catch(() => this.unsynced);
-		}
+		});
+	}
+
+	async fetchRemote() {
+		await this.#run('Fetching', async (ws) => {
+			const { behind } = await ws.fetch();
+			this.sync = {
+				kind: 'done',
+				message: behind
+					? `${behind} new ${behind === 1 ? 'commit' : 'commits'} to pull`
+					: 'Already up to date',
+			};
+		});
+	}
+
+	async switchBranch(name: string) {
+		const ws = this.workspace;
+		if (!ws) return;
+		await this.#run(`Switching to ${name}`, async () => {
+			await ws.switchBranch(name);
+			await ws.clearCache();
+			await this.#activate(ws);
+			this.sync = { kind: 'done', message: `On ${name}` };
+		});
+	}
+
+	async createBranch(name: string) {
+		await this.#run(`Creating ${name}`, async (ws) => {
+			await ws.createBranch(name);
+			this.sync = { kind: 'done', message: `Created and switched to ${name}` };
+		});
 	}
 
 	dismissSync() {
@@ -431,7 +680,11 @@ class AppState {
 
 /** Turn isomorphic-git and network failures into something a person can act on. */
 export function describeGitError(e: unknown): string {
-	const err = e as { code?: string; message?: string; data?: { statusCode?: number } };
+	const err = e as {
+		code?: string;
+		message?: string;
+		data?: { statusCode?: number; reason?: string };
+	};
 	const status = err?.data?.statusCode;
 	if (err?.code === 'HttpError' && (status === 401 || status === 403))
 		return 'The git host refused access. Check the repository URL and that your token can read (and write) it.';
@@ -440,7 +693,7 @@ export function describeGitError(e: unknown): string {
 	if (err?.code === 'UserCanceledError')
 		return 'Authentication is required. Add an access token for this repository.';
 	if (err?.code === 'PushRejectedError')
-		return 'The remote changed while syncing. Sync again to merge.';
+		return 'The remote has commits you don’t have yet. Pull first, then push.';
 	if (err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError'))
 		return 'Could not reach the git host or sync proxy. Check your connection and the proxy in Settings.';
 	return err?.message ?? String(e);

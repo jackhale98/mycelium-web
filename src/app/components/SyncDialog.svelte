@@ -20,7 +20,7 @@
 		const resolutions = new Map(
 			conflicts.map((c) => [c.path, choices[c.path] === 'theirs' ? c.theirs : c.ours]),
 		);
-		app.syncNow(resolutions);
+		void app.pull(resolutions);
 	}
 
 	const trim = (s: string) => (s.endsWith('\n') ? s.slice(0, -1) : s) || '(empty)';
@@ -37,7 +37,7 @@
 		<p>
 			{conflicts.length === 1 ? 'One file was' : `${conflicts.length} files were`} edited here and elsewhere
 			in a way that can't be combined automatically. Choose which version to keep for each — everything
-			else has merged cleanly.
+			else has merged cleanly. The merge is committed locally; push when you're ready.
 		</p>
 	</header>
 	<div class="files">
@@ -47,11 +47,11 @@
 				{#each file.hunks.filter((h) => h.conflict) as hunk, i (i)}
 					<div class="hunk">
 						<div class="side" class:chosen={choices[file.path] !== 'theirs'}>
-							<span class="who">This device</span>
+							<span class="who">Yours (HEAD)</span>
 							<pre>{trim(hunk.conflict!.ours)}</pre>
 						</div>
 						<div class="side" class:chosen={choices[file.path] === 'theirs'}>
-							<span class="who">Remote</span>
+							<span class="who">Theirs (origin)</span>
 							<pre>{trim(hunk.conflict!.theirs)}</pre>
 						</div>
 					</div>
@@ -61,13 +61,13 @@
 						type="button"
 						role="radio"
 						aria-checked={choices[file.path] !== 'theirs'}
-						onclick={() => (choices[file.path] = 'ours')}>Keep this device's</button
+						onclick={() => (choices[file.path] = 'ours')}>Keep yours</button
 					>
 					<button
 						type="button"
 						role="radio"
 						aria-checked={choices[file.path] === 'theirs'}
-						onclick={() => (choices[file.path] = 'theirs')}>Use remote</button
+						onclick={() => (choices[file.path] = 'theirs')}>Use theirs</button
 					>
 				</div>
 			</section>
@@ -75,7 +75,7 @@
 	</div>
 	<footer>
 		<button type="button" class="btn" onclick={() => app.dismissSync()}>Decide later</button>
-		<button type="button" class="btn primary" onclick={resolve}>Merge and sync</button>
+		<button type="button" class="btn primary" onclick={resolve}>Merge</button>
 	</footer>
 </dialog>
 

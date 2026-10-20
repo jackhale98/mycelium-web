@@ -10,6 +10,7 @@
 	import { href, router } from './router.svelte';
 	import { app } from './state.svelte';
 	import AgendaView from './views/AgendaView.svelte';
+	import ChangesView from './views/ChangesView.svelte';
 	import DailyView from './views/DailyView.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
@@ -93,8 +94,8 @@
 			<div class="demo-banner" role="note">
 				<Icon name="zap" size={14} />
 				<span
-					>You're exploring the demo vault — edits stay in this tab. <a href={href.vaults()}
-						>Open your own repository</a
+					>You're exploring the demo vault — a local git repo in this browser. <a
+						href={href.vaults()}>Open your own repository</a
 					></span
 				>
 			</div>
@@ -126,6 +127,8 @@
 			<TagsView tag={router.route.tag} />
 		{:else if router.route.name === 'vaults'}
 			<VaultsView />
+		{:else if router.route.name === 'changes'}
+			<ChangesView />
 		{:else if router.route.name === 'settings'}
 			{#key app.activeId}<SettingsView />{/key}
 		{:else}

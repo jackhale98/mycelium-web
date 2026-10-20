@@ -3,7 +3,7 @@
 	import { app, localNow, type ThemeChoice } from '../state.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
 	import Logo from './Logo.svelte';
-	import SyncControl from './SyncControl.svelte';
+	import GitControl from './GitControl.svelte';
 
 	const today = localNow().date;
 	const route = $derived(router.route);
@@ -17,7 +17,10 @@
 		{ label: 'Home', icon: 'home', href: href.home(), match: (r) => r.name === 'home' },
 		{ label: 'Today', icon: 'calendar', href: href.daily(today), match: (r) => r.name === 'daily' },
 		{ label: 'Agenda', icon: 'agenda', href: href.agenda(), match: (r) => r.name === 'agenda' },
+		{ label: 'Search', icon: 'search', href: href.search(), match: (r) => r.name === 'search' },
+		{ label: 'Graph', icon: 'graph', href: href.graph(), match: (r) => r.name === 'graph' },
 		{ label: 'Tags', icon: 'tag', href: href.tags(), match: (r) => r.name === 'tags' },
+		{ label: 'Changes', icon: 'commit', href: href.changes(), match: (r) => r.name === 'changes' },
 	];
 
 	const notes = $derived.by(() => {
@@ -78,6 +81,9 @@
 				<li>
 					<a href={item.href} aria-current={item.match(route) ? 'page' : undefined}>
 						<Icon name={item.icon} size={17} />{item.label}
+						{#if item.label === 'Changes' && app.git.changes.length}<span class="count"
+								>{app.git.changes.length}</span
+							>{/if}
 					</a>
 				</li>
 			{/each}
@@ -85,7 +91,16 @@
 	</nav>
 
 	<div class="notes">
-		<h2>Notes <span>{notes.length}</span></h2>
+		<div class="notes-head">
+			<h2>Notes <span>{notes.length}</span></h2>
+			<button
+				type="button"
+				class="new"
+				aria-label="New note"
+				title="New note"
+				onclick={() => (app.newNote = { title: '' })}><Icon name="plus" size={15} /></button
+			>
+		</div>
 		<ul>
 			{#each notes as node (node.id)}
 				<li>
@@ -98,7 +113,7 @@
 	</div>
 
 	<footer class="foot">
-		<SyncControl />
+		<GitControl />
 		<div class="foot-row">
 			<a
 				class="settings"
@@ -125,6 +140,43 @@
 </div>
 
 <style>
+	.notes-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-right: 0.5rem;
+	}
+	.notes-head h2 {
+		flex: 1;
+		margin-bottom: 0;
+	}
+	.notes-head {
+		margin-bottom: 0.3rem;
+	}
+	.new {
+		display: grid;
+		place-items: center;
+		width: 1.6rem;
+		height: 1.6rem;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		color: var(--text-muted);
+	}
+	.new:hover {
+		background: var(--surface-2);
+		color: var(--accent);
+	}
+	.count {
+		margin-left: auto;
+		padding: 0 0.45rem;
+		border-radius: 999px;
+		background: var(--todo-soft);
+		color: var(--todo);
+		font-size: 0.7rem;
+		font-weight: 700;
+		line-height: 1.3rem;
+	}
 	.sidebar {
 		display: flex;
 		flex-direction: column;

@@ -8,6 +8,9 @@ export type Route =
 	| { name: 'tags'; tag: string | null }
 	| { name: 'vaults' }
 	| { name: 'settings' }
+	| { name: 'changes' }
+	| { name: 'search'; q: string }
+	| { name: 'graph' }
 	| { name: 'notfound'; path: string };
 
 export function parseHash(hash: string): Route {
@@ -29,6 +32,12 @@ export function parseHash(hash: string): Route {
 			return { name: 'vaults' };
 		case 'settings':
 			return { name: 'settings' };
+		case 'changes':
+			return { name: 'changes' };
+		case 'search':
+			return { name: 'search', q: tail };
+		case 'graph':
+			return { name: 'graph' };
 		default:
 			return { name: 'notfound', path };
 	}
@@ -42,6 +51,9 @@ export const href = {
 	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),
 	vaults: () => '#/vaults',
 	settings: () => '#/settings',
+	changes: () => '#/changes',
+	search: (q = '') => (q ? `#/search/${encodeURIComponent(q)}` : '#/search'),
+	graph: () => '#/graph',
 };
 
 class Router {

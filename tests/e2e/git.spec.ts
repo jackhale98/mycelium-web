@@ -1,5 +1,5 @@
 /// Real git round trip in the browser: clone from a local server, edit,
-/// commit, sync, and check the server received byte-exact changes.
+/// commit, push, pull, and check the server received byte-exact changes.
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,14 +19,11 @@ test.beforeAll(async () => {
 });
 test.afterAll(() => server?.close());
 
-test('clone, edit, commit and sync a git vault', async ({ page, isMobile }) => {
-	/** Phones keep Sync in the menu drawer. */
-	const sync = async () => {
-		if (isMobile) await page.getByRole('button', { name: 'Menu', exact: true }).click();
-		await page.getByRole('button', { name: 'Sync with remote' }).click();
-	};
+test('clone, edit, commit, push and pull a git vault', async ({ page }) => {
+	const changes = () => page.goto('app#/changes');
 	test.setTimeout(90_000);
 	await page.goto('app#/vaults');
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
 	await page.getByRole('radio', { name: 'Other' }).click();
 	await page.getByRole('textbox', { name: 'Repository' }).fill(`${server.url}/vault.git`);
 	await page.getByLabel('Username').fill('tester');
@@ -51,13 +48,24 @@ test('clone, edit, commit and sync a git vault', async ({ page, isMobile }) => {
 	await page.getByRole('checkbox').nth(2).check();
 	await expect(page.locator('.cookie').first()).toHaveText('3/5');
 
-	// Sync pushes the local commit.
-	if (!isMobile) await expect(page.getByText('1 unsynced change')).toBeVisible();
-	await sync();
-	await expect(page.getByText(/Pushed 1 change/)).toBeVisible({ timeout: 30_000 });
+	// The edit autosaves to the working tree; nothing is committed yet.
+	await changes();
+	const file = 'notes/20261007111100-mycelium_web.org';
+	await expect(page.getByRole('button', { name: file, exact: true })).toBeVisible();
+	await page.getByRole('button', { name: file, exact: true }).click();
+	await expect(page.getByRole('region', { name: `Diff of ${file}` })).toContainText(
+		'- [X] Git sync through a stateless worker',
+	);
+	await page.getByLabel('Commit message').fill('Tick off the worker milestone');
+	await page.getByRole('button', { name: 'Commit', exact: true }).click();
+	await expect(page.getByText('Nothing to commit')).toBeVisible();
+	expect(server.git('vault.git', 'log', '-1', '--format=%s')).toBe('seed');
+
+	await page.getByRole('button', { name: 'Push', exact: true }).click();
+	await expect(page.getByText(/Pushed 1 commit/)).toBeVisible({ timeout: 30_000 });
 
 	const log = server.git('vault.git', 'log', '-1', '--format=%an <%ae>%n%s');
-	expect(log).toBe('Playwright <pw@example.com>\nUpdate checklist in Mycelium Web');
+	expect(log).toBe('Playwright <pw@example.com>\nTick off the worker milestone');
 	const pushed = server.git('vault.git', 'show', 'HEAD:notes/20261007111100-mycelium_web.org');
 	const original = files['notes/20261007111100-mycelium_web.org']!;
 	expect(pushed).toBe(
@@ -79,10 +87,9 @@ test('clone, edit, commit and sync a git vault', async ({ page, isMobile }) => {
 	server.git('work', 'commit', '-q', '-am', 'Add task elsewhere');
 	server.git('work', 'push', '-q', 'origin', 'main');
 
-	await page.goto('app#/agenda');
-	await sync();
-	if (isMobile) await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Pull', exact: true }).click();
 	await expect(page.getByText(/Pulled 1 file/)).toBeVisible({ timeout: 30_000 });
+	await page.goto('app#/agenda');
 	await expect(page.getByRole('link', { name: /Added from another device/ })).toBeVisible();
 
 	// The vault survives a reload from the IndexedDB cache.

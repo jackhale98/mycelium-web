@@ -12,7 +12,8 @@ export interface VaultRecord {
 	id: string;
 	name: string;
 	provider: ProviderId;
-	url: string;
+	/** Remote clone URL, or `null` for a local-only repository (the demo). */
+	url: string | null;
 	branch: string | null;
 	corsProxy: string | null;
 	author: Author;
@@ -25,6 +26,10 @@ export interface VaultRecord {
 	log: Partial<LogSettings>;
 	createdAt: number;
 	lastSync: number | null;
+	/** Paths with uncommitted edits in the working tree. */
+	dirty?: string[];
+	/** Commit every edit immediately with a generated message (off: you write each commit). */
+	autoCommit?: boolean;
 }
 
 export interface CachedFile {
