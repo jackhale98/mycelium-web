@@ -318,7 +318,8 @@ class AppState {
 			await this.openVault(active);
 		else {
 			if (resumeId) this.#showDemo();
-			if (this.vaults.some((v) => v.id === DEMO_ID)) await this.openDemo();
+			// The in-memory demo is on screen unless we came from another vault.
+			if (this.vaults.some((v) => v.id === DEMO_ID)) await this.openDemo({ quiet: !resumeId });
 			else this.#startDemo();
 		}
 		this.loading = null;
@@ -361,7 +362,12 @@ class AppState {
 	// ------------------------------------------------------------------ vaults
 
 	/** Open the demo: a local git repository (no remote) seeded with the demo notes. */
-	async openDemo() {
+	/**
+	 * Open the demo's stored repository. `quiet` skips the loading screen, for when the
+	 * in-memory demo is already on screen: swapping pages for the loader would rebuild them
+	 * and lose whatever someone had started typing.
+	 */
+	async openDemo(options: { quiet?: boolean } = {}) {
 		try {
 			const { Workspace } = await import('$lib/git/workspace');
 			const existing = this.vaults.find((v) => v.id === DEMO_ID);
@@ -369,7 +375,7 @@ class AppState {
 				? Workspace.open($state.snapshot(existing) as VaultRecord)
 				: await Workspace.createLocal(demoRecord(), demoSources, 'Demo vault');
 			if (!existing) this.vaults = [...this.vaults, ws.record];
-			await this.#activate(ws);
+			await this.#activate(ws, options);
 		} catch (e) {
 			// No IndexedDB (e.g. some private windows): the demo still works in memory.
 			console.warn('Demo vault falling back to memory:', e);
@@ -581,7 +587,7 @@ class AppState {
 		}
 	}
 
-	async #activate(ws: Workspace | FolderWorkspace) {
+	async #activate(ws: Workspace | FolderWorkspace, options: { quiet?: boolean } = {}) {
 		// Vaults saved with the public test proxy move to this site's own worker, so
 		// their tokens no longer pass through a third party.
 		if (ws.kind !== 'folder') {
@@ -592,7 +598,9 @@ class AppState {
 				this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
 			}
 		}
-		const files = await ws.load((p) => (this.loading = p));
+		const files = await ws.load((p) => {
+			if (!options.quiet) this.loading = p;
+		});
 		if (ws.kind === 'folder') {
 			this.folder = ws;
 			this.workspace = null;
