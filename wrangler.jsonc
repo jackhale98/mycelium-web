@@ -1,0 +1,10 @@
+// The site on Cloudflare (my-celium.org): static files only, no server code.
+// Cloudflare runs `npm run build`, then `npx wrangler deploy` uploads dist/.
+// (The git sync worker is a separate project in worker/.)
+{
+	"name": "mycelium-web",
+	"compatibility_date": "2026-10-01",
+	"assets": {
+		"directory": "./dist",
+	},
+}

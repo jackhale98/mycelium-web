@@ -2,9 +2,13 @@
 import { defineConfig } from 'astro/config';
 import svelte from '@astrojs/svelte';
 
-// GitHub Pages project sites live under /<repo>/. Override with SITE_BASE=/ for a custom domain.
-const base = process.env.SITE_BASE ?? '/mycelium-web';
-const site = process.env.SITE_URL ?? 'https://jackhale98.github.io';
+// Cloudflare (Workers Builds sets WORKERS_CI=1, Pages sets CF_PAGES=1) serves
+// my-celium.org from the root; GitHub Pages project sites live under /<repo>/.
+// SITE_BASE and SITE_URL override either.
+const cloudflare = process.env.WORKERS_CI === '1' || process.env.CF_PAGES === '1';
+const base = process.env.SITE_BASE ?? (cloudflare ? '/' : '/mycelium-web');
+const site =
+	process.env.SITE_URL ?? (cloudflare ? 'https://my-celium.org' : 'https://jackhale98.github.io');
 
 export default defineConfig({
 	site,
