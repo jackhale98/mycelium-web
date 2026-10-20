@@ -9,7 +9,7 @@ enabled = false
 [vars]
 # Origins that may use this worker: the site (my-celium.org, plus the GitHub Pages copy) and
 # localhost for development.
-ALLOWED_ORIGINS = "https://my-celium.org,https://www.my-celium.org,https://jackhale98.github.io,http://localhost:4321"
+ALLOWED_ORIGINS = "https://my-celium.org,https://www.my-celium.org,https://my-celium.fonur.workers.dev,https://jackhale98.github.io,http://localhost:4321"
 # EXTRA_GIT_HOSTS = "git.example.com"
 
 # OAuth client credentials are secrets, never vars:
