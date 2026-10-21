@@ -2,6 +2,7 @@
 	import { parseRepo, PROVIDERS, type ProviderId } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
 	import SignIn from '../components/SignIn.svelte';
+	import DropboxConnect from '../components/DropboxConnect.svelte';
 	import { DEFAULT_GIT_PROXY, DEMO_REPO, PUBLIC_TEST_PROXY } from '../config';
 	import { href, router } from '../router.svelte';
 	import { app, DEMO_ID } from '../state.svelte';
@@ -102,7 +103,16 @@
 	}
 
 	async function remove(id: string, name: string) {
+		const dropbox = app.vaults.find((v) => v.id === id)?.kind === 'dropbox';
 		if (
+			dropbox &&
+			!confirm(
+				`Remove ${name} from this browser? Edits not yet uploaded will be lost. Your Dropbox folder is not affected.`,
+			)
+		)
+			return;
+		if (
+			!dropbox &&
 			!confirm(
 				`Remove the local copy of ${name}? Uncommitted and unpushed work will be lost. The remote repository is not affected.`,
 			)
@@ -144,15 +154,19 @@
 		{#each app.vaults.filter((v) => v.id !== DEMO_ID) as vault (vault.id)}
 			<li class="vault" class:active={app.activeId === vault.id}>
 				<span class="v-icon"
-					><Icon name={vault.kind === 'folder' ? 'folder' : 'git'} size={16} /></span
+					><Icon
+						name={vault.kind === 'folder' ? 'folder' : vault.kind === 'dropbox' ? 'cloud' : 'git'}
+						size={16}
+					/></span
 				>
 				<span class="v-text">
 					<span class="v-name">{vault.name}</span>
 					<span class="v-sub"
-						>{#if vault.kind === 'folder'}Folder on this computer{:else}{PROVIDERS[vault.provider]
-								.name} · {vault.branch ?? 'default branch'}{vault.credentials
-								? ''
-								: ' · read-only'}{/if}</span
+						>{#if vault.kind === 'folder'}Folder on this computer{:else if vault.kind === 'dropbox'}Dropbox
+							· {vault.dropbox?.root || '/'}{vault.dropbox?.account
+								? ` · ${vault.dropbox.account}`
+								: ''}{:else}{PROVIDERS[vault.provider].name} · {vault.branch ??
+								'default branch'}{vault.credentials ? '' : ' · read-only'}{/if}</span
 					>
 				</span>
 				{#if app.activeId === vault.id}<span class="badge">Open</span>{:else}<button
@@ -174,6 +188,8 @@
 	</ul>
 
 	<SignIn />
+
+	<DropboxConnect />
 
 	<section class="panel stack" aria-labelledby="folder-h">
 		<h2 id="folder-h">Open a folder on this computer</h2>

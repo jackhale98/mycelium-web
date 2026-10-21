@@ -52,6 +52,7 @@ jobs:
           PUBLIC_GITHUB_CLIENT_ID: Ivtest
           PUBLIC_GITHUB_APP_SLUG: mycelium-test
           PUBLIC_GIT_PROXY: https://sync.example.test
+          PUBLIC_DROPBOX_APP_KEY: dbxtest
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

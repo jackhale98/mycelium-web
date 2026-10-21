@@ -9,8 +9,8 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
 
 > **Status:** preview — see [the plan](docs/PLAN.md). Sign in with GitHub,
 > GitLab or Bitbucket (once [set up](docs/setup-git-providers.md)), paste an
-> access token, open a local folder (Chromium desktop), or try the built-in
-> demo vault.
+> access token, connect Dropbox (once [set up](docs/setup-dropbox.md)), open a
+> local folder (Chromium desktop), or try the built-in demo vault.
 
 ## What it does
 
@@ -25,6 +25,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   diffs, write commit messages, and pull/push/branch when you choose
   (auto-commit is opt-in). Pulls never overwrite uncommitted work; conflicts
   get a side-by-side resolver.
+- **Dropbox, synced automatically:** pick your org-roam folder in Dropbox and
+  edits upload a few seconds later; changes from Emacs or another device come
+  in when you open the app. It works offline, and edits on two devices are
+  merged line by line (overlaps get the same resolver as git). No server in
+  between: the browser talks to Dropbox directly.
 - **Local folders** (Chrome, Edge and friends on desktop): edit an org-roam
   directory in place and commit with your own tools.
 

@@ -170,54 +170,69 @@
 		>
 	</section>
 
-	{#if vault}
-		<form class="panel stack" onsubmit={saveConnection} aria-labelledby="conn-h">
-			<h2 id="conn-h">Repository</h2>
+	{#if vault?.kind === 'dropbox' && vault.dropbox}
+		<section class="panel stack" aria-labelledby="conn-h">
+			<h2 id="conn-h">Dropbox</h2>
 			<dl class="facts">
-				<dt>Remote</dt>
-				<dd><code>{vault.url}</code></dd>
-				<dt>Host</dt>
-				<dd>{PROVIDERS[vault.provider].name}</dd>
-				<dt>Branch</dt>
-				<dd><Icon name="branch" size={14} /> {vault.branch ?? 'default'}</dd>
+				<dt>Folder</dt>
+				<dd><code>{vault.dropbox.root || '/'}</code></dd>
+				{#if vault.dropbox.account}<dt>Account</dt>
+					<dd>{vault.dropbox.account}</dd>{/if}
 				<dt>Access</dt>
-				<dd>{vault.credentials ? 'Token saved in this browser' : 'Read-only (no token)'}</dd>
+				<dd>Signed in; the sign-in is kept only in this browser</dd>
 			</dl>
-			<div class="field">
-				<label for="s-token"
-					>{vault.credentials ? 'Replace access token' : 'Add an access token'}</label
-				>
-				<input id="s-token" class="input" type="password" bind:value={token} autocomplete="off" />
-			</div>
-			<div class="field">
-				<label for="s-proxy">Sync proxy</label>
-				<input
-					id="s-proxy"
-					class="input"
-					bind:value={proxy}
-					autocapitalize="off"
-					spellcheck="false"
-				/>
-			</div>
-			<div class="row two">
+		</section>
+	{/if}
+	{#if vault}
+		{#if vault.kind !== 'dropbox'}
+			<form class="panel stack" onsubmit={saveConnection} aria-labelledby="conn-h">
+				<h2 id="conn-h">Repository</h2>
+				<dl class="facts">
+					<dt>Remote</dt>
+					<dd><code>{vault.url}</code></dd>
+					<dt>Host</dt>
+					<dd>{PROVIDERS[vault.provider].name}</dd>
+					<dt>Branch</dt>
+					<dd><Icon name="branch" size={14} /> {vault.branch ?? 'default'}</dd>
+					<dt>Access</dt>
+					<dd>{vault.credentials ? 'Token saved in this browser' : 'Read-only (no token)'}</dd>
+				</dl>
 				<div class="field">
-					<label for="s-an">Commit name</label><input
-						id="s-an"
-						class="input"
-						bind:value={authorName}
-					/>
+					<label for="s-token"
+						>{vault.credentials ? 'Replace access token' : 'Add an access token'}</label
+					>
+					<input id="s-token" class="input" type="password" bind:value={token} autocomplete="off" />
 				</div>
 				<div class="field">
-					<label for="s-ae">Commit email</label><input
-						id="s-ae"
+					<label for="s-proxy">Sync proxy</label>
+					<input
+						id="s-proxy"
 						class="input"
-						type="email"
-						bind:value={authorEmail}
+						bind:value={proxy}
+						autocapitalize="off"
+						spellcheck="false"
 					/>
 				</div>
-			</div>
-			<div class="row"><button class="btn primary" type="submit">Save</button></div>
-		</form>
+				<div class="row two">
+					<div class="field">
+						<label for="s-an">Commit name</label><input
+							id="s-an"
+							class="input"
+							bind:value={authorName}
+						/>
+					</div>
+					<div class="field">
+						<label for="s-ae">Commit email</label><input
+							id="s-ae"
+							class="input"
+							type="email"
+							bind:value={authorEmail}
+						/>
+					</div>
+				</div>
+				<div class="row"><button class="btn primary" type="submit">Save</button></div>
+			</form>
+		{/if}
 
 		<form class="panel stack" onsubmit={saveLayout} aria-labelledby="layout-h">
 			<h2 id="layout-h">Vault layout</h2>
@@ -242,32 +257,36 @@
 			<div class="row"><button class="btn primary" type="submit">Save and re-index</button></div>
 		</form>
 
-		<section class="panel" aria-labelledby="history-h">
-			<h2 id="history-h">Recent history</h2>
-			{#if history === null}
-				<p class="hint">Loading…</p>
-			{:else if history.length === 0}
-				<p class="hint">No commits yet.</p>
-			{:else}
-				<ol class="history">
-					{#each history as c, i (c.oid)}
-						<li>
-							<span class="msg">{c.message}</span>
-							<span class="meta"
-								>{c.author.name} · {date(c.author.timestamp)} ·
-								<code>{c.oid.slice(0, 7)}</code>{#if i < app.unsynced}
-									· <span class="local">not synced</span>{/if}</span
-							>
-						</li>
-					{/each}
-				</ol>
-			{/if}
-		</section>
+		{#if vault.kind !== 'dropbox'}
+			<section class="panel" aria-labelledby="history-h">
+				<h2 id="history-h">Recent history</h2>
+				{#if history === null}
+					<p class="hint">Loading…</p>
+				{:else if history.length === 0}
+					<p class="hint">No commits yet.</p>
+				{:else}
+					<ol class="history">
+						{#each history as c, i (c.oid)}
+							<li>
+								<span class="msg">{c.message}</span>
+								<span class="meta"
+									>{c.author.name} · {date(c.author.timestamp)} ·
+									<code>{c.oid.slice(0, 7)}</code>{#if i < app.unsynced}
+										· <span class="local">not synced</span>{/if}</span
+								>
+							</li>
+						{/each}
+					</ol>
+				{/if}
+			</section>
+		{/if}
 
 		<section class="panel stack" aria-labelledby="danger-h">
 			<h2 id="danger-h">Remove from this browser</h2>
 			<p class="hint">
-				Deletes the local clone and index. The remote repository is not affected{app.unsynced
+				{vault.kind === 'dropbox'
+					? "Deletes this browser's copy. Your Dropbox folder is not affected"
+					: 'Deletes the local clone and index. The remote repository is not affected'}{app.unsynced
 					? `, but your ${app.unsynced} unsynced ${app.unsynced === 1 ? 'change' : 'changes'} will be lost`
 					: ''}.
 			</p>

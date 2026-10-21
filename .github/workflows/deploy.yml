@@ -38,6 +38,7 @@ jobs:
           PUBLIC_GITHUB_APP_SLUG: ${{ vars.PUBLIC_GITHUB_APP_SLUG }}
           PUBLIC_GITLAB_CLIENT_ID: ${{ vars.PUBLIC_GITLAB_CLIENT_ID }}
           PUBLIC_BITBUCKET_CLIENT_ID: ${{ vars.PUBLIC_BITBUCKET_CLIENT_ID }}
+          PUBLIC_DROPBOX_APP_KEY: ${{ vars.PUBLIC_DROPBOX_APP_KEY }}
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

@@ -37,8 +37,10 @@ import {
 	type Change,
 } from '$lib/org';
 import type { FileConflict, FileStatus, LoadProgress, Workspace } from '$lib/git/workspace';
-import type { KeywordTone, SavedAgendaView, VaultRecord } from '$lib/store/db';
+import type { DropboxState, KeywordTone, SavedAgendaView, VaultRecord } from '$lib/store/db';
 import type { FolderWorkspace } from '$lib/vault/folder';
+import type { DropboxWorkspace } from '$lib/dropbox/workspace';
+import type { DropboxTokens } from '$lib/dropbox/api';
 import {
 	dailyDate,
 	dailyPath,
@@ -118,6 +120,23 @@ export type SyncState =
 	| { kind: 'error'; message: string }
 	| { kind: 'done'; message: string };
 
+export interface DropboxSyncStatus {
+	state: 'idle' | 'syncing' | 'offline' | 'error';
+	/** Files edited here and not yet uploaded. */
+	pending: number;
+	lastSync: number | null;
+	/** Files edited both here and elsewhere, waiting for a choice. */
+	conflicts?: number;
+	message?: string;
+}
+
+type DropboxSyncOptions = { auto?: boolean; resolutions?: Map<string, string> | undefined };
+
+/** Wait after an edit before uploading, so typing becomes one upload. */
+const DROPBOX_EDIT_DELAY = 2500;
+/** Check Dropbox for changes from other devices this often while the app is open. */
+const DROPBOX_POLL = 60_000;
+
 export interface GitState {
 	branch: string;
 	/** Uncommitted changes in the working tree. */
@@ -187,6 +206,10 @@ class AppState {
 	workspace: Workspace | null = $state.raw(null);
 	/** The open local-folder vault, if any. */
 	folder: FolderWorkspace | null = $state.raw(null);
+	/** The open Dropbox vault, if any. */
+	dropbox: DropboxWorkspace | null = $state.raw(null);
+	/** Dropbox sync status, for the sidebar and Changes page. */
+	dropboxSync = $state<DropboxSyncStatus>({ state: 'idle', pending: 0, lastSync: null });
 	/** A folder vault waiting for the person to grant access again (needs a click). */
 	folderAccess = $state<{ id: string; name: string } | null>(null);
 	vaults = $state<VaultRecord[]>([]);
@@ -203,12 +226,20 @@ class AppState {
 	ready = $state(false);
 
 	#saving: Promise<void> = Promise.resolve();
+	#dropboxTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Counts edits, so a sync can tell whether any were made while it ran. */
+	#edits = 0;
 	#statusTimer: ReturnType<typeof setTimeout> | null = null;
 	#search = $derived.by(() => {
 		void this.rev;
 		return buildSearch(this.vault);
 	});
 	#trees = new Map<string, { source: string; tree: OrgData }>();
+
+	/** Whichever kind of vault is open. */
+	get #ws(): Workspace | FolderWorkspace | DropboxWorkspace | null {
+		return this.workspace ?? this.folder ?? this.dropbox;
+	}
 
 	get demo() {
 		return this.activeId === DEMO_ID;
@@ -255,7 +286,7 @@ class AppState {
 
 	/** Save the vault's TODO keywords (and chip colours) and re-index with them. */
 	async saveKeywords(keywords: KeywordConfig, tones: Record<string, KeywordTone>) {
-		const ws = this.workspace ?? this.folder;
+		const ws = this.#ws;
 		const snapshot = JSON.parse(JSON.stringify(keywords)) as KeywordConfig;
 		if (ws) {
 			await ws.updateRecord({ keywords: snapshot, keywordTones: { ...tones } });
@@ -298,8 +329,9 @@ class AppState {
 		return this.vaults.find((v) => v.id === this.activeId) ?? null;
 	}
 
-	/** Things not yet pushed: uncommitted files plus local commits. */
+	/** Things not yet pushed: uncommitted files plus local commits (or Dropbox uploads). */
 	get unsynced(): number {
+		if (this.dropbox) return this.dropboxSync.pending;
 		return this.git.changes.length + this.git.ahead;
 	}
 
@@ -324,6 +356,7 @@ class AppState {
 		}
 		this.loading = null;
 		this.ready = true;
+		this.#watchDropbox();
 	}
 
 	/** Parsed tree for a file, cached by content. */
@@ -394,6 +427,7 @@ class AppState {
 	#showDemo() {
 		this.workspace = null;
 		this.folder = null;
+		this.dropbox = null;
 		this.activeId = DEMO_ID;
 		this.layout = DEFAULT_LAYOUT;
 		this.vault = Vault.fromSources(demoSources, DEMO_KEYWORDS);
@@ -422,7 +456,7 @@ class AppState {
 			const { Workspace } = await import('$lib/git/workspace');
 			const ws = await Workspace.createLocal(demoRecord(), demoSources, 'Demo vault');
 			this.vaults = [...this.vaults.filter((v) => v.id !== DEMO_ID), ws.record];
-			if (this.activeId !== DEMO_ID || this.workspace || this.folder) return;
+			if (this.activeId !== DEMO_ID || this.#ws) return;
 			// Keep anything edited while the repository was being built.
 			const changes: { path: string; source: string | null }[] = [];
 			for (const [path, file] of this.vault.files)
@@ -453,6 +487,18 @@ class AppState {
 		this.folderAccess = null;
 		this.loading = { phase: 'Opening vault', ratio: null };
 		try {
+			if (record.kind === 'dropbox') {
+				const [{ DropboxWorkspace }, { OAUTH_CONFIG }] = await Promise.all([
+					import('$lib/dropbox/workspace'),
+					import('./config'),
+				]);
+				const ws = DropboxWorkspace.open(
+					$state.snapshot(record) as VaultRecord,
+					OAUTH_CONFIG.dropboxAppKey ?? '',
+				);
+				await this.#activate(ws);
+				return;
+			}
 			if (record.kind === 'folder') {
 				const { FolderWorkspace } = await import('$lib/vault/folder');
 				const ws = await FolderWorkspace.open($state.snapshot(record) as VaultRecord);
@@ -587,10 +633,13 @@ class AppState {
 		}
 	}
 
-	async #activate(ws: Workspace | FolderWorkspace, options: { quiet?: boolean } = {}) {
+	async #activate(
+		ws: Workspace | FolderWorkspace | DropboxWorkspace,
+		options: { quiet?: boolean } = {},
+	) {
 		// Vaults saved with the public test proxy move to this site's own worker, so
 		// their tokens no longer pass through a third party.
-		if (ws.kind !== 'folder') {
+		if (ws.kind === 'git') {
 			const { DEFAULT_GIT_PROXY, PUBLIC_TEST_PROXY } = await import('./config');
 			const proxy = ws.record.corsProxy?.replace(/\/$/, '');
 			if (proxy === PUBLIC_TEST_PROXY && DEFAULT_GIT_PROXY !== PUBLIC_TEST_PROXY) {
@@ -601,13 +650,14 @@ class AppState {
 		const files = await ws.load((p) => {
 			if (!options.quiet) this.loading = p;
 		});
-		if (ws.kind === 'folder') {
-			this.folder = ws;
-			this.workspace = null;
-		} else {
-			this.workspace = ws;
-			this.folder = null;
-		}
+		this.workspace = ws.kind === 'git' ? ws : null;
+		this.folder = ws.kind === 'folder' ? ws : null;
+		this.dropbox = ws.kind === 'dropbox' ? ws : null;
+		this.dropboxSync = {
+			state: 'idle',
+			pending: ws.kind === 'dropbox' ? ws.pending.length : 0,
+			lastSync: ws.record.lastSync,
+		};
 		this.activeId = ws.record.id;
 		this.layout = ws.record.layout;
 		this.vault = Vault.fromIndexed(files, ws.record.keywords);
@@ -617,10 +667,11 @@ class AppState {
 		writeLocal(ACTIVE_KEY, ws.record.id);
 		this.rev += 1;
 		await this.refreshGit();
+		if (ws.kind === 'dropbox') this.#queueDropboxSync(0);
 	}
 
 	async updateVault(patch: Partial<VaultRecord>) {
-		const ws = this.workspace ?? this.folder;
+		const ws = this.#ws;
 		if (!ws) return;
 		await ws.updateRecord(patch);
 		this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
@@ -638,7 +689,15 @@ class AppState {
 	async removeVault(id: string, reopen = true) {
 		const record = this.vaults.find((v) => v.id === id);
 		if (!record) return;
-		if (record.kind === 'folder') {
+		if (record.kind === 'dropbox') {
+			const { DropboxWorkspace } = await import('$lib/dropbox/workspace');
+			const ws =
+				this.dropbox?.record.id === id
+					? this.dropbox
+					: DropboxWorkspace.open($state.snapshot(record) as VaultRecord, '');
+			await ws.destroy();
+			if (this.dropbox?.record.id === id) this.dropbox = null;
+		} else if (record.kind === 'folder') {
 			const { FolderWorkspace } = await import('$lib/vault/folder');
 			const ws =
 				this.folder?.record.id === id
@@ -671,8 +730,9 @@ class AppState {
 	 */
 	#write(path: string, text: string | null, message: string) {
 		const [file] = this.vault.apply([{ path, source: text }]);
+		this.#edits += 1;
 		this.rev += 1;
-		const ws = this.workspace ?? this.folder;
+		const ws = this.#ws;
 		if (!ws) {
 			// The demo's repository is still being built: save once it exists.
 			const ready = this.#demoReady;
@@ -689,7 +749,11 @@ class AppState {
 		this.#saving = this.#saving
 			.then(async () => {
 				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);
-				if (ws.kind !== 'folder' && ws.record.autoCommit) await ws.commit([path], message);
+				if (ws.kind === 'git' && ws.record.autoCommit) await ws.commit([path], message);
+				if (ws.kind === 'dropbox') {
+					this.dropboxSync = { ...this.dropboxSync, pending: ws.pending.length };
+					this.#queueDropboxSync(DROPBOX_EDIT_DELAY);
+				}
 				this.#scheduleStatus();
 			})
 			.catch((e) => {
@@ -1084,6 +1148,7 @@ class AppState {
 
 	/** Fetch, then fast-forward or merge. Conflicts open the resolver; uncommitted files are never overwritten. */
 	async pull(resolutions?: Map<string, string>) {
+		if (this.dropbox) return this.syncDropbox({ resolutions });
 		await this.#run('Pulling', async (ws) => {
 			const result = await ws.pull(
 				resolutions,
@@ -1181,9 +1246,250 @@ class AppState {
 		});
 	}
 
+	// ------------------------------------------------------------------ dropbox
+
+	/** Sync the Dropbox vault soon (edits are batched; `0`: now). */
+	#queueDropboxSync(delay: number) {
+		if (this.#dropboxTimer) clearTimeout(this.#dropboxTimer);
+		this.#dropboxTimer = setTimeout(() => {
+			this.#dropboxTimer = null;
+			void this.syncDropbox({ auto: true });
+		}, delay);
+	}
+
+	#dropboxRun: Promise<void> | null = null;
+	#shownConflicts = '';
+
+	/**
+	 * Exchange changes with Dropbox. Automatic runs stay quiet (a status in the
+	 * sidebar); conflicts open the resolver, whose choices come back as
+	 * `resolutions`.
+	 */
+	async syncDropbox(options: DropboxSyncOptions = {}): Promise<void> {
+		const ws = this.dropbox;
+		if (!ws) return;
+		if (this.#dropboxRun) {
+			// One at a time; an edit or a click during a sync runs another after it.
+			if (!options.auto || ws.pending.length) {
+				await this.#dropboxRun;
+				return this.syncDropbox(options);
+			}
+			return this.#dropboxRun;
+		}
+		// An automatic sync never reopens a conflict someone is looking at.
+		if (options.auto && this.sync.kind === 'conflict') return;
+		if (options.auto && typeof navigator !== 'undefined' && navigator.onLine === false) {
+			this.dropboxSync = { ...this.dropboxSync, state: 'offline' };
+			return;
+		}
+		this.#dropboxRun = this.#syncDropbox(ws, options).finally(() => (this.#dropboxRun = null));
+		return this.#dropboxRun;
+	}
+
+	async #syncDropbox(ws: DropboxWorkspace, options: DropboxSyncOptions) {
+		this.dropboxSync = { ...this.dropboxSync, state: 'syncing' };
+		if (!options.auto) this.sync = { kind: 'busy', phase: 'Syncing with Dropbox' };
+		// What's on screen now, to merge with anything typed while the sync runs.
+		const before = new Map([...this.vault.files].map(([p, f]) => [p, f.source]));
+		const edits = this.#edits;
+		try {
+			await this.flush();
+			const outcome = await ws.sync(options.resolutions, (p) => {
+				if (!options.auto) this.sync = { kind: 'busy', phase: p.phase };
+			});
+			if (this.dropbox !== ws) return;
+			await this.flush();
+			await this.#applyDropbox(ws, outcome.changes, before, edits !== this.#edits);
+			this.dropboxSync = {
+				state: 'idle',
+				pending: ws.pending.length,
+				lastSync: ws.record.lastSync,
+			};
+			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
+			this.dropboxSync.conflicts = outcome.conflicts.length;
+			if (outcome.conflicts.length) {
+				// Automatic syncs don't reopen conflicts someone chose to decide later.
+				const key = outcome.conflicts
+					.map((c) => c.path)
+					.sort()
+					.join('\n');
+				if (!options.auto || key !== this.#shownConflicts) {
+					this.#shownConflicts = key;
+					this.sync = { kind: 'conflict', conflicts: outcome.conflicts };
+				}
+				return;
+			}
+			this.#shownConflicts = '';
+			if (!options.auto) {
+				const parts = [
+					outcome.pulled && `${outcome.pulled} in`,
+					outcome.pushed && `${outcome.pushed} out`,
+				].filter(Boolean);
+				this.sync = {
+					kind: 'done',
+					message: parts.length ? `Synced (${parts.join(', ')})` : 'Up to date with Dropbox',
+				};
+			} else if (this.sync.kind === 'error' && this.sync.message.startsWith('Dropbox'))
+				this.sync = { kind: 'idle' };
+		} catch (e) {
+			const offline =
+				typeof navigator !== 'undefined' && navigator.onLine === false
+					? true
+					: e instanceof TypeError || (e as Error)?.name === 'TimeoutError';
+			this.dropboxSync = {
+				...this.dropboxSync,
+				state: offline ? 'offline' : 'error',
+				pending: ws.pending.length,
+				message: offline ? 'Offline: edits upload when you reconnect' : describeDropboxError(e),
+			};
+			// Being offline is normal on a phone; only a real failure (or a click) says so loudly.
+			if (!options.auto || !offline)
+				this.sync = {
+					kind: 'error',
+					message: offline
+						? 'Dropbox: couldn’t reach Dropbox. Your edits are kept here and upload when you’re back online.'
+						: `Dropbox: ${describeDropboxError(e)}`,
+				};
+		} finally {
+			if (this.sync.kind === 'busy') this.sync = { kind: 'idle' };
+			// Edits made while syncing go up next.
+			if (this.dropbox === ws && ws.pending.length && this.dropboxSync.state === 'idle')
+				this.#queueDropboxSync(DROPBOX_EDIT_DELAY);
+		}
+	}
+
+	/** Bring synced files into the open vault, merging with anything typed meanwhile. */
+	async #applyDropbox(
+		ws: DropboxWorkspace,
+		changes: { path: string; source: string | null }[],
+		before: Map<string, string>,
+		edited: boolean,
+	) {
+		const latest = new Map<string, string | null>();
+		for (const c of changes) latest.set(c.path, c.source);
+		const apply: { path: string; source: string | null }[] = [];
+		for (const [path, source] of latest) {
+			const now = this.vault.file(path)?.source ?? null;
+			const then = before.get(path) ?? null;
+			if (!edited || now === then) {
+				if (now !== source) apply.push({ path, source });
+				continue;
+			}
+			// Typed into while syncing: keep both, or keep the typing and merge again next time.
+			if (now === null || source === null || now === source) continue;
+			const { mergeText } = await import('$lib/git/merge');
+			const merged = mergeText(then ?? '', now, source);
+			if (merged.clean) this.#write(path, merged.text, 'Sync');
+			else void ws.rebase(path, then ?? '');
+		}
+		if (apply.length) {
+			this.vault.apply(apply);
+			this.rev += 1;
+		}
+	}
+
+	/** Watch for moments to sync: coming back to the app, reconnecting, and every minute. */
+	#watchDropbox() {
+		if (typeof window === 'undefined') return;
+		const poke = () => {
+			if (this.dropbox && document.visibilityState === 'visible')
+				void this.syncDropbox({ auto: true });
+		};
+		document.addEventListener('visibilitychange', poke);
+		window.addEventListener('online', poke);
+		window.addEventListener('focus', poke);
+		setInterval(poke, DROPBOX_POLL);
+		// Leaving the app: upload what's waiting.
+		window.addEventListener('pagehide', () => {
+			if (this.dropbox?.pending.length) void this.syncDropbox({ auto: true });
+		});
+	}
+
+	/** Make a vault from a Dropbox folder (after signing in) and open it. */
+	async connectDropbox(tokens: DropboxTokens, root: string, account: string): Promise<boolean> {
+		this.loadError = null;
+		this.connecting = { phase: 'Connecting to Dropbox', ratio: null };
+		try {
+			const [{ DropboxWorkspace }, { OAUTH_CONFIG }] = await Promise.all([
+				import('$lib/dropbox/workspace'),
+				import('./config'),
+			]);
+			const name = root.split('/').filter(Boolean).pop() ?? 'Dropbox';
+			const record: VaultRecord & { dropbox: DropboxState } = {
+				id: crypto.randomUUID(),
+				name,
+				kind: 'dropbox',
+				provider: 'other',
+				url: null,
+				branch: null,
+				corsProxy: null,
+				author: { name: '', email: '' },
+				credentials: null,
+				layout: DEFAULT_LAYOUT,
+				keywords: DEMO_KEYWORDS,
+				log: {},
+				createdAt: Date.now(),
+				lastSync: null,
+				dropbox: {
+					root,
+					cursor: null,
+					account,
+					accessToken: tokens.accessToken,
+					refreshToken: tokens.refreshToken,
+					expiresAt: tokens.expiresAt,
+					pending: [],
+				},
+			};
+			const ws = await DropboxWorkspace.create(
+				record,
+				OAUTH_CONFIG.dropboxAppKey ?? '',
+				(p) => (this.connecting = p),
+			);
+			this.connecting = null;
+			this.vaults = [...this.vaults, ws.record];
+			await this.#activate(ws);
+			return true;
+		} catch (e) {
+			this.loadError = `Couldn't open the Dropbox folder: ${describeDropboxError(e)}`;
+			return false;
+		} finally {
+			this.connecting = null;
+			this.loading = null;
+		}
+	}
+
+	/** Sign in to Dropbox again for an existing vault (new tokens, same folder). */
+	async renewDropbox(id: string, tokens: DropboxTokens) {
+		const record = this.vaults.find((v) => v.id === id);
+		if (!record?.dropbox) return;
+		const dropbox = {
+			...$state.snapshot(record.dropbox),
+			accessToken: tokens.accessToken,
+			refreshToken: tokens.refreshToken,
+			expiresAt: tokens.expiresAt,
+		};
+		if (this.dropbox?.record.id === id) await this.dropbox.updateRecord({ dropbox });
+		else {
+			const { db } = await import('$lib/store/db');
+			await db().vaults.update(id, { dropbox });
+		}
+		this.vaults = this.vaults.map((v) => (v.id === id ? { ...v, dropbox } : v));
+		if (this.dropbox?.record.id === id) void this.syncDropbox();
+	}
+
 	dismissSync() {
 		if (this.sync.kind !== 'busy') this.sync = { kind: 'idle' };
 	}
+}
+
+export function describeDropboxError(e: unknown): string {
+	const err = e as { status?: number; summary?: string; message?: string };
+	if (err?.status === 401) return 'Dropbox signed you out. Reconnect Dropbox to keep syncing.';
+	if (err?.summary?.startsWith('path/not_found') || err?.summary?.includes('not_found'))
+		return 'The folder is no longer in Dropbox. Was it moved or renamed?';
+	if (err?.summary?.includes('insufficient_space')) return 'Your Dropbox is full.';
+	if (err?.status === 429) return 'Dropbox asked us to slow down. Sync will try again shortly.';
+	return (err?.message ?? String(e)).replace(/^Dropbox: /, '');
 }
 
 /** Turn isomorphic-git and network failures into something a person can act on. */

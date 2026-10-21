@@ -5,6 +5,8 @@ import {
 	challengeFor,
 	completeSignIn,
 	needsRefresh,
+	takeDropboxResult,
+	takeSignInResult,
 	refreshCredentials,
 } from './oauth';
 
@@ -52,6 +54,38 @@ describe('oauth', () => {
 	it('only offers configured providers with a worker', () => {
 		expect(availableProviders(config)).toEqual(['github', 'gitlab']);
 		expect(availableProviders({ ...config, worker: '' })).toEqual([]);
+	});
+
+	it('trades a Dropbox code with Dropbox itself, never the worker', async () => {
+		store.set(
+			'mycelium:oauth-pending',
+			JSON.stringify({
+				provider: 'dropbox',
+				state: 'abc',
+				verifier: 'v',
+				redirectUri: 'https://app/cb/',
+				returnTo: '/app#/vaults',
+			}),
+		);
+		const fetch = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({ access_token: 'sl.a', refresh_token: 'r', expires_in: 14400 }),
+				),
+		);
+		vi.stubGlobal('fetch', fetch);
+		const next = await completeSignIn(new URLSearchParams('code=xyz&state=abc'), {
+			...config,
+			dropboxAppKey: 'dbx',
+		});
+		expect(next).toBe('/app#/vaults');
+		const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+		expect(url).toBe('https://api.dropboxapi.com/oauth2/token');
+		expect(new URLSearchParams(String(init.body)).get('client_id')).toBe('dbx');
+		// Only the Dropbox panel picks it up; the git sign-in doesn't.
+		expect(takeSignInResult()).toBeNull();
+		expect(takeDropboxResult()).toMatchObject({ accessToken: 'sl.a', refreshToken: 'r' });
+		expect(takeDropboxResult()).toBeNull();
 	});
 
 	it('checks state and trades the code through the worker', async () => {

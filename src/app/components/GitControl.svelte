@@ -5,9 +5,43 @@
 
 	const busy = $derived(app.sync.kind === 'busy');
 	const changes = $derived(app.git.changes.length);
+	const dbx = $derived(app.dropboxSync);
+	const dbxLabel = $derived(
+		dbx.state === 'syncing'
+			? 'Syncing…'
+			: dbx.conflicts
+				? `${dbx.conflicts} to resolve`
+				: dbx.state === 'offline'
+					? 'Offline'
+					: dbx.state === 'error'
+						? 'Not synced'
+						: dbx.pending
+							? `${dbx.pending} to upload`
+							: 'Synced',
+	);
 </script>
 
-{#if app.folder}
+{#if app.dropbox}
+	<div class="git">
+		<a class="branch" href={href.changes()} title={dbx.message ?? 'Dropbox sync'}>
+			<Icon name="cloud" size={14} /><span class="name">{app.dropbox.record.name}</span>
+		</a>
+		<span
+			class="counts"
+			class:warn={dbx.state === 'error' || !!dbx.conflicts}
+			role="status"
+			aria-live="polite">{dbxLabel}</span
+		>
+		<button
+			type="button"
+			class="icon-btn"
+			aria-label="Sync with Dropbox now"
+			title="Sync now"
+			disabled={dbx.state === 'syncing'}
+			onclick={() => app.syncDropbox()}><Icon name="sync" size={15} /></button
+		>
+	</div>
+{:else if app.folder}
 	<div class="git">
 		<span class="branch"
 			><Icon name="folder" size={14} /><span class="name">{app.folder.record.name}</span></span
@@ -53,6 +87,9 @@
 {/if}
 
 <style>
+	.counts.warn {
+		color: var(--warn, #b45309);
+	}
 	.git {
 		display: flex;
 		align-items: center;

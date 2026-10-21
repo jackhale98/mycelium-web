@@ -2,6 +2,9 @@
 	import type { CommitSummary } from '$lib/git/repo';
 	import { diffLines, type DiffHunk } from '$lib/git/diff';
 	import Icon from '../components/Icon.svelte';
+	import { RENEW_KEY } from '../components/DropboxConnect.svelte';
+	import { beginDropboxSignIn } from '$lib/auth/oauth';
+	import { OAUTH_CONFIG, OAUTH_REDIRECT } from '../config';
 	import { app } from '../state.svelte';
 
 	const STATUS = { added: 'A', modified: 'M', deleted: 'D' } as const;
@@ -117,6 +120,23 @@
 		if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void commit(e);
 	}
 
+	const dbx = $derived(app.dropboxSync);
+	const toUpload = $derived.by(() => {
+		void app.dropboxSync;
+		return [...(app.dropbox?.pending ?? [])].sort();
+	});
+
+	async function reconnectDropbox() {
+		const id = app.dropbox?.record.id;
+		if (!id) return;
+		try {
+			sessionStorage.setItem(RENEW_KEY, id);
+		} catch {
+			/* storage unavailable: the sign-in opens the folder picker instead */
+		}
+		await beginDropboxSignIn(OAUTH_CONFIG, OAUTH_REDIRECT(), 'app#/vaults');
+	}
+
 	async function discard(path: string) {
 		if (!confirm(`Discard your uncommitted changes to ${path}? This can't be undone.`)) return;
 		await app.discard(path);
@@ -146,12 +166,72 @@
 
 <div class="page wide">
 	<h1>Changes</h1>
-	<p class="lede">
-		Edits save to the working tree as you type. Pick what to commit, write a message, and push when
-		you're ready.
-	</p>
+	{#if !app.dropbox}
+		<p class="lede">
+			Edits save to the working tree as you type. Pick what to commit, write a message, and push
+			when you're ready.
+		</p>
+	{/if}
 
-	{#if app.folder}
+	{#if app.dropbox}
+		<section class="panel stack" aria-labelledby="dbx-h">
+			<div class="row dbx-head">
+				<h2 id="dbx-h"><Icon name="cloud" size={16} />Dropbox</h2>
+				<button
+					type="button"
+					class="btn small primary"
+					disabled={dbx.state === 'syncing'}
+					onclick={() => app.syncDropbox()}
+					><Icon name="sync" size={14} />{dbx.state === 'syncing' ? 'Syncing…' : 'Sync now'}</button
+				>
+			</div>
+			<p class="muted">
+				This vault is the Dropbox folder <strong>{app.dropbox.record.dropbox.root || '/'}</strong>.
+				Edits are kept in this browser and upload a few seconds after you stop typing; changes from
+				your other devices come in when you open the app and every minute while it's open.
+				{#if dbx.lastSync}Last synced {new Date(dbx.lastSync).toLocaleString(undefined, {
+						dateStyle: 'medium',
+						timeStyle: 'short',
+					})}.{/if}
+			</p>
+			{#if dbx.state === 'offline'}
+				<p class="notice info">
+					<Icon name="info" size={16} /><span
+						>You're offline. Keep editing; everything uploads when you reconnect.</span
+					>
+				</p>
+			{:else if dbx.state === 'error'}
+				<p class="notice warn" role="alert">
+					<Icon name="alert" size={16} /><span>{dbx.message ?? 'The last sync failed.'}</span>
+					{#if dbx.message?.includes('signed you out')}<button
+							type="button"
+							class="btn small"
+							onclick={reconnectDropbox}>Reconnect Dropbox</button
+						>{/if}
+				</p>
+			{/if}
+			{#if dbx.conflicts}
+				<p class="notice warn">
+					<Icon name="alert" size={16} /><span
+						>{dbx.conflicts === 1 ? 'A file was' : `${dbx.conflicts} files were`} changed here and elsewhere
+						in the same place.</span
+					>
+					<button type="button" class="btn small" onclick={() => app.syncDropbox()}>Resolve…</button
+					>
+				</p>
+			{/if}
+			{#if toUpload.length}
+				<h3 class="sub">Waiting to upload</h3>
+				<ul class="pending">
+					{#each toUpload as path (path)}
+						<li><Icon name="file" size={14} />{path}</li>
+					{/each}
+				</ul>
+			{:else if dbx.state !== 'error'}
+				<p class="muted"><Icon name="check" size={14} /> Everything is in Dropbox.</p>
+			{/if}
+		</section>
+	{:else if app.folder}
 		<div class="notice info">
 			<Icon name="folder" size={16} />
 			<span
@@ -360,6 +440,36 @@
 </div>
 
 <style>
+	.dbx-head {
+		justify-content: space-between;
+		align-items: center;
+	}
+	.dbx-head h2 {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 0;
+	}
+	.sub {
+		margin: 0;
+		font-size: 0.85rem;
+	}
+	.pending {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		margin: 0;
+		padding: 0;
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		list-style: none;
+		overflow-wrap: anywhere;
+	}
+	.pending li {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
 	.wide {
 		max-width: 56rem;
 	}

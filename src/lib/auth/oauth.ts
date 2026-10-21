@@ -5,6 +5,7 @@
 /// are stored only in this browser, with the vault.
 
 import type { Credentials, ProviderId } from '$lib/git/providers';
+import { dropboxAuthorizeUrl, exchangeDropboxCode, type DropboxTokens } from '$lib/dropbox/api';
 
 export type OAuthProvider = Exclude<ProviderId, 'other'>;
 
@@ -14,6 +15,8 @@ export interface OAuthConfig {
 	clientIds: Partial<Record<OAuthProvider, string | undefined>>;
 	/** GitHub App slug, for the "choose repositories" install link. */
 	githubAppSlug?: string | undefined;
+	/** Dropbox app key (public; Dropbox sign-in needs no secret or worker). */
+	dropboxAppKey?: string | undefined;
 }
 
 export interface TokenSet {
@@ -24,7 +27,7 @@ export interface TokenSet {
 }
 
 interface PendingSignIn {
-	provider: OAuthProvider;
+	provider: OAuthProvider | 'dropbox';
 	state: string;
 	verifier: string;
 	redirectUri: string;
@@ -33,6 +36,7 @@ interface PendingSignIn {
 
 const PENDING_KEY = 'mycelium:oauth-pending';
 export const RESULT_KEY = 'mycelium:oauth-result';
+const DROPBOX_RESULT_KEY = 'mycelium:dropbox-result';
 
 const AUTHORIZE: Record<OAuthProvider, string> = {
 	github: 'https://github.com/login/oauth/authorize',
@@ -169,6 +173,17 @@ export async function completeSignIn(
 		throw new Error('Sign-in state mismatch. Start again from Mycelium.');
 	const code = params.get('code');
 	if (!code) throw new Error('No authorization code came back.');
+	if (pending.provider === 'dropbox') {
+		if (!config.dropboxAppKey) throw new Error("Dropbox isn't configured for this site");
+		const tokens = await exchangeDropboxCode({
+			appKey: config.dropboxAppKey,
+			code,
+			verifier: pending.verifier,
+			redirectUri: pending.redirectUri,
+		});
+		sessionStorage.setItem(DROPBOX_RESULT_KEY, JSON.stringify(tokens));
+		return pending.returnTo;
+	}
 	// Bitbucket's authorize link carries no redirect_uri or PKCE challenge (it uses the
 	// consumer's registered callback), and it rejects a token request that adds them.
 	const body = await post(
@@ -188,6 +203,43 @@ export function hasPendingSignIn(): boolean {
 		return sessionStorage.getItem(PENDING_KEY) !== null;
 	} catch {
 		return false;
+	}
+}
+
+/** Leave for Dropbox's sign-in page (PKCE; the code is traded for tokens in the browser). */
+export async function beginDropboxSignIn(
+	config: OAuthConfig,
+	redirectUri: string,
+	returnTo: string,
+): Promise<void> {
+	if (!config.dropboxAppKey) throw new Error("Dropbox isn't configured for this site");
+	const pending: PendingSignIn = {
+		provider: 'dropbox',
+		state: randomString(16),
+		verifier: randomString(48),
+		redirectUri,
+		returnTo,
+	};
+	sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+	location.assign(
+		dropboxAuthorizeUrl(
+			config.dropboxAppKey,
+			redirectUri,
+			pending.state,
+			await challengeFor(pending.verifier),
+		),
+	);
+}
+
+/** Pick up Dropbox tokens left by the callback page (once). */
+export function takeDropboxResult(): DropboxTokens | null {
+	try {
+		const raw = sessionStorage.getItem(DROPBOX_RESULT_KEY);
+		if (!raw) return null;
+		sessionStorage.removeItem(DROPBOX_RESULT_KEY);
+		return JSON.parse(raw) as DropboxTokens;
+	} catch {
+		return null;
 	}
 }
 

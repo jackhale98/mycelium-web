@@ -53,13 +53,22 @@
 	</div>
 
 	<a class="vault" href={href.vaults()} title="Switch vault">
-		<span class="vault-icon"><Icon name={app.demo ? 'zap' : 'git'} size={15} /></span>
+		<span class="vault-icon"
+			><Icon
+				name={app.demo ? 'zap' : app.dropbox ? 'cloud' : app.folder ? 'folder' : 'git'}
+				size={15}
+			/></span
+		>
 		<span class="vault-text">
 			<span class="vault-name" title={app.activeVault?.name}
 				>{app.activeVault?.name.split('/').pop() ?? 'Demo vault'}</span
 			>
 			<span class="vault-sub">
-				{#if app.activeVault}{app.activeVault.branch ?? 'default branch'} · {app.vault.files.size} files{:else}{app
+				{#if app.activeVault}{app.activeVault.kind === 'dropbox'
+						? 'Dropbox'
+						: app.activeVault.kind === 'folder'
+							? 'Folder'
+							: (app.activeVault.branch ?? 'default branch')} · {app.vault.files.size} files{:else}{app
 						.vault.files.size} files · in this tab only{/if}
 			</span>
 		</span>

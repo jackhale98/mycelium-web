@@ -38,6 +38,8 @@ export const OAUTH_CONFIG = {
 		(import.meta.env.PUBLIC_GITHUB_CLIENT_ID === MYCELIUM_GITHUB_APP.clientId
 			? MYCELIUM_GITHUB_APP.slug
 			: undefined),
+	/** Dropbox app key (public). Dropbox sign-in and sync go straight to Dropbox, never the worker. */
+	dropboxAppKey: import.meta.env.PUBLIC_DROPBOX_APP_KEY || undefined,
 };
 
 /** Absolute URL of a page on this site (e.g. the OAuth callback). */

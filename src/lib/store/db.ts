@@ -38,8 +38,35 @@ export interface VaultRecord {
 	captureTemplates?: CaptureTemplate[] | undefined;
 	/** Named agenda filters (an encoded filter query each), shown as chips on the agenda. */
 	agendaViews?: SavedAgendaView[];
-	/** `folder`: a directory on this computer opened with the File System Access API (no git here). */
-	kind?: 'git' | 'folder';
+	/**
+	 * `folder`: a directory on this computer opened with the File System Access API (no git here).
+	 * `dropbox`: a Dropbox folder, synced automatically (see `dropbox`).
+	 */
+	kind?: 'git' | 'folder' | 'dropbox';
+	dropbox?: DropboxState;
+}
+
+/** A Dropbox vault's connection and sync position. Tokens stay in this browser. */
+export interface DropboxState {
+	/** The vault's folder in Dropbox: `''` (the app folder or Dropbox root) or `/Notes`. */
+	root: string;
+	/** Where the last sync left off in Dropbox's change list (`null`: never synced). */
+	cursor: string | null;
+	account: string;
+	accessToken: string;
+	refreshToken: string | null;
+	expiresAt: number | null;
+	/** Files edited here and not yet uploaded. */
+	pending: string[];
+}
+
+/** The text and revision of a Dropbox file as of the last sync (the base for merging). */
+export interface SyncBase {
+	key: string;
+	vaultId: string;
+	path: string;
+	rev: string;
+	source: string;
 }
 
 export interface SavedAgendaView {
@@ -69,6 +96,7 @@ class MyceliumDB extends Dexie {
 	vaults!: EntityTable<VaultRecord, 'id'>;
 	files!: EntityTable<CachedFile, 'key'>;
 	handles!: EntityTable<FolderHandle, 'id'>;
+	syncbase!: EntityTable<SyncBase, 'key'>;
 
 	constructor() {
 		super('mycelium');
@@ -81,6 +109,7 @@ class MyceliumDB extends Dexie {
 		this.version(3)
 			.stores({})
 			.upgrade((tx) => tx.table('files').clear());
+		this.version(4).stores({ syncbase: 'key, vaultId' });
 	}
 }
 
