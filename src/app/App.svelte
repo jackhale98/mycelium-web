@@ -19,6 +19,7 @@
 	import RefileDialog from './components/RefileDialog.svelte';
 	import TableSheet from './components/TableSheet.svelte';
 	import MathSheet from './components/MathSheet.svelte';
+	import ImageSheet from './components/ImageSheet.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
 	import TagsView from './views/TagsView.svelte';
@@ -242,6 +243,7 @@
 <RefileDialog />
 <TableSheet />
 <MathSheet />
+<ImageSheet />
 <HeadingSheet />
 <CaptureSheet />
 

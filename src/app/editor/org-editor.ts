@@ -43,6 +43,8 @@ export interface EditorHooks {
 	/** Follow a link target (`id:…`, `https:…`). */
 	follow: (target: string) => void;
 	onChange: (text: string) => void;
+	/** A picture was pasted or dropped at `pos`. */
+	onImage?: (file: File, pos: number) => void;
 	/** Focus moved in or out, or the cursor moved (for the formatting bar). */
 	onCursor?: (view: EditorView) => void;
 }
@@ -417,6 +419,27 @@ export function createEditor(
 				]),
 				orgHighlight(hooks),
 				EditorView.domEventHandlers({
+					// Pictures pasted or dropped into a note are saved to the vault (via the picture sheet).
+					paste(e, view) {
+						const file = [...(e.clipboardData?.files ?? [])].find((f) =>
+							f.type.startsWith('image/'),
+						);
+						if (!file || !hooks.onImage) return false;
+						e.preventDefault();
+						hooks.onImage(file, view.state.selection.main.head);
+						return true;
+					},
+					drop(e, view) {
+						const file = [...(e.dataTransfer?.files ?? [])].find((f) =>
+							f.type.startsWith('image/'),
+						);
+						if (!file || !hooks.onImage) return false;
+						e.preventDefault();
+						const pos =
+							view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head;
+						hooks.onImage(file, pos);
+						return true;
+					},
 					mousedown(e) {
 						const el = (e.target as HTMLElement).closest<HTMLElement>('.cm-org-link');
 						if (el && (e.metaKey || e.ctrlKey)) {

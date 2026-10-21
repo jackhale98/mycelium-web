@@ -22,6 +22,7 @@
 		| 'outdent'
 		| 'link'
 		| 'table'
+		| 'image'
 		| 'math'
 		| 'undo'
 		| 'redo'
@@ -114,6 +115,7 @@
 			{ action: 'indent', label: 'Indent or demote', icon: 'indent' },
 		],
 		[
+			{ action: 'image', label: 'Picture', icon: 'image' },
 			{ action: 'table', label: 'Table', icon: 'table' },
 			{ action: 'math', label: 'Maths (LaTeX)', icon: 'sigma' },
 			{ action: 'link', label: 'Link to a note', icon: 'link' },

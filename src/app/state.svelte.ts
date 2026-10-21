@@ -1124,6 +1124,37 @@ class AppState {
 		apply: (tex: string, display: boolean) => void;
 	} | null>(null);
 
+	// ------------------------------------------------------------------ pictures
+
+	/** The folder pictures added from the app go into. */
+	get imageDir(): string {
+		return this.activeVault?.imageDir ?? 'images';
+	}
+
+	/** The picture sheet: a chosen file, and where its link goes once saved. */
+	imageSheet = $state<{
+		file: File;
+		note: string;
+		insert: (link: string, caption: string) => void;
+	} | null>(null);
+
+	/**
+	 * Save a picture into the vault's images folder and return its org link
+	 * from `note`. Git vaults list it with the other changes; cloud vaults
+	 * upload it straight away; folder vaults write it to disk.
+	 */
+	async saveImage(note: string, name: string, bytes: Uint8Array, ext: string): Promise<string> {
+		const { imagePath, imageLink } = await import('$lib/vault/images');
+		const path = imagePath(this.imageDir, name, ext, new Date());
+		if (this.#demoReady) await this.#demoReady;
+		const ws = this.#ws;
+		if (!ws) throw new Error('This vault can’t store pictures here.');
+		await ws.writeBytes(path, bytes);
+		this.rev += 1;
+		this.#scheduleStatus();
+		return imageLink(note, path);
+	}
+
 	// ------------------------------------------------------------------ tables
 
 	/** The table editor sheet: the table at `offset` in `path`. */

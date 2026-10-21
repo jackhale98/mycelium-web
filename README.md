@@ -26,6 +26,9 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   KaTeX preview explains mistakes in plain words; in the editor the formula
   under the cursor is previewed, broken ones are underlined, and `\` offers
   commands.
+- **Pictures:** add one from the camera, your photos or a file (paste or drop on
+  desktop). It's offered smaller first (2000px, location data removed) to keep
+  git and sync light, saved in `images/` and linked from the note.
 - **Rich notes:** inline images and attachments (`attachment:` links and
   `#+ATTR_ORG` widths), LaTeX maths, highlighted source blocks, `<<targets>>`,
   `[[file::search]]` links and org-transclusion. Line breaks show as written,

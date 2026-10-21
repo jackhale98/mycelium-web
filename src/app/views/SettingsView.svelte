@@ -19,6 +19,7 @@
 	let roamDir = $state(app.layout.roamDir);
 	let dailyDir = $state(app.layout.dailyDir);
 	let dailyFormat = $state(app.layout.dailyFormat);
+	let imageDir = $state(app.imageDir);
 	let saved = $state<string | null>(null);
 	let history = $state<CommitSummary[] | null>(null);
 
@@ -55,6 +56,7 @@
 				dailyDir: dailyDir.trim().replace(/^\/+|\/+$/g, '') || 'daily',
 				dailyFormat,
 			},
+			imageDir: imageDir.trim().replace(/^\/+|\/+$/g, ''),
 		});
 		flash('Vault layout saved');
 	}
@@ -284,6 +286,13 @@
 					<option value="YYYY-MM-DD">2026-10-20.org (org-roam default)</option>
 					<option value="YYYYMMDD">20261020.org</option>
 				</select>
+			</div>
+			<div class="field">
+				<label for="s-images">Pictures folder</label>
+				<input id="s-images" class="input" bind:value={imageDir} placeholder="Vault root" />
+				<p class="hint">
+					Pictures you add are saved here, linked from the note with a relative <code>file:</code> link.
+				</p>
 			</div>
 
 			<div class="row"><button class="btn primary" type="submit">Save and re-index</button></div>

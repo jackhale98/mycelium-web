@@ -34,6 +34,8 @@ export interface VaultRecord {
 	autoCommit?: boolean;
 	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */
 	keywordTones?: Record<string, KeywordTone>;
+	/** Where pictures added from the app are saved (relative to the vault); `images` when unset. */
+	imageDir?: string;
 	/** Quick capture templates (org-capture style); the defaults apply when unset. */
 	captureTemplates?: CaptureTemplate[] | undefined;
 	/** Named agenda filters (an encoded filter query each), shown as chips on the agenda. */

@@ -76,6 +76,9 @@
 					nodes: () => app.vault.nodes.values(),
 					createNode: (title) => app.createNode(title),
 					follow,
+					onImage(file, pos) {
+						if (view) addImage(view, file, pos);
+					},
 					onCursor(v) {
 						focused = v.hasFocus;
 						level = format.headingLevelAt(v.state);
@@ -126,6 +129,36 @@
 				: null;
 		save();
 		app.setTodo(path, line.from, nextTodoKeyword(current, config));
+	}
+
+	let picker: HTMLInputElement | undefined = $state();
+
+	/**
+	 * Add a picture at `pos` through the picture sheet: once it's saved, its
+	 * link goes on a line of its own (with a #+CAPTION: line if given), which
+	 * is how org shows a picture as a figure.
+	 */
+	function addImage(v: EditorView, file: File, pos: number) {
+		save();
+		app.imageSheet = {
+			file,
+			note: path,
+			insert(link, caption) {
+				const at = Math.min(pos, v.state.doc.length);
+				const line = v.state.doc.lineAt(at);
+				const block = `${caption ? `#+CAPTION: ${caption}\n` : ''}${link}`;
+				// On an empty line: there. Otherwise on a new line after this one.
+				const empty = !line.text.trim();
+				const from = empty ? line.from : line.to;
+				const insert = empty ? block : `\n${block}`;
+				v.dispatch({
+					changes: { from, to: empty ? line.to : from, insert },
+					selection: { anchor: from + insert.length },
+					scrollIntoView: true,
+					userEvent: 'input',
+				});
+			},
+		};
 	}
 
 	/** An effect scrolling `pos` to the middle of the screen. */
@@ -243,6 +276,9 @@
 				run(f.insertLink);
 				void import('@codemirror/autocomplete').then((a) => a.startCompletion(v));
 				break;
+			case 'image':
+				picker?.click();
+				return;
 			case 'table':
 				openTable(v);
 				return;
@@ -285,6 +321,20 @@
 {/if}
 <div class="editor" class:loading={!ready} bind:this={host}></div>
 <FormatBar {focused} {level} onaction={act} />
+<!-- The Picture button's file chooser: phones offer the camera and photo library. -->
+<input
+	bind:this={picker}
+	class="sr-only"
+	type="file"
+	accept="image/*"
+	tabindex="-1"
+	aria-hidden="true"
+	onchange={(e) => {
+		const file = e.currentTarget.files?.[0];
+		e.currentTarget.value = '';
+		if (file && view) addImage(view, file, view.state.selection.main.head);
+	}}
+/>
 
 <style>
 	.editor {

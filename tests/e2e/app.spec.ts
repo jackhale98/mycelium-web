@@ -977,6 +977,70 @@ test('reading view can hide items marked done', async ({ page }) => {
 	).toBeVisible();
 });
 
+test('adding a picture: offered smaller, saved to images/, linked and shown', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	// A big 3000×2000 picture with photo-like fine detail (noise), as a phone camera makes.
+	const png = await page.evaluate(async () => {
+		const c = new OffscreenCanvas(3000, 2000);
+		const ctx = c.getContext('2d')!;
+		const img = ctx.createImageData(3000, 2000);
+		let seed = 7;
+		for (let i = 0; i < img.data.length; i += 4) {
+			seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+			const v = 90 + (seed % 80);
+			img.data[i] = v;
+			img.data[i + 1] = v + ((i >> 9) % 40);
+			img.data[i + 2] = 120;
+			img.data[i + 3] = 255;
+		}
+		ctx.putImageData(img, 0, 0);
+		const bytes = new Uint8Array(
+			await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer(),
+		);
+		let s = '';
+		for (const b of bytes) s += String.fromCharCode(b);
+		return btoa(s);
+	});
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.press('Enter');
+	const chooser = page.waitForEvent('filechooser');
+	await page
+		.getByRole('toolbar', { name: 'Formatting' })
+		.getByRole('button', { name: 'Picture' })
+		.click();
+	await (
+		await chooser
+	).setFiles({
+		name: 'Garden plan.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from(png, 'base64'),
+	});
+	const sheet = page.getByRole('dialog', { name: 'Add picture' });
+	const smaller = sheet.getByRole('radio', { name: /Smaller/ });
+	await expect(smaller).toBeChecked();
+	await expect(sheet.getByText(/2000×1333, JPEG/)).toBeVisible();
+	await sheet.getByRole('textbox', { name: /Caption/ }).fill('The garden plan');
+	await sheet.getByRole('button', { name: 'Add picture' }).click();
+	await expect(sheet).toBeHidden();
+	const lines = () => page.locator('.cm-line').allInnerTexts();
+	await expect
+		.poll(async () => (await lines()).slice(-2))
+		.toEqual([
+			'#+CAPTION: The garden plan',
+			expect.stringMatching(
+				/^images\/\d{4}-\d\d-\d\d-\d{6}-garden-plan\.jpg$|^\[\[file:images\/\d{4}-\d\d-\d\d-\d{6}-garden-plan\.jpg\]\]$/,
+			),
+		]);
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	await expect(page.locator('.node-body img[src^="blob:"]').last()).toBeVisible();
+	await page.goto('app#/changes');
+	await expect(
+		page.getByText(/images\/\d{4}-\d\d-\d\d-\d{6}-garden-plan\.jpg/).first(),
+	).toBeVisible();
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {
