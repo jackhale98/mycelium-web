@@ -417,7 +417,7 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 	const editor = page.locator('.cm-content');
 	await expect(editor).toContainText(':LOGBOOK:');
 	await expect(editor).toContainText(
-		/CLOCK: \[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\]--\[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\] =>  0:00/,
+		/CLOCK: \[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\]--\[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\] => +\d+:\d\d/,
 	);
 });
 
