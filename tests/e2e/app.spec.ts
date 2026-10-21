@@ -392,7 +392,15 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 	await page.getByRole('button', { name: 'Clock in' }).click();
 	const bar = page.locator('.clockbar');
 	await expect(bar).toContainText('Ship the design system');
-	await bar.getByRole('button', { name: 'Clock out' }).click();
+	// Clocking in elsewhere stops (and records) the running clock.
+	await page.keyboard.press('Escape');
+	const other = page.locator('.org-section', { hasText: 'Write the self-hosting guide' }).first();
+	await other.getByRole('button', { name: /Edit heading/ }).click();
+	await expect(page.getByText('Stops and records “Ship the design system”')).toBeVisible();
+	await page.getByRole('button', { name: 'Clock in' }).click();
+	await expect(bar).toContainText('Write the self-hosting guide');
+	// Cancel discards it; Stop records it.
+	await bar.getByRole('button', { name: 'Cancel' }).click();
 	await expect(bar).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -674,22 +682,22 @@ test('the formatting bar shapes the line, and reading keeps line breaks', async 
 		expect.poll(async () =>
 			(await editor.locator('.cm-line').allInnerTexts()).slice(-n).map((t) => t.trimEnd()),
 		);
-	await page.keyboard.type('\nShopping');
+	// Text goes in as input events, as a phone keyboard sends it.
+	const type = (text: string) => page.keyboard.insertText(text);
+	await type('\nShopping');
 	await bar.getByRole('button', { name: 'Make a heading' }).click();
 	await bar.getByRole('button', { name: /Heading level 1/ }).click();
 	await last(1).toEqual(['** Shopping']);
-	await page.keyboard.type('\nmilk');
+	await type('\nmilk');
 	await bar.getByRole('button', { name: /Checkbox/ }).click();
-	await last(1).toEqual(['- [ ] milk']);
+	await last(2).toEqual(['** Shopping', '- [ ] milk']);
 	await bar.getByRole('button', { name: /Checkbox/ }).click();
 	await last(1).toEqual(['- [X] milk']);
-	// Enter continues the checklist; Enter on the empty item ends it.
-	await page.keyboard.press('Enter');
-	await page.keyboard.press('Enter');
-	await page.keyboard.type('\nfirst line ');
+	await type('\n\nfirst line ');
 	await bar.getByRole('button', { name: 'Bold' }).click();
-	await page.keyboard.type('loud');
-	await page.keyboard.type('\nsecond line');
+	await type('loud');
+	await bar.getByRole('button', { name: 'Bold' }).click();
+	await type('\nsecond line');
 	await last(2).toEqual(['first line *loud*', 'second line']);
 	// The editor's mono text draws `***` as three stars, not a ligature.
 	expect(await editor.evaluate((el) => getComputedStyle(el).fontVariantLigatures)).toBe('none');

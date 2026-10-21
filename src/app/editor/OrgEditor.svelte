@@ -163,7 +163,17 @@
 				v.contentDOM.blur();
 				break;
 		}
-		if (action !== 'done') v.focus();
+		if (action === 'done') return;
+		v.focus();
+		// Put the browser's own caret where the editor's is: Android keyboards
+		// type at the DOM selection, which a toolbar tap can leave behind.
+		requestAnimationFrame(() => {
+			const { anchor, head } = v.state.selection.main;
+			const sel = (v.root as Document).getSelection?.() ?? document.getSelection();
+			const a = v.domAtPos(anchor);
+			const h = v.domAtPos(head);
+			sel?.setBaseAndExtent(a.node, a.offset, h.node, h.offset);
+		});
 	}
 
 	// Changes made elsewhere (a TODO toggled, a pull) flow into the editor.

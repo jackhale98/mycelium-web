@@ -1211,11 +1211,15 @@ class AppState {
 		const now = localNow();
 		for (const c of this.runningClocks) {
 			if (c.path === path && c.heading === heading) return;
+			const before = this.vault.file(c.path)?.source.length ?? 0;
 			this.#edit(
 				c.path,
 				(src) => clockOut(src, c.heading, now, this.#keywords(c.path)),
 				`Clock out: ${c.title}`,
 			);
+			// Closing a clock earlier in the same file moves this heading down.
+			if (c.path === path && c.heading < heading)
+				heading += (this.vault.file(path)?.source.length ?? before) - before;
 		}
 		const file = this.vault.file(path);
 		if (!file) return;

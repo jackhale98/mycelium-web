@@ -36,6 +36,9 @@ export function toggleMark(marker: Marker): StateCommand {
 						changes: { from: range.from - 1, to: range.from + 1 },
 						range: EditorSelection.cursor(range.from - 1),
 					};
+				// Just before a closing marker (typing inside a pair): step past it.
+				if (doc.sliceString(range.from, range.from + 1) === marker)
+					return { range: EditorSelection.cursor(range.from + 1) };
 				return {
 					changes: { from: range.from, insert: marker + marker },
 					range: EditorSelection.cursor(range.from + 1),

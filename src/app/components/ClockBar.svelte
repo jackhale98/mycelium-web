@@ -1,6 +1,7 @@
 <script lang="ts">
 	// The running clock (org-clock's mode-line indicator): what's being timed,
-	// for how long, and a way to stop it from any page.
+	// for how long, and a way to stop it (recording the time) or cancel it
+	// (discarding it, as org-clock-cancel does) from any page.
 	import { clockMillis, formatDuration } from '$lib/org';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
@@ -36,8 +37,17 @@
 		<span class="time" title={`Since ${clock.start.date} ${clock.start.time}`}
 			>{formatDuration(elapsed)}</span
 		>
-		<button type="button" class="btn small" onclick={() => app.clockOut(clock.path, clock.heading)}
-			>Clock out</button
+		<button
+			type="button"
+			class="btn small primary"
+			title="Stop the clock and record the time"
+			onclick={() => app.clockOut(clock.path, clock.heading)}>Stop</button
+		>
+		<button
+			type="button"
+			class="btn small"
+			title="Discard this clock without recording any time"
+			onclick={() => app.clockCancel(clock.path, clock.heading)}>Cancel</button
 		>
 	</div>
 {/if}

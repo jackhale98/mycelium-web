@@ -54,6 +54,10 @@
 	const running = $derived(
 		app.runningClocks.find((c) => c.path === path && c.heading === offset) ?? null,
 	);
+	/** A clock running on another heading, which clocking in here will stop. */
+	const elsewhere = $derived(
+		app.runningClocks.find((c) => !(c.path === path && c.heading === offset)) ?? null,
+	);
 	const summary = $derived(app.clockSummary(path, offset));
 	const today = localNow().date;
 
@@ -256,6 +260,7 @@
 				<button type="button" class="btn small" onclick={() => app.clockIn(path, offset)}
 					><Icon name="clock" size={14} />Clock in</button
 				>
+				{#if elsewhere}<span class="raw">Stops and records “{elsewhere.title}”</span>{/if}
 			{/if}
 			{#if summary.minutes || summary.effort}
 				<span class="raw"

@@ -5,6 +5,9 @@
 /// typeset stays as the source, as Emacs shows it without a preview.
 
 import type { Action } from 'svelte/action';
+// The stylesheet ships with the app (a lazily imported stylesheet isn't
+// emitted by the build); its fonts download only when maths is shown.
+import 'katex/dist/katex.min.css';
 
 export interface Tex {
 	tex: string;
@@ -31,9 +34,7 @@ export function texOf(fragment: string): Tex | null {
 
 let katex: Promise<typeof import('katex').default> | null = null;
 function load() {
-	katex ??= Promise.all([import('katex'), import('katex/dist/katex.min.css')]).then(
-		([m]) => m.default,
-	);
+	katex ??= import('katex').then((m) => m.default);
 	return katex;
 }
 

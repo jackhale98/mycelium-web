@@ -111,7 +111,6 @@
 						class:on={b.action === 'heading' && level > 0}
 						aria-label={b.label}
 						title={b.label}
-						onpointerdown={(e) => e.preventDefault()}
 						onmousedown={(e) => e.preventDefault()}
 						onclick={() => onaction(b.action)}
 					>
@@ -126,7 +125,6 @@
 		class="done"
 		aria-label="Hide keyboard"
 		title="Hide keyboard"
-		onpointerdown={(e) => e.preventDefault()}
 		onmousedown={(e) => e.preventDefault()}
 		onclick={() => onaction('done')}><Icon name="keyboardDown" size={18} /></button
 	>

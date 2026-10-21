@@ -41,6 +41,7 @@ describe('emphasis', () => {
 	it('inserts a pair at the cursor, and steps out of an empty one', () => {
 		expect(exec(toggleMark('_'), 'see |')).toBe('see _|_');
 		expect(exec(toggleMark('_'), 'see _|_')).toBe('see |');
+		expect(exec(toggleMark('*'), 'a *loud|*')).toBe('a *loud*|');
 	});
 });
 
