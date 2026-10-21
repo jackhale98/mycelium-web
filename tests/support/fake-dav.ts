@@ -17,7 +17,17 @@ export class FakeDav {
 	constructor(
 		/** URL path of the WebDAV root, e.g. `/remote.php/dav/files/ada`. */
 		readonly root: string,
-		readonly options: { nextcloud?: boolean; weak?: boolean; user?: string; pass?: string } = {},
+		readonly options: {
+			nextcloud?: boolean;
+			weak?: boolean;
+			user?: string;
+			pass?: string;
+			/**
+			 * `Depth: infinity`: answer it, refuse it (403, Nextcloud's default), or
+			 * quietly answer one level. Defaults to refuse for Nextcloud, answer otherwise.
+			 */
+			infinity?: 'answer' | 'refuse' | 'ignore';
+		} = {},
 	) {}
 
 	#etag() {
@@ -61,7 +71,14 @@ export class FakeDav {
 			case 'PROPFIND': {
 				const isFolder = this.folders.has(path);
 				if (!isFolder && !file) return reply(404);
-				const depth = h['depth'] ?? '1';
+				let depth = h['depth'] ?? '1';
+				if (depth === 'infinity') {
+					const mode = this.options.infinity ?? (this.options.nextcloud ? 'refuse' : 'answer');
+					if (mode === 'refuse') return reply(403);
+					if (mode === 'ignore') depth = '1';
+				}
+				const under = (p: string) =>
+					depth === 'infinity' ? p.startsWith(`${path}/`) : p.slice(0, p.lastIndexOf('/')) === path;
 				const items: { path: string; folder: boolean; etag: string }[] = [];
 				const tagOf = (p: string) =>
 					this.options.nextcloud ? (this.#folderTag.get(p) ?? '"root"') : '';
@@ -69,11 +86,9 @@ export class FakeDav {
 					items.push({ path, folder: true, etag: tagOf(path) });
 					if (depth !== '0') {
 						for (const f of this.folders)
-							if (f !== path && f.slice(0, f.lastIndexOf('/')) === path)
-								items.push({ path: f, folder: true, etag: tagOf(f) });
+							if (f !== path && under(f)) items.push({ path: f, folder: true, etag: tagOf(f) });
 						for (const [p, v] of this.files)
-							if (p.slice(0, p.lastIndexOf('/')) === path)
-								items.push({ path: p, folder: false, etag: v.etag });
+							if (under(p)) items.push({ path: p, folder: false, etag: v.etag });
 					}
 				} else items.push({ path, folder: false, etag: file!.etag });
 				const ns = this.options.nextcloud ? ' xmlns:oc="http://owncloud.org/ns"' : '';

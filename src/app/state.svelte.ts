@@ -41,6 +41,7 @@ import type { CloudState, KeywordTone, SavedAgendaView, VaultRecord } from '$lib
 import type { FolderWorkspace } from '$lib/vault/folder';
 import type { CloudWorkspace } from '$lib/sync/workspace';
 import { RemoteAuthError, RemoteNotFound } from '$lib/sync/remote';
+import { nextCheckDelay, saveDataOn } from '$lib/sync/schedule';
 import {
 	dailyDate,
 	dailyPath,
@@ -746,6 +747,7 @@ class AppState {
 				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);
 				if (ws.kind === 'git' && ws.record.autoCommit) await ws.commit([path], message);
 				if (ws.kind === 'cloud') {
+					this.#cloudQuiet = 0;
 					this.cloudSync = { ...this.cloudSync, pending: ws.pending.length };
 					this.#queueCloudSync(CLOUD_EDIT_DELAY);
 				}
@@ -1253,6 +1255,10 @@ class AppState {
 	}
 
 	#cloudRun: Promise<void> | null = null;
+	/** Checks in a row that found nothing new (or failed): the pace slows while quiet. */
+	#cloudQuiet = 0;
+	/** When the last check started (successful or not). */
+	#cloudLastCheck = 0;
 	#shownConflicts = '';
 
 	/**
@@ -1283,6 +1289,7 @@ class AppState {
 
 	async #syncCloud(ws: CloudWorkspace, options: CloudSyncOptions) {
 		this.cloudSync = { ...this.cloudSync, state: 'syncing' };
+		this.#cloudLastCheck = Date.now();
 		const name = ws.service.name;
 		if (!options.auto) this.sync = { kind: 'busy', phase: `Syncing with ${name}` };
 		// What's on screen now, to merge with anything typed while the sync runs.
@@ -1296,6 +1303,8 @@ class AppState {
 			if (this.cloud !== ws) return;
 			await this.flush();
 			await this.#applyCloud(ws, outcome.changes, before, edits !== this.#edits);
+			const busy = outcome.pulled + outcome.pushed + outcome.changes.length > 0;
+			this.#cloudQuiet = busy || !options.auto ? 0 : this.#cloudQuiet + 1;
 			this.cloudSync = {
 				state: 'idle',
 				pending: ws.pending.length,
@@ -1328,6 +1337,8 @@ class AppState {
 			} else if (this.sync.kind === 'error' && this.sync.message.startsWith(`${name}:`))
 				this.sync = { kind: 'idle' };
 		} catch (e) {
+			// Unreachable or failing: back off like a quiet spell.
+			this.#cloudQuiet += 1;
 			const offline =
 				typeof navigator !== 'undefined' && navigator.onLine === false
 					? true
@@ -1387,17 +1398,27 @@ class AppState {
 	/** Watch for moments to sync: coming back to the app, reconnecting, and every minute. */
 	#watchCloud() {
 		if (typeof window === 'undefined') return;
-		const poke = () => {
-			if (this.cloud && document.visibilityState === 'visible') void this.syncCloud({ auto: true });
+		const visible = () => document.visibilityState === 'visible';
+		// Coming back to the app (or back online): check now, at the quick pace again,
+		// unless a check ran moments ago (desktop focus changes are frequent).
+		const back = () => {
+			if (!this.cloud || !visible() || Date.now() - this.#cloudLastCheck < 30_000) return;
+			this.#cloudQuiet = 0;
+			void this.syncCloud({ auto: true });
 		};
-		document.addEventListener('visibilitychange', poke);
-		window.addEventListener('online', poke);
-		window.addEventListener('focus', poke);
-		// Each service sets its own pace; check every 15 s whether its interval has passed.
+		document.addEventListener('visibilitychange', back);
+		window.addEventListener('online', back);
+		window.addEventListener('focus', back);
+		// Checks while open slow down when nothing changes; see nextCheckDelay.
 		setInterval(() => {
 			const ws = this.cloud;
-			const last = this.cloudSync.lastSync ?? 0;
-			if (ws && Date.now() - last >= ws.service.poll) poke();
+			if (!ws || !visible()) return;
+			const wait = nextCheckDelay({
+				base: ws.basePoll,
+				quiet: this.#cloudQuiet,
+				saveData: saveDataOn(),
+			});
+			if (Date.now() - this.#cloudLastCheck >= wait) void this.syncCloud({ auto: true });
 		}, 15_000);
 		// Leaving the app: upload what's waiting.
 		window.addEventListener('pagehide', () => {

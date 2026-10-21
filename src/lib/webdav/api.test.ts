@@ -77,9 +77,43 @@ describe('WebDav', () => {
 		expect(again.entries).toHaveLength(2);
 	});
 
+	it('lists the whole tree in one request where the server allows it', async () => {
+		const server = new FakeDav(ROOT, { infinity: 'answer' });
+		server.put('/Notes/a.org', 'A');
+		server.put('/Notes/daily/d.org', 'D');
+		server.put('/Notes/.trash/x.org', 'X');
+		const client = dav(server);
+		const first = await client.listAll({ path: '/Notes' });
+		server.requests = [];
+		const r = await client.listAll({ cursor: first.cursor });
+		expect(server.requests).toHaveLength(1);
+		expect(server.requests[0]!.headers['depth']).toBe('infinity');
+		expect(r.entries.map((e) => e.path).sort()).toEqual(['/Notes/a.org', '/Notes/daily/d.org']);
+	});
+
+	it('falls back to folder by folder when Depth: infinity is refused or ignored, and stops asking', async () => {
+		for (const infinity of ['refuse', 'ignore'] as const) {
+			const server = new FakeDav(ROOT, { infinity });
+			server.put('/Notes/a.org', 'A');
+			server.put('/Notes/daily/d.org', 'D');
+			const client = dav(server);
+			const first = await client.listAll({ path: '/Notes' });
+			expect(first.entries.map((e) => e.path).sort(), infinity).toEqual([
+				'/Notes/a.org',
+				'/Notes/daily/d.org',
+			]);
+			server.requests = [];
+			await client.listAll({ cursor: first.cursor });
+			expect(
+				server.requests.some((q) => q.headers['depth'] === 'infinity'),
+				infinity,
+			).toBe(false);
+		}
+	});
+
 	it('skips unchanged folders on Nextcloud, and only there', async () => {
 		for (const nextcloud of [true, false]) {
-			const server = new FakeDav(ROOT, { nextcloud });
+			const server = new FakeDav(ROOT, { nextcloud, infinity: 'refuse' });
 			server.put('/Notes/a.org', 'A');
 			server.put('/Notes/daily/d.org', 'D');
 			server.put('/Notes/projects/p.org', 'P');

@@ -38,7 +38,10 @@ export interface DavEntry {
 
 /** Last listing, kept in the cursor to skip unchanged folders. */
 interface Tree {
+	/** Folder ETags change with their contents (Nextcloud, ownCloud). */
 	trusted: boolean;
+	/** The server answers `Depth: infinity` (`false`: it refused; don't ask again). */
+	infinity?: boolean;
 	folders: Record<string, { etag: string; files: { path: string; rev: string }[]; dirs: string[] }>;
 }
 
@@ -133,10 +136,13 @@ export class WebDav implements RemoteFiles, RemoteBrowser {
 	}
 
 	/** PROPFIND a folder (Depth 1) or one item (Depth 0). */
-	async propfind(path: string, depth: 0 | 1): Promise<{ entries: DavEntry[]; xml: string }> {
+	async propfind(
+		path: string,
+		depth: 0 | 1 | 'infinity',
+	): Promise<{ entries: DavEntry[]; xml: string }> {
 		const res = await this.#call(
 			'PROPFIND',
-			depth === 1 ? `${path}/` : path,
+			depth === 0 ? path : `${path}/`,
 			{ Depth: String(depth), 'Content-Type': 'application/xml; charset=utf-8' },
 			PROPFIND,
 		);
@@ -156,8 +162,56 @@ export class WebDav implements RemoteFiles, RemoteBrowser {
 		}
 	}
 
+	/**
+	 * The whole tree in one request, for servers that allow `Depth: infinity`
+	 * (Nextcloud doesn't by default; Apache, nginx and others may). `null` when
+	 * the server refuses, or answers only one level (some quietly do).
+	 */
+	async #infinity(root: string): Promise<RemoteEntry[] | null> {
+		let found: DavEntry[];
+		try {
+			found = (await this.propfind(root, 'infinity')).entries;
+		} catch (e) {
+			if (e instanceof RemoteError && [400, 403, 405, 409, 412, 501, 507].includes(e.status))
+				return null;
+			throw e;
+		}
+		const depth = (p: string) => p.slice(root.length).split('/').filter(Boolean).length;
+		const subfolders = found.filter((e) => e.folder && e.path !== root && depth(e.path) === 1);
+		// A subfolder but nothing below the first level: probably only Depth 1 came back.
+		if (subfolders.length && !found.some((e) => depth(e.path) >= 2)) return null;
+		const hidden = (p: string) =>
+			p
+				.slice(root.length)
+				.split('/')
+				.some((part) => part.startsWith('.'));
+		return found
+			.filter((e) => !e.folder && e.path.startsWith(`${root}/`) && !hidden(e.path))
+			.map((e) => ({ tag: 'file', path: e.path, pathLower: e.path, rev: e.etag }));
+	}
+
 	async #walk(root: string, before: Tree | null): Promise<{ entries: RemoteEntry[]; tree: Tree }> {
-		const tree: Tree = { trusted: before?.trusted ?? false, folders: {} };
+		// One request for the whole tree, where the server allows it (and it isn't
+		// Nextcloud/ownCloud, whose folder ETags already make listing cheap).
+		if (!before?.trusted && before?.infinity !== false) {
+			const all = await this.#infinity(root);
+			if (all) return { entries: all, tree: { trusted: false, infinity: true, folders: {} } };
+			const walked = await this.#walkFolders(root, before);
+			walked.tree.infinity = false;
+			return walked;
+		}
+		return this.#walkFolders(root, before);
+	}
+
+	async #walkFolders(
+		root: string,
+		before: Tree | null,
+	): Promise<{ entries: RemoteEntry[]; tree: Tree }> {
+		const tree: Tree = {
+			trusted: before?.trusted ?? false,
+			...(before?.infinity === false ? { infinity: false } : {}),
+			folders: {},
+		};
 		const entries: RemoteEntry[] = [];
 		const file = (path: string, rev: string) =>
 			entries.push({ tag: 'file', path, pathLower: path, rev });

@@ -292,3 +292,27 @@ test('a Dropbox vault from before cloud vaults carries over', async ({ page }) =
 	await page.goto('app#/changes');
 	await expect(page.getByText('Everything is in Dropbox.')).toBeVisible();
 });
+
+test('an idle open app checks for changes less and less often', async ({ page }) => {
+	await page.clock.install();
+	const dbx = seed();
+	await connect(page, dbx);
+	let checks = 0;
+	page.on('request', (r) => {
+		if (r.url().endsWith('/files/list_folder/continue')) checks += 1;
+	});
+	// Let the first check after opening finish, then leave the app idle.
+	await page.clock.runFor(5_000);
+	checks = 0;
+	await page.clock.runFor(10 * 60_000);
+	// Every minute would be 10 checks; slowing down (1, 2, 4, then 5 minutes) is 3 or 4.
+	expect(checks).toBeGreaterThanOrEqual(2);
+	expect(checks).toBeLessThanOrEqual(4);
+
+	// A change made elsewhere still arrives at the slower pace.
+	dbx.put('/Notes/inbox.org', '#+title: Inbox\n* Arrived while idle\n');
+	await page.clock.runFor(5 * 60_000);
+	await page.goto('app#/search');
+	await page.getByRole('searchbox').first().fill('Arrived while idle');
+	await expect(page.getByText('Arrived while idle').first()).toBeVisible();
+});

@@ -30,8 +30,9 @@ export const SERVICES: Record<
 > = {
 	dropbox: { name: 'Dropbox', caseSensitive: false, poll: 60_000 },
 	onedrive: { name: 'OneDrive', caseSensitive: false, poll: 60_000 },
-	// No change feed: each check lists the folder, so check less often.
-	webdav: { name: 'WebDAV', caseSensitive: true, poll: 120_000 },
+	// No change feed: each check lists the folder. Every 5 minutes unless the server
+	// lists cheaply (see CloudWorkspace.basePoll).
+	webdav: { name: 'WebDAV', caseSensitive: true, poll: 300_000 },
 };
 
 /** The display name, e.g. "OneDrive" or "SharePoint · Team site". */

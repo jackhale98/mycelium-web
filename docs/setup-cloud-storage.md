@@ -227,13 +227,26 @@ network with the relay off and CORS allowed.
 - **When it syncs:**
   - a few seconds after you stop editing;
   - when you open or return to the app, and when you reconnect;
-  - every minute while the app is open (every two minutes for WebDAV, which
-    has no change feed and lists the folder each time; on Nextcloud and
-    ownCloud only folders that changed are listed again);
+  - while the app is open and on screen: every minute at first, then less
+    often while nothing changes (2, 4, then every 5 minutes). Any edit, change
+    from elsewhere, or return to the app goes back to every minute;
   - when you select **Sync now** in the sidebar or on Changes.
 
   Browsers don't let web apps sync in the background, so changes from other
-  devices arrive the next time Mycelium is open.
+  devices arrive the next time Mycelium is open. Nothing runs while the app
+  is closed or in the background, so it doesn't drain the battery.
+
+- **Data use.** A check that finds nothing new is about 1–2 KB for Dropbox and
+  OneDrive. Edits upload the whole file, usually a few KB. Connecting
+  downloads the whole vault once.
+  - **WebDAV** has no change feed, so each check lists the folder. Nextcloud
+    and ownCloud only list folders that changed, and servers that allow it
+    answer with the whole tree in one request; both are checked every 2
+    minutes. Other servers are listed folder by folder, about 300 bytes per
+    file, every 5 minutes.
+  - **Data Saver.** When the phone or browser asks to save data (Chrome on
+    Android reports this; Safari doesn't), checks start at every 10 minutes and
+    stretch to 15. Edits still upload a few seconds after you stop typing.
 
 - **Sign-in lifetimes.** Dropbox sign-ins last until revoked. Microsoft limits
   sign-ins made in web apps to 24 hours, renewed each time they're used, so

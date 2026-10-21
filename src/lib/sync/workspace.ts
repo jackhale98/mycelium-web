@@ -84,6 +84,26 @@ export class CloudWorkspace {
 		return SERVICES[this.record.cloud.service];
 	}
 
+	/**
+	 * How often to look for changes while the app is open (before slowing down
+	 * when quiet). WebDAV servers that list cheaply — Nextcloud/ownCloud, which
+	 * skip unchanged folders, or servers answering one whole-tree request — are
+	 * checked every 2 minutes; others every 5.
+	 */
+	get basePoll(): number {
+		const { service, cursor } = this.record.cloud;
+		if (service !== 'webdav') return SERVICES[service].poll;
+		try {
+			const tree = (
+				JSON.parse(cursor ?? '') as { tree?: { trusted?: boolean; infinity?: boolean } }
+			).tree;
+			if (tree?.trusted || tree?.infinity) return 120_000;
+		} catch {
+			/* not listed yet */
+		}
+		return SERVICES.webdav.poll;
+	}
+
 	/** The service's client (made once). */
 	client(): Promise<CloudClient> {
 		this.#client ??= openClient(this.record.cloud, (force) => this.#token(force), this.fetcher);
