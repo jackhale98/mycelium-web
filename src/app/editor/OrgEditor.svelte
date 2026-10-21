@@ -111,6 +111,10 @@
 		app.setTodo(path, line.from, nextTodoKeyword(current, config));
 	}
 
+	/** An effect scrolling `pos` to the middle of the screen. */
+	const centerOn = (v: EditorView, pos: number) =>
+		(v.constructor as typeof EditorView).scrollIntoView(pos, { y: 'center' });
+
 	/** In a table: edit it in the table sheet. Elsewhere: insert a new table (and edit it, on touch screens). */
 	function openTable(v: EditorView) {
 		if (!tables) return;
@@ -123,7 +127,21 @@
 		}
 		const offset = v.state.doc.lineAt(v.state.selection.main.head).from;
 		save();
-		app.tableSheet = { path, offset };
+		// Let go of the keyboard first: it closing and reopening around the sheet
+		// would scroll the page away. Afterwards, bring the table back into view.
+		v.contentDOM.blur();
+		app.tableSheet = {
+			path,
+			offset,
+			done: () => {
+				const t = tables?.tableHere(v.state);
+				const at = Math.min(offset, v.state.doc.length);
+				v.dispatch({
+					selection: { anchor: t ? t.table.from : at },
+					effects: centerOn(v, at),
+				});
+			},
+		};
 	}
 
 	/** Write a formula in the maths sheet; edit the one at the cursor, if it's in one. */

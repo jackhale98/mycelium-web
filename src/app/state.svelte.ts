@@ -1119,7 +1119,7 @@ class AppState {
 	// ------------------------------------------------------------------ tables
 
 	/** The table editor sheet: the table at `offset` in `path`. */
-	tableSheet = $state<{ path: string; offset: number } | null>(null);
+	tableSheet = $state<{ path: string; offset: number; done?: () => void } | null>(null);
 
 	/**
 	 * Write a table back, aligned as org-table-align does. `before` is the

@@ -24,7 +24,7 @@
 	let dialog: HTMLDialogElement | undefined = $state();
 	let grid: HTMLDivElement | undefined = $state();
 
-	type Edit = { path: string; offset: number; before: string };
+	type Edit = { path: string; offset: number; before: string; done?: () => void };
 	let editing = $state<Edit | null>(null);
 	let rows = $state<TableRow[]>([]);
 	let sel = $state({ row: 0, col: 0 });
@@ -44,14 +44,19 @@
 		else if (!sheet && dialog.open) dialog.close();
 	});
 
-	function open(s: { path: string; offset: number }) {
+	function open(s: { path: string; offset: number; done?: () => void }) {
 		const file = app.vault.file(s.path);
 		const t = file && tableAt(file.source, s.offset);
 		if (!file || !t) {
 			app.tableSheet = null;
 			return;
 		}
-		editing = { path: s.path, offset: s.offset, before: file.source.slice(t.from, t.to) };
+		editing = {
+			path: s.path,
+			offset: s.offset,
+			before: file.source.slice(t.from, t.to),
+			...(s.done ? { done: s.done } : {}),
+		};
 		rows = t.rows.map((r) => (r.rule ? { rule: true } : { cells: [...r.cells] }));
 		const first = rows.findIndex((r, i) => !r.rule && !(i === 0 && rows[1]?.rule));
 		sel = { row: first === -1 ? 0 : first, col: 0 };
@@ -62,8 +67,11 @@
 	}
 
 	function close() {
+		const done = editing?.done;
 		app.tableSheet = null;
 		editing = null;
+		// After the dialog has gone (and the keyboard with it): show the table again.
+		if (done) requestAnimationFrame(() => requestAnimationFrame(done));
 	}
 
 	function save() {

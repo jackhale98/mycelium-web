@@ -40,25 +40,46 @@
 	} = $props();
 
 	// How far the keyboard (or anything else) covers the bottom of the layout
-	// viewport. iOS reports visual-viewport scrolls only after the page has
-	// moved (pressing Return scrolls it), so the bar would trail a frame or
-	// more behind. While typing on a phone, re-measure every frame instead and
-	// write the offset straight to the element: two reads a frame, and a style
-	// write only when it changes.
+	// viewport, re-measured every frame while typing on a phone and written
+	// straight to the element. iOS scrolls the page on its own thread and
+	// tells scripts afterwards, so a bar that follows a scrolling page always
+	// trails it and judders: instead it fades out while the page moves and
+	// comes back, in place, once it settles. Keyboard changes (a new height)
+	// move it at once.
 	let bar: HTMLDivElement | undefined = $state();
 	$effect(() => {
 		const vv = window.visualViewport;
 		const el = bar;
 		if (!vv || !el || !focused || !window.matchMedia('(max-width: 960px)').matches) return;
 		let last = -1;
+		let height = vv.height;
+		let top = vv.offsetTop;
+		let scrollY = window.scrollY;
+		let settle: ReturnType<typeof setTimeout> | null = null;
 		let frame = 0;
+		const moving = () => {
+			el.classList.add('moving');
+			if (settle) clearTimeout(settle);
+			settle = setTimeout(() => el.classList.remove('moving'), 160);
+		};
 		const place = () => {
 			const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+			const scrolled = vv.offsetTop !== top || window.scrollY !== scrollY;
+			if (scrolled && vv.height === height) moving();
+			height = vv.height;
+			top = vv.offsetTop;
+			scrollY = window.scrollY;
 			if (kb !== last) el.style.setProperty('--kb', `${(last = kb)}px`);
 			frame = requestAnimationFrame(place);
 		};
 		place();
-		return () => cancelAnimationFrame(frame);
+		window.addEventListener('scroll', moving, { passive: true });
+		return () => {
+			cancelAnimationFrame(frame);
+			if (settle) clearTimeout(settle);
+			window.removeEventListener('scroll', moving);
+			el.classList.remove('moving');
+		};
 	});
 
 	type Button = {
@@ -252,11 +273,19 @@
 			border-width: 1px 0 0;
 			border-radius: 0;
 			box-shadow: none;
+			/* Solid: a backdrop blur on a moving layer blurs its text on iOS. */
+			background: var(--surface);
+			backdrop-filter: none;
 			transform: translateY(calc(-1 * var(--kb, 0px)));
-			will-change: transform;
+			transition: opacity 0.15s var(--ease);
 		}
 		.format-bar.focused {
 			display: flex;
+		}
+		.format-bar:global(.moving) {
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.08s linear;
 		}
 		/* With the keyboard down, keep clear of the home indicator. */
 		.format-bar.focused {
