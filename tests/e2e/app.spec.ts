@@ -844,6 +844,40 @@ test('tables in the source editor: the bar inserts one, Tab moves and realigns',
 		]);
 });
 
+test('on phones the bottom bar steps aside while the keyboard is up', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(!isMobile, 'phones only');
+	// A stand-in for the visual viewport, so the test can "open the keyboard".
+	await page.addInitScript(() => {
+		const vv = new EventTarget() as EventTarget & Record<string, number>;
+		Object.assign(vv, {
+			height: innerHeight,
+			width: innerWidth,
+			offsetTop: 0,
+			offsetLeft: 0,
+			scale: 1,
+		});
+		Object.defineProperty(window, 'visualViewport', { value: vv });
+		(window as unknown as { keyboard: (open: boolean) => void }).keyboard = (open) => {
+			vv.height = open ? innerHeight - 300 : innerHeight;
+			vv.dispatchEvent(new Event('resize'));
+		};
+	});
+	await open(page, `app#/node/${PROJECT}`);
+	const nav = page.getByRole('navigation', { name: 'Quick navigation' });
+	const keyboard = (o: boolean) =>
+		page.evaluate((o) => (window as unknown as { keyboard: (o: boolean) => void }).keyboard(o), o);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await keyboard(true);
+	await expect(nav).toBeHidden();
+	// Keyboard dismissed (the field may keep focus, as Android's back button leaves it): back.
+	await keyboard(false);
+	await expect(nav).toBeVisible();
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {

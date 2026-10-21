@@ -6,6 +6,46 @@
 	const route = $derived(router.route);
 	const today = localNow().date;
 
+	// While the on-screen keyboard is up for typing, the bar steps aside: the
+	// keyboard covers where it lives, and iOS would otherwise lift it above
+	// the keyboard. Only while the keyboard is really there (a focused field
+	// with the keyboard dismissed, as Android's back button leaves it, keeps
+	// the bar).
+	let editing = $state(false);
+	let keyboard = $state(false);
+	const typing = $derived(editing && keyboard);
+	$effect(() => {
+		const vv = window.visualViewport;
+		if (!vv || !matchMedia('(pointer: coarse)').matches) return;
+		const editable = (e: Event) => {
+			// The editor lives in a shadow root: look at the real target.
+			const t = e.composedPath()[0];
+			return (
+				t instanceof HTMLElement &&
+				(t.isContentEditable ||
+					t instanceof HTMLTextAreaElement ||
+					(t instanceof HTMLInputElement &&
+						!['checkbox', 'radio', 'button', 'submit', 'range', 'color', 'file'].includes(t.type)))
+			);
+		};
+		const on = (e: FocusEvent) => {
+			if (editable(e)) editing = true;
+		};
+		const off = (e: FocusEvent) => {
+			if (editable(e)) editing = false;
+		};
+		const measure = () => (keyboard = window.innerHeight - vv.height > 120);
+		document.addEventListener('focusin', on);
+		document.addEventListener('focusout', off);
+		vv.addEventListener('resize', measure);
+		measure();
+		return () => {
+			document.removeEventListener('focusin', on);
+			document.removeEventListener('focusout', off);
+			vv.removeEventListener('resize', measure);
+		};
+	});
+
 	// The search button: tap to search, swipe up (or long-press) to capture.
 	const SWIPE = 28;
 	let startY: number | null = null;
@@ -50,7 +90,7 @@
 	}
 </script>
 
-<nav class="bar" aria-label="Quick navigation">
+<nav class="bar" class:typing aria-label="Quick navigation">
 	<a href={href.home()} aria-current={route.name === 'home' ? 'page' : undefined}
 		><Icon name="home" size={20} /><span>Home</span></a
 	>
@@ -171,6 +211,9 @@
 	@media (max-width: 960px) {
 		.bar {
 			display: flex;
+		}
+		.bar.typing {
+			display: none;
 		}
 	}
 </style>
