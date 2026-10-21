@@ -34,6 +34,16 @@ export interface RemoteFiles {
 	delete(path: string, rev: string | null): Promise<void>;
 }
 
+/**
+ * Binary files (attachments, images). They aren't merged or kept offline as
+ * a whole: they're fetched when shown (and cached) and uploaded when added.
+ */
+export interface RemoteBlobs {
+	downloadBytes(path: string): Promise<Uint8Array>;
+	/** Create a file; `RemoteConflict` if one is already there. */
+	uploadBytes(path: string, bytes: Uint8Array): Promise<void>;
+}
+
 /** A folder for the folder picker. */
 export interface RemoteFolder {
 	name: string;
@@ -90,6 +100,6 @@ export async function pool<T>(items: T[], size: number, task: (item: T) => Promi
 	);
 }
 
-/** Org files, outside hidden folders (`.git`, `.trash`…). */
+/** Org files and their archives (`x.org_archive`), outside hidden folders (`.git`, `.trash`…). */
 export const syncable = (path: string) =>
-	/\.org$/i.test(path) && !path.split('/').some((part) => part.startsWith('.'));
+	/\.org(?:_archive)?$/i.test(path) && !path.split('/').some((part) => part.startsWith('.'));

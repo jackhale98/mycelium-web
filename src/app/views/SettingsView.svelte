@@ -111,6 +111,27 @@
 				>
 			</p>
 		</div>
+		<div class="field">
+			<span class="label" id="lb-label">Line breaks in paragraphs</span>
+			<div class="segmented" role="radiogroup" aria-labelledby="lb-label">
+				<button
+					type="button"
+					role="radio"
+					aria-checked={!app.joinLines}
+					onclick={() => app.setJoinLines(false)}>Keep as written</button
+				>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={app.joinLines}
+					onclick={() => app.setJoinLines(true)}>Join into paragraphs</button
+				>
+			</div>
+			<p class="hint">
+				Keep shows each line where you broke it, as Emacs does. Join flows lines together, as org's
+				HTML export does; pick it if you wrap lines with M-q.
+			</p>
+		</div>
 	</section>
 
 	<section class="panel stack" aria-labelledby="workflow-h">

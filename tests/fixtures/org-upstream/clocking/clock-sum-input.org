@@ -1,0 +1,11 @@
+* This is test
+CLOCK: [2025-10-18 Sat 09:00]--[2025-10-18 Sat 10:00] =>  1:00
+*************** Here
+:LOGBOOK:
+CLOCK: [2025-10-18 Sat 13:00]
+CLOCK: [2025-10-18 Sat 10:00]--[2025-10-18 Sat 11:00] =>  1:00
+CLOCK: [2025-10-18 Sat 13:00]
+CLOCK: [2025-10-18 Sat 14:43]
+:END:
+The open clocks here are fake outs.
+*************** END

@@ -41,6 +41,8 @@ export interface EditorHooks {
 	/** Follow a link target (`id:…`, `https:…`). */
 	follow: (target: string) => void;
 	onChange: (text: string) => void;
+	/** Focus moved in or out, or the cursor moved (for the formatting bar). */
+	onCursor?: (view: EditorView) => void;
 }
 
 /** Marks changes that came from outside the editor (so they aren't echoed back). */
@@ -239,6 +241,8 @@ const theme = EditorView.theme({
 		color: 'var(--text)',
 		backgroundColor: 'transparent',
 		fontSize: '0.95rem',
+		// The mono font's ligatures would draw `***` and `->` as single glyphs.
+		fontVariantLigatures: 'none',
 	},
 	'&.cm-focused': { outline: 'none' },
 	'.cm-scroller': { fontFamily: 'var(--font-read)', fontSize: '1.08rem', lineHeight: '1.7' },
@@ -249,6 +253,8 @@ const theme = EditorView.theme({
 		fontSize: '0.85em',
 	},
 	'.cm-content': { caretColor: 'var(--accent)', padding: '0.5rem 0 40vh' },
+	// iOS zooms the page into any focused text under 16px.
+	'@media (pointer: coarse)': { '.cm-scroller': { fontSize: 'max(16px, 1.08rem)' } },
 	'.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
 	'&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
 		backgroundColor: 'color-mix(in oklab, var(--accent) 22%, transparent) !important',
@@ -403,7 +409,10 @@ export function createEditor(
 				EditorView.updateListener.of((u) => {
 					if (u.docChanged && !u.transactions.some((t) => t.annotation(external)))
 						hooks.onChange(u.state.doc.toString());
+					if (u.docChanged || u.selectionSet || u.focusChanged) hooks.onCursor?.(u.view);
 				}),
+				// Keep the cursor clear of the formatting bar floating above the keyboard.
+				EditorView.scrollMargins.of(() => ({ bottom: 64 })),
 				theme,
 			],
 		}),

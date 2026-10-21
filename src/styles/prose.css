@@ -12,6 +12,13 @@
 
 .prose p {
 	margin: 0 0 1em;
+	/* Keep a paragraph's line breaks as written, as Emacs shows them. */
+	white-space: pre-line;
+}
+
+/* Setting: join lines into flowing text, as org's exporters do. */
+:root[data-line-breaks='join'] .prose p {
+	white-space: normal;
 }
 
 .prose strong {
@@ -645,4 +652,90 @@
 .prose.compact h3.heading,
 .prose.compact h4.heading {
 	font-size: 1em;
+}
+
+/* Source block highlighting (CodeMirror's class highlighter), in the theme's colours. */
+.prose pre .tok-keyword,
+.prose pre .tok-operatorKeyword,
+.prose pre .tok-modifier {
+	color: var(--next);
+	font-weight: 600;
+}
+.prose pre .tok-string,
+.prose pre .tok-string2,
+.prose pre .tok-regexp {
+	color: var(--link);
+}
+.prose pre .tok-comment,
+.prose pre .tok-meta {
+	color: var(--text-faint);
+	font-style: italic;
+}
+.prose pre .tok-number,
+.prose pre .tok-bool,
+.prose pre .tok-atom,
+.prose pre .tok-literal {
+	color: var(--todo);
+}
+.prose pre .tok-typeName,
+.prose pre .tok-className,
+.prose pre .tok-namespace,
+.prose pre .tok-macroName {
+	color: var(--wait);
+}
+.prose pre .tok-definition,
+.prose pre .tok-function {
+	color: var(--accent);
+	font-weight: 600;
+}
+.prose pre .tok-propertyName,
+.prose pre .tok-attributeName,
+.prose pre .tok-labelName {
+	color: var(--next);
+}
+.prose pre .tok-heading {
+	font-weight: 700;
+}
+.prose pre .tok-invalid {
+	text-decoration: underline wavy var(--todo);
+}
+
+/* LaTeX: typeset maths, or the source while KaTeX loads (and if it can't typeset). */
+.prose .math.display,
+.prose .math-block {
+	display: block;
+	margin: 1em 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	text-align: center;
+}
+.prose .math-block:not(.typeset) {
+	text-align: left;
+}
+.prose .math-block:not(.typeset) code.latex {
+	display: block;
+	padding: 0.8rem 1rem;
+	border-radius: var(--radius);
+	background: var(--code-bg);
+	white-space: pre-wrap;
+}
+.prose .katex {
+	font-size: 1.08em;
+}
+
+/* A link's target, briefly highlighted after following it. */
+.org-section,
+.org-target {
+	scroll-margin-top: 4rem;
+}
+.flash {
+	animation: flash 1.6s var(--ease, ease);
+}
+@keyframes flash {
+	from {
+		background: color-mix(in oklab, var(--accent) 18%, transparent);
+	}
+}
+.prose .org-target.radio {
+	text-decoration: underline dotted var(--text-faint);
 }

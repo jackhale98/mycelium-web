@@ -1,0 +1,6 @@
+Byte-exact copies of Org's own test fixtures (GPLv3+, part of GNU Org mode).
+Commit 21e976594d3081f7bc45ebec312275aec49778e0 (main), fetched 2026-10-21 via the mirror https://raw.githubusercontent.com/emacs-straight/org-mode/master/testing/examples/<file>
+
+link-in-heading.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/link-in-heading.org
+links.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/links.org
+normal.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/normal.org

@@ -1,4 +1,4 @@
-import { addDays, getProperties, matches, parseMatch } from '$lib/org';
+import { addDays, getProperties, isHabit, matches, parseMatch } from '$lib/org';
 import type { AgendaItem, Vault } from '$lib/vault/vault';
 
 export interface AgendaGroups {
@@ -35,6 +35,13 @@ export function groupAgenda(
 			continue;
 		}
 		const due = item.deadline ?? item.scheduled;
+		// Habits are shown on today's agenda only (org-habit-show-habits-only-for-today),
+		// however late: their graph shows how late.
+		const source = item.scheduled ? vault.file(item.file)?.source : undefined;
+		if (source && isHabit(source, item.pos, vault.file(item.file)!.index.keywords)) {
+			if (item.scheduled!.date <= today) groups.today.push(item);
+			continue;
+		}
 		if (!due) {
 			if (item.todo) groups.unscheduled.push(item);
 		} else if (due.date < today) groups.overdue.push(item);
@@ -42,10 +49,13 @@ export function groupAgenda(
 		else if (due.date <= end) groups.upcoming.push(item);
 		else groups.later.push(item);
 	}
+	const time = (i: AgendaItem) => (i.deadline ?? i.scheduled)?.time ?? '99:99';
 	const byDate = (a: AgendaItem, b: AgendaItem) =>
 		((a.deadline ?? a.scheduled)?.date ?? '').localeCompare(
 			(b.deadline ?? b.scheduled)?.date ?? '',
-		) || PRIORITY_ORDER(a.priority) - PRIORITY_ORDER(b.priority);
+		) ||
+		time(a).localeCompare(time(b)) ||
+		PRIORITY_ORDER(a.priority) - PRIORITY_ORDER(b.priority);
 	for (const list of [groups.overdue, groups.today, groups.upcoming, groups.later])
 		list.sort(byDate);
 	groups.unscheduled.sort((a, b) => PRIORITY_ORDER(a.priority) - PRIORITY_ORDER(b.priority));

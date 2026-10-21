@@ -385,6 +385,44 @@ test('heading actions set priority, tags and dates', async ({ page }) => {
 	await expect(section.locator('.prio')).toHaveText('B');
 });
 
+test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
+	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await page.getByRole('button', { name: 'Clock in' }).click();
+	const bar = page.locator('.clockbar');
+	await expect(bar).toContainText('Ship the design system');
+	await bar.getByRole('button', { name: 'Clock out' }).click();
+	await expect(bar).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editor = page.locator('.cm-content');
+	await expect(editor).toContainText(':LOGBOOK:');
+	await expect(editor).toContainText(
+		/CLOCK: \[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\]--\[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\] =>  0:00/,
+	);
+});
+
+test('archiving a heading moves it to the archive file', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
+	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await page.getByRole('button', { name: 'Archive', exact: true }).click();
+	await expect(page.locator('.org-section', { hasText: 'Ship the design system' })).toHaveCount(0);
+	await page.goto('app#/changes');
+	await expect(page.getByText(/mycelium_web\.org_archive/).first()).toBeVisible();
+});
+
+test('LaTeX maths renders with KaTeX', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.type('\nEnergy is \\(E = mc^2\\) here.\n');
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	await expect(page.locator('.node-body .katex').first()).toBeVisible();
+});
+
 test('full-text search finds words inside notes', async ({ page }) => {
 	await open(page, 'app#/search/hyphae');
 	await expect(page.getByRole('status')).toContainText(/match/);
@@ -622,6 +660,54 @@ test('lists continue on Enter and indent with Tab in the editor', async ({ page 
 	await last(1).toEqual(['']);
 	await page.keyboard.type('done');
 	await last(4).toEqual(['- [ ] milk', '  - [ ] oat', '- [ ] eggs', 'done']);
+});
+
+test('the formatting bar shapes the line, and reading keeps line breaks', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editor = page.locator('.cm-content');
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+End');
+	const bar = page.getByRole('toolbar', { name: 'Formatting' });
+	await expect(bar).toBeVisible();
+	const last = (n: number) =>
+		expect.poll(async () =>
+			(await editor.locator('.cm-line').allInnerTexts()).slice(-n).map((t) => t.trimEnd()),
+		);
+	await page.keyboard.type('\nShopping');
+	await bar.getByRole('button', { name: 'Make a heading' }).click();
+	await bar.getByRole('button', { name: /Heading level 1/ }).click();
+	await last(1).toEqual(['** Shopping']);
+	await page.keyboard.type('\nmilk');
+	await bar.getByRole('button', { name: /Checkbox/ }).click();
+	await last(1).toEqual(['- [ ] milk']);
+	await bar.getByRole('button', { name: /Checkbox/ }).click();
+	await last(1).toEqual(['- [X] milk']);
+	// Enter continues the checklist; Enter on the empty item ends it.
+	await page.keyboard.press('Enter');
+	await page.keyboard.press('Enter');
+	await page.keyboard.type('\nfirst line ');
+	await bar.getByRole('button', { name: 'Bold' }).click();
+	await page.keyboard.type('loud');
+	await page.keyboard.type('\nsecond line');
+	await last(2).toEqual(['first line *loud*', 'second line']);
+	// The editor's mono text draws `***` as three stars, not a ligature.
+	expect(await editor.evaluate((el) => getComputedStyle(el).fontVariantLigatures)).toBe('none');
+
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	const para = page.locator('.node-body p', { hasText: 'second line' });
+	await expect(para.locator('strong')).toHaveText('loud');
+	// One paragraph, two lines (as written), unless the reader chooses to join them.
+	const lines = () =>
+		para.evaluate((el) =>
+			Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+		);
+	expect(await lines()).toBe(2);
+	await page.goto('app#/settings');
+	await page.getByRole('radio', { name: 'Join into paragraphs' }).click();
+	await page.goBack();
+	await expect(para).toBeVisible();
+	expect(await lines()).toBe(1);
 });
 
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({

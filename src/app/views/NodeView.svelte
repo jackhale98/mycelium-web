@@ -9,9 +9,31 @@
 	import TodoChip from '../org/TodoChip.svelte';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
+	import { scrollToSearch } from '../org/scroll-to';
+	import { tick } from 'svelte';
 
-	let { id, eyebrow, displayTitle }: { id: string; eyebrow?: string; displayTitle?: string } =
-		$props();
+	let {
+		id,
+		eyebrow,
+		displayTitle,
+		at = null,
+	}: {
+		id: string;
+		eyebrow?: string;
+		displayTitle?: string;
+		/** An org search option to scroll to (from a link like `[[file:x.org::*Heading]]`). */
+		at?: string | null;
+	} = $props();
+
+	let article: HTMLElement | undefined = $state();
+	// Scroll to the link's target once the page has rendered.
+	$effect(() => {
+		const search = at;
+		const el = article;
+		const file = node ? app.vault.file(node.file) : undefined;
+		if (!search || !el || !file || app.editing) return;
+		void tick().then(() => scrollToSearch(el, file.source, search, file.index.keywords));
+	});
 
 	const node = $derived.by(() => {
 		void app.rev;
@@ -77,7 +99,7 @@
 
 {#if node}
 	<div class="node-layout" class:with-panel={app.panelOpen}>
-		<article class="node" aria-labelledby="node-title">
+		<article class="node" aria-labelledby="node-title" bind:this={article}>
 			<header class="node-header">
 				<div class="toolbar">
 					<a

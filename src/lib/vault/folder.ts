@@ -169,6 +169,29 @@ export class FolderWorkspace {
 		return [dir, name];
 	}
 
+	/** A text file outside the vault's notes (an archive file), or `null`. */
+	async readText(path: string): Promise<string | null> {
+		const bytes = await this.readBytes(path);
+		return bytes ? new TextDecoder().decode(bytes) : null;
+	}
+
+	/** A file's bytes (attachments, images), or `null` if it isn't there. */
+	async readBytes(path: string): Promise<Uint8Array | null> {
+		try {
+			const [dir, name] = await this.#dirFor(path, false);
+			return new Uint8Array(await (await (await dir.getFileHandle(name)).getFile()).arrayBuffer());
+		} catch {
+			return null;
+		}
+	}
+
+	async writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+		const [dir, name] = await this.#dirFor(path, true);
+		const writable = await (await dir.getFileHandle(name, { create: true })).createWritable();
+		await writable.write(bytes as unknown as ArrayBuffer);
+		await writable.close();
+	}
+
 	/** Write files to disk (or delete them, for `null`). */
 	async save(changes: { path: string; source: string | null; file?: VaultFile }[]): Promise<void> {
 		for (const c of changes) {

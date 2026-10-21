@@ -1,0 +1,16 @@
+** TODO Shave
+   SCHEDULED: <2009-10-17 Sat .+2d/4d>
+   :PROPERTIES:
+   :STYLE:    habit
+   :LAST_REPEAT: [2009-10-19 Mon 00:36]
+   :END:
+   - State "DONE"       from "TODO"       [2009-10-15 Thu]
+   - State "DONE"       from "TODO"       [2009-10-12 Mon]
+   - State "DONE"       from "TODO"       [2009-10-10 Sat]
+   - State "DONE"       from "TODO"       [2009-10-04 Sun]
+   - State "DONE"       from "TODO"       [2009-10-02 Fri]
+   - State "DONE"       from "TODO"       [2009-09-29 Tue]
+   - State "DONE"       from "TODO"       [2009-09-25 Fri]
+   - State "DONE"       from "TODO"       [2009-09-19 Sat]
+   - State "DONE"       from "TODO"       [2009-09-16 Wed]
+   - State "DONE"       from "TODO"       [2009-09-12 Sat]

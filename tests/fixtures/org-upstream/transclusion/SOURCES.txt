@@ -1,0 +1,4 @@
+Byte-exact copies of org-transclusion's own test fixtures (GPLv3+), fetched 2026-10-21 from
+https://raw.githubusercontent.com/nobiot/org-transclusion/main/test/<file>
+test-2.0.org, paragraph.org, bertrand-russell.org, python-1.py
+(test-2.0.org references other fixture files that were not copied, e.g. paragraph.txt.)

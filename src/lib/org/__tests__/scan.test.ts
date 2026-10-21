@@ -19,7 +19,7 @@ const files = (dir: string): string[] =>
 const keywords = { todoKeywords: ['TODO', 'NEXT'], doneKeywords: ['DONE'] };
 
 /** The parts of an index that the app relies on, in comparable form. */
-function essentials(idx: FileIndex) {
+function essentials(idx: FileIndex, source: string) {
 	return {
 		title: idx.title,
 		excluded: idx.excluded,
@@ -37,7 +37,10 @@ function essentials(idx: FileIndex) {
 		})),
 		links: idx.links
 			.filter(
-				(l) => l.type === 'id' || l.type === 'roam' || l.type === 'file' || l.type === 'https',
+				(l) =>
+					(l.type === 'id' || l.type === 'roam' || l.type === 'file' || l.type === 'https') &&
+					// Bare URLs make no backlinks, and the fast scanner skips them.
+					source.startsWith('[[', l.pos),
 			)
 			.map((l) => ({
 				source: l.source,
@@ -56,8 +59,8 @@ describe('scanner agrees with the tree extractor', () => {
 			const name = path.slice(root.length + 1);
 			it(name, () => {
 				const source = readFileSync(path, 'utf8');
-				expect(essentials(scanFile(name, source, keywords))).toEqual(
-					essentials(indexFileTree(name, source, keywords)),
+				expect(essentials(scanFile(name, source, keywords), source)).toEqual(
+					essentials(indexFileTree(name, source, keywords), source),
 				);
 			});
 		}
@@ -87,8 +90,8 @@ describe('scanner agrees with the tree extractor', () => {
 			':END:',
 			'| cell [[id:cell]] |',
 		].join('\n');
-		expect(essentials(scanFile('t.org', source, keywords))).toEqual(
-			essentials(indexFileTree('t.org', source, keywords)),
+		expect(essentials(scanFile('t.org', source, keywords), source)).toEqual(
+			essentials(indexFileTree('t.org', source, keywords), source),
 		);
 	});
 });

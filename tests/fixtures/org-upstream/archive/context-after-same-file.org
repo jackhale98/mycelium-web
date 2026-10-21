@@ -1,0 +1,11 @@
+* a
+* Archived Tasks
+
+** TODO b
+:PROPERTIES:
+:ARCHIVE_TIME: 2020-07-05 Sun 00:00
+:ARCHIVE_FILE: /tmp/test.org
+:ARCHIVE_OLPATH: a
+:ARCHIVE_CATEGORY: test
+:ARCHIVE_TODO: TODO
+:END:

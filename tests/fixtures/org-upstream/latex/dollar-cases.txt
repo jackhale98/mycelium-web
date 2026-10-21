@@ -1,0 +1,13 @@
+test-org-element/latex-fragment-parser (testing/lisp/test-org-element.el)
+Is the object at point a latex-fragment?
+
+$a$     yes        $a$a    NO (closing $ followed by a letter)
+$a$!    yes        $a$,    yes
+$a$"    yes        $a$)    yes
+"$a$ "  yes        $a$'    yes
+$.a$    NO         $,a$    NO
+$;a$    NO         "$ a$"  NO (whitespace after opening $)
+$a.$    NO         $a,$    NO
+"$a $"  NO (whitespace before closing $)
+$$a$$   yes        \(a\)   yes        \[a\]   yes
+"- $x$" yes (fragment at beginning of an item)

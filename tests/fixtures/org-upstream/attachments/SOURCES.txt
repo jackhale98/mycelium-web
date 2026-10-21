@@ -1,0 +1,13 @@
+Byte-exact copies of Org's own test fixtures (GPLv3+, part of GNU Org mode).
+Commit 21e976594d3081f7bc45ebec312275aec49778e0 (main), fetched 2026-10-21 via the mirror https://raw.githubusercontent.com/emacs-straight/org-mode/master/testing/examples/<file>
+
+att1/fileA  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/att1/fileA
+att1/fileB  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/att1/fileB
+att2/fileC  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/att2/fileC
+att2/fileD  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/att2/fileD
+attachments.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/attachments.org
+data/ab/cd123/fileE  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/data/ab/cd123/fileE
+
+Used by testing/lisp/test-org-attach.el (test-org-attach/dir).  att1/, att2/ are DIR-property
+attachment folders; data/ab/cd123/ is the ID-derived folder for :ID: abcd123 under
+org-attach-id-dir "data/" (uuid-folder-format: first 2 chars / rest).

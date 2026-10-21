@@ -1,8 +1,15 @@
 <script lang="ts">
-	import { normaliseTag, type KeywordConfig, type OrgTimestamp, type PlanningKind } from '$lib/org';
+	import {
+		archiveLocation,
+		formatDuration,
+		normaliseTag,
+		type KeywordConfig,
+		type OrgTimestamp,
+		type PlanningKind,
+	} from '$lib/org';
 	import Icon from '../components/Icon.svelte';
 	import { href, router } from '../router.svelte';
-	import { app } from '../state.svelte';
+	import { app, localNow } from '../state.svelte';
 
 	let {
 		path,
@@ -44,6 +51,31 @@
 		return [...app.vault.tags.keys()].filter((t) => !tags.includes(t)).sort();
 	});
 	const states = $derived([...keywords.todoKeywords, ...keywords.doneKeywords]);
+	const running = $derived(
+		app.runningClocks.find((c) => c.path === path && c.heading === offset) ?? null,
+	);
+	const summary = $derived(app.clockSummary(path, offset));
+	const today = localNow().date;
+
+	/** Where Archive sends the tree (org-archive-location). */
+	const archiveTo = $derived.by(() => {
+		void app.rev;
+		const file = app.vault.file(path);
+		if (!file) return '';
+		const loc = archiveLocation(file.source, offset, path, keywords);
+		return `${loc.file ?? path}${loc.heading ? ` › ${loc.heading.replace(/^\*+\s*/, '')}` : ''}`;
+	});
+	let archiveNote = $state<string | null>(null);
+
+	async function archive() {
+		const r = await app.archive(path, offset);
+		if ('error' in r) archiveNote = r.error;
+		else {
+			archiveNote = null;
+			onclose();
+			app.headingSheet = null;
+		}
+	}
 
 	function addTags(e?: Event) {
 		e?.preventDefault();
@@ -205,6 +237,52 @@
 		</div>
 	</div>
 
+	<div class="row">
+		<span class="label">Clock</span>
+		<div class="when clock">
+			{#if running}
+				<span class="running"
+					><Icon name="clock" size={14} />Since {running.start.time}{running.start.date !== today
+						? ` (${running.start.date})`
+						: ''}</span
+				>
+				<button type="button" class="btn small primary" onclick={() => app.clockOut(path, offset)}
+					>Clock out</button
+				>
+				<button type="button" class="btn small" onclick={() => app.clockCancel(path, offset)}
+					>Cancel</button
+				>
+			{:else}
+				<button type="button" class="btn small" onclick={() => app.clockIn(path, offset)}
+					><Icon name="clock" size={14} />Clock in</button
+				>
+			{/if}
+			{#if summary.minutes || summary.effort}
+				<span class="raw"
+					>{summary.minutes ? `${formatDuration(summary.minutes)} clocked` : ''}{summary.minutes &&
+					summary.effort
+						? ' · '
+						: ''}{summary.effort ? `effort ${formatDuration(summary.effort)}` : ''}</span
+				>
+			{/if}
+		</div>
+	</div>
+
+	<div class="row move">
+		<button
+			type="button"
+			class="btn small"
+			onclick={() => {
+				app.refileSheet = { path, pos: offset };
+				if (variant === 'inline') onclose();
+			}}><Icon name="arrowRight" size={14} />Refile…</button
+		>
+		<button type="button" class="btn small" onclick={archive} title={`Move to ${archiveTo}`}
+			><Icon name="inbox" size={14} />Archive</button
+		>
+		{#if archiveNote}<span class="raw" role="status">{archiveNote}</span>{/if}
+	</div>
+
 	{#if variant === 'inline' || !id}
 		<div class="row foot">
 			{#if id && nodeAction}
@@ -224,6 +302,19 @@
 </div>
 
 <style>
+	.clock {
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		align-items: center;
+	}
+	.running {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--todo);
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
 	.actions {
 		display: flex;
 		flex-direction: column;

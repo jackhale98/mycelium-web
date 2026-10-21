@@ -13,6 +13,7 @@ import { scanFile } from '$lib/org';
 import { db, fileKey, requestPersistence, type CachedFile, type VaultRecord } from '$lib/store/db';
 import { detectKeywords, detectLayout, inVault } from '$lib/vault/layout';
 import type { VaultFile } from '$lib/vault/vault';
+import { isTextPath } from '$lib/vault/files';
 import {
 	GitRepo,
 	type FileConflict,
@@ -43,7 +44,7 @@ function fsFor(id: string, wipe = false) {
 }
 
 const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
-const hash = async (text: string) => (await git.hashBlob({ object: text })).oid;
+const hash = async (content: string | Uint8Array) => (await git.hashBlob({ object: content })).oid;
 
 export class Workspace {
 	readonly kind = 'git';
@@ -185,6 +186,23 @@ export class Workspace {
 		return out;
 	}
 
+	/** A text file outside the vault's notes (an archive file), or `null`. */
+	readText(path: string): Promise<string | null> {
+		return this.repo.readWorking(path);
+	}
+
+	/** A file's bytes (attachments, images), or `null` if it isn't there. */
+	readBytes(path: string): Promise<Uint8Array | null> {
+		return this.repo.readWorkingBytes(path);
+	}
+
+	/** Add or replace a binary file; it shows up on Changes like any edit. */
+	async writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+		await this.repo.writeBytes(path, bytes);
+		this.#dirty.add(path);
+		await this.#saveDirty();
+	}
+
 	/** Autosave: write to the working tree and remember the paths as uncommitted. */
 	async save(changes: { path: string; source: string | null; file?: VaultFile }[]): Promise<void> {
 		await this.repo.write(changes.map((c) => ({ path: c.path, content: c.source })));
@@ -220,7 +238,10 @@ export class Workspace {
 		const head = await this.repo.files((p) => this.#dirty.has(p));
 		const out: FileStatus[] = [];
 		for (const path of [...this.#dirty].sort()) {
-			const working = await this.repo.readWorking(path);
+			// Attachments are compared as bytes, text as text.
+			const working = isTextPath(path)
+				? await this.repo.readWorking(path)
+				: await this.repo.readWorkingBytes(path);
 			const committed = head.get(path);
 			if (working === null) {
 				if (committed) out.push({ path, status: 'deleted' });
@@ -234,8 +255,23 @@ export class Workspace {
 	}
 
 	/** Committed and working text of a file, for a diff. */
-	async diff(path: string): Promise<{ before: string | null; after: string | null }> {
+	async diff(path: string): Promise<{
+		before: string | null;
+		after: string | null;
+		binary?: boolean;
+		size?: number;
+	}> {
 		const head = await this.repo.files((p) => p === path);
+		if (!isTextPath(path)) {
+			// Binary: no line diff, just whether it's there.
+			const bytes = await this.repo.readWorkingBytes(path);
+			return {
+				before: head.has(path) ? '' : null,
+				after: bytes ? '' : null,
+				binary: true,
+				size: bytes?.length ?? 0,
+			};
+		}
 		const before = head.has(path) ? await this.repo.readBlob(head.get(path)!) : null;
 		return { before, after: await this.repo.readWorking(path) };
 	}

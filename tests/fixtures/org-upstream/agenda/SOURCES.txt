@@ -1,0 +1,9 @@
+Byte-exact copies of Org's own test fixtures (GPLv3+, part of GNU Org mode).
+Commit 21e976594d3081f7bc45ebec312275aec49778e0 (main), fetched 2026-10-21 via the mirror https://raw.githubusercontent.com/emacs-straight/org-mode/master/testing/examples/<file>
+
+agenda-file.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/agenda-file.org
+agenda-file2.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/agenda-file2.org
+agenda-search.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/agenda-search.org
+
+Used by testing/lisp/test-org-agenda.el: agenda-file2.org drives test-org-agenda/time-grid
+(timed ranges 09:30-10:00, 10:00-12:30, 13:00-15:00, a bare 19:00 and a two-day range).

@@ -1,0 +1,7 @@
+BEFORE (point on "* H"):
+* H
+* Archive :ARCHIVE:
+
+AFTER org-archive-to-archive-sibling (first two lines; ARCHIVE_TIME property follows under ** H):
+* Archive :ARCHIVE:
+** H

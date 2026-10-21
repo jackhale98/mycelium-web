@@ -1,0 +1,7 @@
+* Test
+CLOCK: [2012-03-29 Thu 8:00]--[2012-03-29 Thu 16:40] => 8:40
+** subtree Test
+#+BEGIN: clocktable :scope subtree
+#+END:
+
+CLOCK: [2012-03-29 Thu 16:00]--[2012-03-29 Thu 17:00] =>  1:00

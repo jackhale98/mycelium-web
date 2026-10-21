@@ -1,0 +1,14 @@
+Agenda lines produced by the test suite with a "no fluff" agenda
+(org-agenda-prefix-format "", org-agenda-todo-keyword-format "", span day),
+so each line is: <heading text padded to org-habit-graph-column><graph>.
+Graph width = org-habit-preceding-days + org-habit-following-days + 1 cells;
+"*" = done that day, "!" = today, " " = no mark (colour is carried by faces, not characters).
+
+simple-habit-catchup.org, today 2009-10-22, org-habit-graph-column 5, TZ UTC0:
+"\nhabit                * *  !       \n"
+
+simple-habit-week.org, today 2026-06-16, org-habit-graph-column 5:
+"\nhabit*      *      *      *       \n"
+
+shave-test-suite.org (all of .+ / + / ++, with and without /4d, both log orders), today 2009-10-17, default column 40:
+"\nShave                                      *  * *     * *  * !       \n"

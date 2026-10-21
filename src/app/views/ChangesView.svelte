@@ -13,9 +13,15 @@
 	let excluded = $state<Set<string>>(new Set());
 	/** Diffs the person opened or closed; others follow the default (open for ≤3 files). */
 	let toggled = $state<Map<string, boolean>>(new Map());
-	let diffs = $state<
-		Map<string, { hunks: DiffHunk[]; headings: (string | null)[]; added: number; removed: number }>
-	>(new Map());
+	interface FileDiff {
+		hunks: DiffHunk[];
+		headings: (string | null)[];
+		added: number;
+		removed: number;
+		/** Attachments and images: no line diff, just the size. */
+		binary?: number;
+	}
+	let diffs = $state<Map<string, FileDiff>>(new Map());
 	let history = $state<CommitSummary[]>([]);
 	let branches = $state<{ current: string; local: string[]; remote: string[] }>({
 		current: '',
@@ -65,7 +71,12 @@
 		let cancelled = false;
 		void Promise.all(
 			paths.map(async (path) => {
-				const { before, after } = await ws.diff(path);
+				const { before, after, binary, size } = await ws.diff(path);
+				if (binary)
+					return [path, { hunks: [], headings: [], added: 0, removed: 0, binary: size ?? 0 }] as [
+						string,
+						FileDiff,
+					];
 				const hunks = diffLines(before ?? '', after ?? '');
 				const lines = (after ?? before ?? '').split('\n');
 				const headings = hunks.map((h) =>
@@ -78,7 +89,7 @@
 						if (l.kind === 'add') added++;
 						else if (l.kind === 'remove') removed++;
 					}
-				return [path, { hunks, headings, added, removed }] as const;
+				return [path, { hunks, headings, added, removed }] as [string, FileDiff];
 			}),
 		).then((entries) => {
 			if (!cancelled) diffs = new Map(entries);
@@ -387,6 +398,12 @@
 								>
 									{#if !d}
 										<p class="empty">Loading…</p>
+									{:else if d.binary !== undefined}
+										<p class="empty">
+											Binary file{c.status === 'deleted'
+												? ' removed'
+												: ` · ${d.binary < 1024 ? `${d.binary} B` : `${Math.round(d.binary / 1024)} KB`}`}
+										</p>
 									{:else if d.hunks.length === 0}
 										<p class="empty">No textual changes.</p>
 									{:else}

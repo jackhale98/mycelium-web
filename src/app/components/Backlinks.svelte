@@ -4,6 +4,7 @@
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import Icon from './Icon.svelte';
+	import { unlinkedReferences } from '$lib/vault/unlinked';
 
 	let { id }: { id: string } = $props();
 
@@ -22,6 +23,19 @@
 		return app.vault.reflinksOf(id);
 	});
 	const refCount = $derived(refGroups.reduce((n, g) => n + g.links.length, 0));
+
+	/** org-roam's unlinked references: computed only when opened (it's a full-text search). */
+	let showUnlinked = $state(false);
+	const unlinked = $derived.by(() => {
+		if (!showUnlinked) return [];
+		void app.rev;
+		const node = app.vault.node(id);
+		if (!node) return [];
+		return unlinkedReferences(
+			node,
+			[...app.vault.files.values()].map((f) => ({ path: f.path, source: f.source })),
+		);
+	});
 </script>
 
 <section class="panel-section" aria-labelledby="bl-heading">
@@ -82,6 +96,48 @@
 	</section>
 {/if}
 
+<section class="panel-section" aria-labelledby="ul-heading">
+	<h2 id="ul-heading" class="panel-title">
+		<button
+			type="button"
+			class="unlinked-toggle"
+			aria-expanded={showUnlinked}
+			onclick={() => (showUnlinked = !showUnlinked)}
+			><Icon name={showUnlinked ? 'chevronDown' : 'chevronRight'} size={14} />Unlinked references</button
+		>
+		{#if showUnlinked}<span class="count">{unlinked.length}</span>{/if}
+	</h2>
+	{#if showUnlinked}
+		{#if unlinked.length === 0}
+			<p class="empty">No other note mentions this one without linking it.</p>
+		{:else}
+			<ul class="unlinked">
+				{#each unlinked as ref (`${ref.file}:${ref.offset}`)}
+					{@const before = ref.context.slice(0, ref.column - 1)}
+					{@const after = ref.context.slice(ref.column - 1 + ref.text.length)}
+					<li>
+						<a class="where" href={app.linkTarget(ref.file, null)?.href ?? null}
+							>{app.vault.file(ref.file)?.index.title || ref.file}<span class="pos"
+								>:{ref.line}</span
+							></a
+						>
+						<p class="line">
+							{before.length > 60 ? `…${before.slice(-60)}` : before}<mark>{ref.text}</mark
+							>{after.length > 80 ? `${after.slice(0, 80)}…` : after}
+						</p>
+						<button
+							type="button"
+							class="btn small"
+							title={`Turn “${ref.text}” into a link to this note`}
+							onclick={() => app.linkMention(ref.file, ref.offset, ref.text, id)}>Link</button
+						>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	{/if}
+</section>
+
 {#if forward.length}
 	<section class="panel-section" aria-labelledby="fl-heading">
 		<h2 id="fl-heading" class="panel-title">
@@ -100,6 +156,56 @@
 {/if}
 
 <style>
+	.unlinked-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		letter-spacing: inherit;
+		text-transform: inherit;
+	}
+	.unlinked {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.unlinked li {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 0.15rem 0.5rem;
+		align-items: start;
+	}
+	.unlinked .where {
+		color: var(--link);
+		font-size: 0.82rem;
+		font-weight: 600;
+	}
+	.unlinked .pos {
+		color: var(--text-faint);
+		font-weight: 400;
+	}
+	.unlinked .line {
+		grid-column: 1;
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 0.84rem;
+		overflow-wrap: anywhere;
+	}
+	.unlinked .btn {
+		grid-column: 2;
+		grid-row: 1 / span 2;
+	}
+	.unlinked mark {
+		background: color-mix(in oklab, var(--accent) 18%, transparent);
+		color: var(--text);
+	}
 	.panel-section + .panel-section {
 		margin-top: 1.75rem;
 	}

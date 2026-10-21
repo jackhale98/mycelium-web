@@ -279,6 +279,46 @@ export class CloudWorkspace {
 			await this.#updateCloud({ pending: [...this.record.cloud.pending, path] });
 	}
 
+	/** A text file outside the vault's notes (an archive file) from this browser's copy, or `null`. */
+	async readText(path: string): Promise<string | null> {
+		return (await db().files.get(fileKey(this.record.id, path)))?.source ?? null;
+	}
+
+	/**
+	 * A binary file (image, attachment): from this browser's cache, else from
+	 * the service (then cached). `null` if it isn't there or can't be reached.
+	 */
+	async readBytes(path: string): Promise<Uint8Array | null> {
+		const key = fileKey(this.record.id, path);
+		const hit = await db().blobs.get(key);
+		if (hit) return new Uint8Array(await hit.data.arrayBuffer());
+		try {
+			const bytes = await (await this.client()).downloadBytes(`${this.record.cloud.root}/${path}`);
+			await db().blobs.put({
+				key,
+				vaultId: this.record.id,
+				path,
+				data: new Blob([bytes as unknown as BlobPart]),
+				fetchedAt: Date.now(),
+			});
+			return bytes;
+		} catch {
+			return null;
+		}
+	}
+
+	/** Add a binary file: uploaded straight away (attachments need a connection). */
+	async writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+		await (await this.client()).uploadBytes(`${this.record.cloud.root}/${path}`, bytes);
+		await db().blobs.put({
+			key: fileKey(this.record.id, path),
+			vaultId: this.record.id,
+			path,
+			data: new Blob([bytes as unknown as BlobPart]),
+			fetchedAt: Date.now(),
+		});
+	}
+
 	async updateRecord(patch: Partial<VaultRecord>) {
 		Object.assign(this.record, patch);
 		await db().vaults.put(this.record);
@@ -295,8 +335,9 @@ export class CloudWorkspace {
 	/** Forget the vault here. The folder in the service is untouched. */
 	async destroy(): Promise<void> {
 		const id = this.record.id;
-		await db().transaction('rw', db().files, db().syncbase, db().vaults, async () => {
+		await db().transaction('rw', [db().files, db().syncbase, db().vaults, db().blobs], async () => {
 			await db().files.where('vaultId').equals(id).delete();
+			await db().blobs.where('vaultId').equals(id).delete();
 			await db().syncbase.where('vaultId').equals(id).delete();
 			await db().vaults.delete(id);
 		});

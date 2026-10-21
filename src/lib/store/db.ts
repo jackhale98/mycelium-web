@@ -109,11 +109,21 @@ export interface CachedFile {
 	index: FileIndex;
 }
 
+/** A binary file fetched from a cloud vault (an image, an attachment), kept for offline use. */
+export interface CachedBlob {
+	key: string;
+	vaultId: string;
+	path: string;
+	data: Blob;
+	fetchedAt: number;
+}
+
 class MyceliumDB extends Dexie {
 	vaults!: EntityTable<VaultRecord, 'id'>;
 	files!: EntityTable<CachedFile, 'key'>;
 	handles!: EntityTable<FolderHandle, 'id'>;
 	syncbase!: EntityTable<SyncBase, 'key'>;
+	blobs!: EntityTable<CachedBlob, 'key'>;
 
 	constructor() {
 		super('mycelium');
@@ -141,6 +151,7 @@ class MyceliumDB extends Dexie {
 						delete v.dropbox;
 					}),
 			);
+		this.version(6).stores({ blobs: 'key, vaultId' });
 	}
 }
 

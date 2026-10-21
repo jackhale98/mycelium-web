@@ -1,0 +1,10 @@
+Byte-exact copies of Org's own test fixtures (GPLv3+, part of GNU Org mode).
+Commit 21e976594d3081f7bc45ebec312275aec49778e0 (main), fetched 2026-10-21 via the mirror https://raw.githubusercontent.com/emacs-straight/org-mode/master/testing/examples/<file>
+
+include.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/include.org
+include2.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/include2.org
+macro-templates.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/macro-templates.org
+no-heading.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/no-heading.org
+org-exp.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/org-exp.org
+property-inheritance.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/property-inheritance.org
+setupfile3.org  <-  https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/examples/setupfile3.org

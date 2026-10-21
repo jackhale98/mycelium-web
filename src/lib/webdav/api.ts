@@ -13,6 +13,7 @@ import {
 	RemoteConflict,
 	RemoteError,
 	RemoteNotFound,
+	type RemoteBlobs,
 	type RemoteBrowser,
 	type RemoteEntry,
 	type RemoteFiles,
@@ -100,7 +101,7 @@ function basic(username: string, password: string): string {
 /** Nextcloud and ownCloud: folder ETags change when anything inside changes. */
 const trustsFolderEtags = (xml: string) => /owncloud\.org\/ns|nextcloud\.org\/ns/.test(xml);
 
-export class WebDav implements RemoteFiles, RemoteBrowser {
+export class WebDav implements RemoteFiles, RemoteBrowser, RemoteBlobs {
 	readonly base: URL;
 
 	constructor(
@@ -327,6 +328,24 @@ export class WebDav implements RemoteFiles, RemoteBrowser {
 		if (res.ok || res.status === 404) return;
 		if (res.status === 412) throw new RemoteConflict(path);
 		throw new RemoteError(res.status, res.statusText, 'WebDAV');
+	}
+
+	async downloadBytes(path: string): Promise<Uint8Array> {
+		const res = await this.#call('GET', path);
+		if (res.status === 404) throw new RemoteNotFound(path);
+		if (!res.ok) throw new RemoteError(res.status, res.statusText, 'WebDAV');
+		return new Uint8Array(await res.arrayBuffer());
+	}
+
+	async uploadBytes(path: string, bytes: Uint8Array): Promise<void> {
+		const headers = { 'Content-Type': 'application/octet-stream', 'If-None-Match': '*' };
+		let res = await this.#call('PUT', path, headers, bytes as unknown as BodyInit);
+		if (res.status === 409) {
+			await this.#mkcols(path);
+			res = await this.#call('PUT', path, headers, bytes as unknown as BodyInit);
+		}
+		if (res.status === 412) throw new RemoteConflict(path);
+		if (!res.ok) throw new RemoteError(res.status, res.statusText, 'WebDAV');
 	}
 
 	async browse(path: string) {

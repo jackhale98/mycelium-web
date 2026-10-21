@@ -1,0 +1,7 @@
+test-org/refile (testing/lisp/test-org.el), refile "* H2" under "* H1" (pos 1):
+BEFORE:
+* H1
+* H2
+AFTER:
+* H1
+** H2

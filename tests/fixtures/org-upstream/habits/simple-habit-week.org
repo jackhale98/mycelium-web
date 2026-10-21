@@ -1,0 +1,16 @@
+* TODO habit
+SCHEDULED: <2026-06-16 Tue +1w>
+:PROPERTIES:
+:STYLE:    habit
+:END:
+- State "DONE"       from "TODO"       [2026-06-16 Tue]
+- State "DONE"       from "TODO"       [2026-06-09 Tue]
+- State "DONE"       from "TODO"       [2026-06-02 Tue]
+- State "DONE"       from "TODO"       [2026-05-26 Tue]
+- State "DONE"       from "TODO"       [2026-05-12 Tue]
+- State "DONE"       from "TODO"       [2026-05-05 Tue]
+- State "DONE"       from "TODO"       [2026-04-28 Tue]
+- State "DONE"       from "TODO"       [2026-04-21 Tue]
+- State "DONE"       from "TODO"       [2026-04-14 Tue]
+- State "DONE"       from "TODO"       [2026-04-07 Tue]
+- State "DONE"       from "TODO"       [2026-03-31 Tue]

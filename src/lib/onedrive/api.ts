@@ -9,6 +9,7 @@ import {
 	RemoteConflict,
 	RemoteError,
 	RemoteNotFound,
+	type RemoteBlobs,
 	type RemoteBrowser,
 	type RemoteEntry,
 	type RemoteFiles,
@@ -74,7 +75,7 @@ export interface DriveChoice {
 	owner: string;
 }
 
-export class GraphDrive implements RemoteFiles, RemoteBrowser {
+export class GraphDrive implements RemoteFiles, RemoteBrowser, RemoteBlobs {
 	constructor(
 		readonly driveId: string,
 		private token: (force?: boolean) => Promise<string>,
@@ -261,6 +262,29 @@ export class GraphDrive implements RemoteFiles, RemoteBrowser {
 		if (res.ok || res.status === 404) return;
 		if (res.status === 412) throw new RemoteConflict(path);
 		throw await failure(res);
+	}
+
+	async downloadBytes(path: string): Promise<Uint8Array> {
+		const item = await this.#json<Item>(this.#item(path));
+		const url = item['@microsoft.graph.downloadUrl'];
+		if (!url) throw new RemoteNotFound(path);
+		const res = await this.fetcher(url);
+		if (!res.ok) throw await failure(res);
+		return new Uint8Array(await res.arrayBuffer());
+	}
+
+	/** Simple upload (Graph takes up to 250 MB this way). */
+	async uploadBytes(path: string, bytes: Uint8Array): Promise<void> {
+		const res = await this.#call(
+			`${this.#item(path, 'content')}?@microsoft.graph.conflictBehavior=fail`,
+			{
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/octet-stream' },
+				body: bytes as unknown as BodyInit,
+			},
+		);
+		if (res.status === 409 || res.status === 412) throw new RemoteConflict(path);
+		if (!res.ok) throw await failure(res);
 	}
 
 	async browse(path: string) {

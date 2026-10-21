@@ -1,0 +1,9 @@
+test-org/paste-subtree (testing/lisp/test-org.el).  org-paste-subtree is what
+org-refile calls with LEVEL = target level + 1.  "|" marks point.
+
+(org-paste-subtree nil "* Text")  in "* H\n|"            => "* H\n* Text\n"
+(org-paste-subtree nil "* Text")  in "* H1\n** H2\n|"     => "* H1\n** H2\n** Text\n"
+(org-paste-subtree nil "* Text")  in "* H1\n|Paragraph\n* H2" => "* H1\nParagraph\n* Text\n* H2"
+(org-paste-subtree '(4) "* Text") in "* H1\n|Paragraph\n** H1.1\n* H2" => "* H1\nParagraph\n** H1.1\n* Text\n* H2"
+(org-paste-subtree '(16) "* Text") same buffer               => "* H1\nParagraph\n** Text\n** H1.1\n* H2"
+(org-paste-subtree nil "*** Text") in "|* H1\n** H2"        => "* Text\n* H1\n** H2"

@@ -1,0 +1,13 @@
+All files here are transcribed verbatim from the Org test suite
+https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/lisp/test-org-clock.el
+(mirror: https://raw.githubusercontent.com/emacs-straight/org-mode/master/testing/lisp/test-org-clock.el)
+commit 21e976594d3081f7bc45ebec312275aec49778e0 (main, Org 10.0-pre), fetched 2026-10-21.
+
+clock-sum-input.org              test-org-clock/org-clock-sum (input; expected org-clock-file-total-minutes = 120, per-heading (120 60))
+clocktable-maxlevel-*            test-org-clock/clocktable/maxlevel  (rendered with org-duration-format bound to 'h:mm by the test helper)
+clocktable-subtree-*             test-org-clock/clocktable/scope ("subtree" case; the test inserts the dblock at point = the blank line under "** subtree Test")
+clocktable-timestamp-*           test-org-clock/clocktable/timestamp (":timestamp t")
+clock-drawer-expected.org        test-org-clock/clock-drawer-dwim (expected buffer after C-c C-c fixes day names)
+update-time-maybe.txt            test-org-clock/org-clock-update-time-maybe
+Day names in the tests are produced by (org-test-get-day-name "Sat") etc.; shown here in English.
+The caption line "#+CAPTION: Clock summary at [...]" is stripped by the test helper and is not included in the *-expected.txt files.

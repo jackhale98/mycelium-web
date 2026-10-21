@@ -1,0 +1,317 @@
+#+title: Test file for Org-transclusion
+#+startup: content
+
+This is the first section before the first headline.
+
+* Regression
+** Translclude from same buffer
+
+   #+transclude: [[id:2026-03-07T124245]]
+
+** notmuch
+#+transclude: [[:]]
+
+   #+transclude: [[notmuch:id:E5208A8C-F56A-4931-9E9F-A1F5F78B8698@nobiot.com][notmuch email]]
+
+   [[notmuch:id:E5208A8C-F56A-4931-9E9F-A1F5F78B8698@nobiot.com]]
+
+** info
+
+   #+transclude: [[info:elisp#Buffer Display Action Functions][(elisp) Buffer Display Action Functions]]
+
+** file search option
+
+   #+transclude: [[file:paragraph.org]]
+   => transclude entire buffer
+
+   #+transclude: [[file:paragraph.org::Sub heading][This is a description]]
+   => Sub heading only
+
+   #+transclude: [[file:paragraph.org::non-exisitent]]
+   => Should not transclude anything
+
+   #+transclude: [[paragraph.txt]]
+
+** make from link -- ID and ID with search option
+This is a link to a [[id:2022-05-30T203553][Bertrand Russell]] wikipedia excerpt
+#+transclude: [[id:2022-05-30T203553][Bertrand Russell]]
+
+#+transclude: [[id:2022-10-10T173507::*H2]]
+
+[[id:2022-10-10T173507::*H2]]
+
+ID with "first section" [[id:2022-06-26T152831]]
+
+#+begin_src emacs-lisp
+  (setq org-transclusion-include-first-section nil)
+  (setq org-transclusion-include-first-section t)
+#+end_src
+
+#+transclude: [[id:2022-06-26T152831]]
+
+** org-id with lines, no first-heading etc
+
+   [[id:2022-10-10T173507::*H2]]
+
+   #+transclude: [[id:2022-10-10T173507::*H2]]  :lines 1-5
+   #+transclude: [[id:2022-10-10T173507::*H2]]  :lines 1-5
+
+   #+transclude: [[id:2022-10-10T173507::*H2]] :no-first-heading
+   #+transclude: [[id:2022-10-10T173507::*H2]] :only-contents
+
+   #+transclude: [[file:paragraph.org::* Other headline]]  :lines 1-5
+
+   [[file:paragraph.org::* Sub heading]]
+   #+transclude: [[file:paragraph.org::* Sub heading]]
+
+** defun / sexp (thingatpt)
+
+   #+transclude: [[file:~/src/org-transclusion/org-transclusion-font-lock.el::(defun org-transclusion-font-lock-set]]  :src emacs-lisp :thingatpt sexp
+
+   [[orgit-rev:~/src/org-transclusion/::0737cfeb0a51fe2143c9cbcbb8d7d0664e3d2a1e][~/src/org-transclusion/ (magit-rev 0737cfe)]]
+
+[[file:~/src/org-transclusion/org-transclusion-font-lock.el::(defun org-transclusion-font-lock-set]]
+   [[orgit-file:~/src/org-transclusion/::0737cfe::org-transclusion.el::org-transclusion-new-function]]
+
+*** Example
+
+   #+transclude: [[orgit-file:~/src/org-transclusion/::0737cfe::org-transclusion.el::org-transclusion-new-function][org-transclusion-new-function (00737cfe)]]  :src emacs-lisp :thingatpt sexp
+
+   #+transclude: [[orgit-file:~/src/org-transclusion/::8ec0233::org-transclusion.el::org-transclusion-new-function][org-transclusion-new-function (83c0233)]]  :src emacs-lisp :thingatpt sexp
+
+** test empty file
+
+   #+transclude: [[file:empty.txt::2][empty text file]]
+
+** test text
+
+   #+transclude: [[file:test.txt][text file]]
+   #+transclude: [[file:test.txt][text file]]
+
+   Below are tesing the new ~org-transclusion-fix-common-misspelling~ function.
+
+   #+transclude: [[file:test.txt][text file]]  :lines 1-2
+
+   ::number works now
+   #+transclude: [[file:test.txt::5]]  :lines 1-2
+
+   ::/regexp/ does not work as intended because it will open an occur buffer and
+   does not move the point in the source buffer.
+   #+transclude: [[file:test.txt::/Gab/]]  :lines 1-1
+
+   #+transclude [[file:test.txt][text file]]
+
+   #+trans [[file:test.txt][text file]]
+
+** test t/nil
+t/nil will be dropped after remove-at-point
+
+#+transclude: [[file:test.txt][text file]]
+#+transclude: [[id:2022-05-30T203553][Bertrand Russell]]
+
+(setq inhibit-read-only nil)
+
+** test
+   :PROPERTIES:
+   :ID:       2026-03-07T124245
+   :END:
+
+   #+transclude: [[id:2022-05-30T203553][Bertrand Russell]] :only-contents
+
+** Paragraph
+
+#+transclude: [[file:./paragraph.org::para1]]
+
+#+transclude: [[file:./paragraph.org::para2]]
+
+** Table
+#+transclude: [[file:paragraph.org::table][Link to a table]]
+
+#+begin_example
+(variable-pitch-mode -1)
+#+end_example
+
+#+transclude: [[file:paragraph.org::table-with-link][Link to a table with a link]]
+
+#+transclude: [[file:paragraph.org::*Table][Link to the headline Table that includes tables]]
+
+** Quote
+#+transclude: [[file:paragraph.org::quote][Link to a quote]]
+
+** #Custom ID
+
+   #+transclude: [[file:testpara.org::#custom-id-1][Custom ID]] :level 2
+
+** *Hadline
+#+transclude: [[file:bertrand-russell.org::*Bertrand Russell - Wikipedia]] :level 2 :disable-auto
+
+** Filter
+
+#+begin_example
+(setq org-transclusion-include-first-section t)
+(setq org-transclusion-include-first-section nil)
+
+(setq org-transclusion-exclude-elements '())
+(setq org-transclusion-exclude-elements '(property-drawer))
+(setq org-transclusion-exclude-elements '(property-drawer keyword))
+(setq org-transclusion-exclude-elements '(property-drawer keyword drawer))
+#+end_example
+
+[[file:./test-no-first-section.org]]
+
+Temporarily set ~org-transclusion-include-first-section~ to nil
+#+begin_src emacs-lisp
+  (setq org-transclusion-include-first-section nil)
+  (setq org-transclusion-include-first-section t)
+#+end_src
+
+#+transclude: [[file:./test-no-first-section.org]]
+
+#+transclude: [[file:test-no-first-section-negative.org]]
+
+* Orgit-file (link to git rev)
+
+  [[orgit-file:~/src/org-transclusion/::main::org-transclusion.el::Last modified][Orgit-file link to main]]
+
+#+transclude: [[orgit-file:~/src/org-transclusion/::main::org-transclusion.el::Last modified][Orgit-file link to main]]  :lines 1- :src emacs-lisp :end "URL"
+
+* Live-Sync
+** center-block dynamic-block example-block export-block special-block verse-block
+
+** drawer
+
+   #+begin_example
+   (setq org-transclusion-exclude-elements '())
+   (setq org-transclusion-exclude-elements '(property-drawer))
+   #+end_example
+
+#+transclude: [[id:2022-05-30T203553][Bertrand Russell]]
+
+** fixed-width
+
+** latex-environment
+
+** plain-list
+
+** quote-block  table
+#+transclude: [[file:paragraph.org::table][Link to a table]]
+#+transclude: [[file:paragraph.org::quote][Link to a quote]]
+
+*  Only Contents
+#+transclude: [[id:2022-05-30T203553][Bertrand Russell]] :only-contents
+
+* :only-contents and :exclude-element
+
+#+transclude: [[file:bertrand-russell.org::*On Denoting]] :level 2 :exclude-elements "headline drawer"
+
+#+transclude: [[file:bertrand-russell.org::*On Denoting]] :level 2 :only-contents :exclude-elements "drawer"
+
+#+transclude: [[file:bertrand-russell.org::*On Denoting]] :level 2 :only-contents :exclude-elements "headline drawer"
+
+** test
+#+transclude: [[file:bertrand-russell.org::*On Denoting]] :level 2 :only-contents :exclude-elements "headline drawer"
+
+* Disable-auto
+** *Hadline
+#+transclude: [[file:bertrand-russell.org::*Bertrand Russell - Wikipedia]] :level 2 :disable-auto :only-contents
+
+* Exclude elements
+#+transclude: [[id:2022-05-30T203553]] :only-contents :exclude-elements "keyword drawer headline"
+
+#+transclude: [[file:./test-no-first-section.org]] :exclude-elements "drawer keyword property-drawer"
+
+* =yank-excluded-properties=
+
+#+begin_src elisp
+  (setq yank-excluded-properties
+        '(:parent category field follow-link fontified font-lock-face help-echo intangible invisible keymap local-map mouse-face read-only yank-handler))
+
+    (setq yank-excluded-properties
+        '(category field follow-link fontified font-lock-face help-echo intangible invisible keymap local-map mouse-face read-only yank-handler))
+
+  (setq org-transclusion-yank-remember-user-excluded-props '(:parent))
+#+end_src
+
+#+RESULTS:
+
+#+begin_src elisp
+  org-transclusion-yank-excluded-properties
+#+end_src
+
+#+RESULTS:
+| tc-type | tc-beg-mkr | tc-end-mkr | tc-src-beg-mkr | tc-pair | tc-orig-keyword | wrap-prefix | line-prefix | :parent | front-sticky | rear-nonsticky |
+
+
+#+begin_src elisp
+  yank-excluded-properties
+#+end_src
+
+#+RESULTS:
+| category | field | follow-link | fontified | font-lock-face | help-echo | intangible | invisible | keymap | local-map | mouse-face | read-only | yank-handler |
+
+* Remove narrowed and/or invisible regions
+#+transclude: [[file:bertrand-russell.org::*Bertrand Russell - Wikipedia]] :level 2
+
+* Exit live-sync and remove-at-point
+
+#+transclude: [[file:bertrand-russell.org::*Bertrand Russell - Wikipedia]] :level 2 :exclude-elements "keyword drawer"
+
+* Open Source
+#+transclude: [[file:open.org]]
+
+* Issue #131 - Level one
+
+1. First item
+
+   Text associated with the first item.
+
+   #+transclude: [[file:paragraph.txt][link]]
+
+2. Second item
+
+* Level two
+* Test headlines only
+
+#+transclude: [[id:2022-06-26T141859]] :exclude-elements "paragraph"
+
+#+transclude: [[id:2022-06-26T141859]]
+* Test src and end
+
+#+transclude: [[file:./python-1.py]]
+#+transclude: [[file:./python-1.py]]  :src python
+
+#+transclude: [[file:./python-1.py::id-1234]]  :src python :end "id-1234 end here"
+
+#+begin_src python
+  import matplotlib
+  import matplotlib.pyplot as plt
+  # end here
+  # id-1234
+  fig=plt.figure(figsize=(9,6))
+  plt.plot([1,3,2])
+  fig.tight_layout()
+  fname = 'pyfig2.png'
+  plt.savefig(fname)
+  # id-1234 end here
+  return fname # return this to org-mode
+#+end_src
+* Test "auto" level  and :no-first-heading
+  #+transclude: [[file:bertrand-russell.org::*On Denoting]] :level  :no-first-heading
+
+  #+transclude: [[file:bertrand-russell.org::*On Denoting]] :level
+
+*** A auto level
+
+  #+transclude: [[file:bertrand-russell.org::*On Denoting]] :level  :exclude-elements "headline drawer"
+
+
+    #+transclude: [[file:bertrand-russell.org::*On Denoting]] :level 3 :exclude-elements "headline drawer"
+
+*** First sectiona and "auto" level
+
+#+begin_src emacs-lisp
+  (setq org-transclusion-include-first-section nil)
+  (setq org-transclusion-include-first-section t)
+#+end_src
+
+  #+transclude: [[file:./test-no-first-section.org]] :level

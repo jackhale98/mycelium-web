@@ -1,0 +1,7 @@
+* TODO habit
+SCHEDULED: <2009-10-21 Sat ++2d>
+:PROPERTIES:
+:STYLE:    habit
+:END:
+- State "DONE"       from "TODO"       [2009-10-19 Sun]
+- State "DONE"       from "TODO"       [2009-10-17 Sun]

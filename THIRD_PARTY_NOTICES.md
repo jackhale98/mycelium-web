@@ -13,6 +13,8 @@ third-party software under their own licences, all compatible with the GPL:
 | [d3](https://d3js.org) (force, zoom, drag…)         | ISC              | The graph               |
 | [MiniSearch](https://lucaong.github.io/minisearch/) | MIT              | Full-text search        |
 | [node-diff3](https://github.com/bhousel/node-diff3) | MIT              | Merging edits           |
+| [KaTeX](https://katex.org) (with its fonts)         | MIT              | LaTeX maths             |
+| CodeMirror language modes (`@codemirror/lang-*`)    | MIT              | Highlighting src blocks |
 | Inter, Newsreader, JetBrains Mono (via Fontsource)  | SIL OFL 1.1      | Typefaces               |
 
 The complete list, with every licence's full text, is generated from the

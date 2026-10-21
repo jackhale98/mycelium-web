@@ -17,6 +17,18 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
 
 - **Read and edit** notes, rendered from org, with a live-preview source
   editor (press <kbd>E</kbd>). Typing `[[` links to any note — or creates one.
+  A formatting bar (above the keyboard on phones) makes headings, TODOs,
+  emphasis, lists and checkboxes without typing org markup.
+- **Rich notes:** inline images and attachments (`attachment:` links and
+  `#+ATTR_ORG` widths), LaTeX maths, highlighted source blocks, `<<targets>>`,
+  `[[file::search]]` links and org-transclusion. Line breaks show as written,
+  or join into paragraphs if you prefer.
+- **Tasks the org way:** clock in and out with a running-clock bar and a
+  clock report, refile and archive subtrees (to `%s_archive`, with org's
+  archive properties), habits with their consistency graph, and a time grid
+  on today's agenda.
+- **Unlinked references:** notes that mention a note's title or aliases
+  without linking it, one tap from becoming a link.
 - **Headings at a click:** TODO state, priority, tags, and SCHEDULED/DEADLINE
   dates through the native date picker. Click any date to change it.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with

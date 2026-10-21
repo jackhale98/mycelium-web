@@ -1,7 +1,7 @@
 /// The file services a cloud vault can live in, and how to reach each one.
 
 import type { CloudService, CloudState } from '$lib/store/db';
-import type { RemoteBrowser, RemoteFiles } from './remote';
+import type { RemoteBlobs, RemoteBrowser, RemoteFiles } from './remote';
 
 export interface CloudConfig {
 	/** Dropbox app key. */
@@ -10,7 +10,7 @@ export interface CloudConfig {
 	onedriveClientId?: string | undefined;
 }
 
-export type CloudClient = RemoteFiles & RemoteBrowser;
+export type CloudClient = RemoteFiles & RemoteBrowser & RemoteBlobs;
 
 export interface OAuthTokens {
 	accessToken: string;

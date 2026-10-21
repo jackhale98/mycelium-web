@@ -23,6 +23,22 @@ import {
 	setHeadlineTags,
 	setHeadlineTitle,
 	headlineAt,
+	archiveLocation,
+	archiveSubtree,
+	parentHeading,
+	updateTodoCookies,
+	refileAcross,
+	refileWithin,
+	clockCancel,
+	clockIn,
+	clockMillis,
+	clockOut,
+	runningClocks,
+	subtreeClockSum,
+	findSearchTarget,
+	parseSearchOption,
+	splitLines,
+	subtreeEnd,
 	setPlanning,
 	setPriority,
 	setProperty,
@@ -52,12 +68,14 @@ import {
 import { buildSearch } from '$lib/vault/search';
 import { Vault } from '$lib/vault/vault';
 import { demoSources } from './demo';
+import { href } from './router.svelte';
 import { slugify } from './util';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
 const THEME_KEY = 'mycelium:theme';
 const TEXT_SIZE_KEY = 'mycelium:text-size';
+const LINE_BREAKS_KEY = 'mycelium:line-breaks';
 /** Text-size steps, in percent of the browser's default size. */
 export const TEXT_SIZES = [
 	{ value: 90, label: 'Small' },
@@ -185,6 +203,12 @@ class AppState {
 	rev = $state(0);
 	theme = $state<ThemeChoice>(readTheme());
 	textSize = $state<number>(readTextSize());
+	/**
+	 * Show a paragraph's line breaks as written (as Emacs shows the buffer), or
+	 * join its lines into flowing text (as org's exporters do), which suits
+	 * notes hard-wrapped with M-q.
+	 */
+	joinLines = $state(readLocal(LINE_BREAKS_KEY) === 'join');
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
@@ -374,6 +398,13 @@ class AppState {
 		writeLocal(TEXT_SIZE_KEY, size === 100 ? null : String(size));
 		if (size === 100) document.documentElement.style.removeProperty('--text-scale');
 		else document.documentElement.style.setProperty('--text-scale', `${size}%`);
+	}
+
+	setJoinLines(join: boolean) {
+		this.joinLines = join;
+		writeLocal(LINE_BREAKS_KEY, join ? 'join' : null);
+		if (join) document.documentElement.dataset.lineBreaks = 'join';
+		else delete document.documentElement.dataset.lineBreaks;
 	}
 
 	/** Step the text size up or down (`0` resets). */
@@ -646,6 +677,7 @@ class AppState {
 		const files = await ws.load((p) => {
 			if (!options.quiet) this.loading = p;
 		});
+		this.#dropUrls();
 		this.workspace = ws.kind === 'git' ? ws : null;
 		this.folder = ws.kind === 'folder' ? ws : null;
 		this.cloud = ws.kind === 'cloud' ? ws : null;
@@ -724,8 +756,9 @@ class AppState {
 	 * Apply a new file text: update the model now, autosave to the working
 	 * tree in the background (and commit, if the vault auto-commits).
 	 */
-	#write(path: string, text: string | null, message: string) {
-		const [file] = this.vault.apply([{ path, source: text }]);
+	#write(path: string, text: string | null, message: string, options: { inVault?: boolean } = {}) {
+		// Files beside the notes (archives) are saved but not indexed as notes.
+		const [file] = options.inVault === false ? [] : this.vault.apply([{ path, source: text }]);
 		this.#edits += 1;
 		this.rev += 1;
 		const ws = this.#ws;
@@ -763,6 +796,92 @@ class AppState {
 		if (!file) return;
 		const next = applyChanges(file.source, changes(file.source));
 		if (next !== file.source) this.#write(path, next, message);
+	}
+
+	// ------------------------------------------------------------------ links
+
+	/**
+	 * Where a link to a vault file goes, with an optional org search option
+	 * (`*Heading`, `#custom-id`, `target`). A search that lands exactly on a
+	 * heading that is itself a node opens that node; otherwise the page that
+	 * holds the target opens and scrolls to it. `null` if the file isn't here.
+	 */
+	linkTarget(path: string, search: string | null): { href: string; title: string } | null {
+		const file = this.vault.file(path);
+		if (!file) return null;
+		const nodes = file.index.nodes;
+		const fileNode = nodes.find((n) => n.level === 0);
+		const fallback = fileNode ?? null;
+		if (!search) {
+			return fallback
+				? { href: href.node(fallback.id), title: fallback.title }
+				: { href: href.file(path), title: file.index.title || path };
+		}
+		const at = findSearchTarget(file.source, parseSearchOption(search), file.index.keywords);
+		const label = search.replace(/^[*#]/, '');
+		if (at === null)
+			return fallback
+				? { href: href.node(fallback.id, search), title: label }
+				: { href: href.file(path, search), title: label };
+		// The deepest heading node whose subtree holds the target.
+		const lines = splitLines(file.source);
+		let owner = fallback;
+		for (const n of nodes) {
+			if (n.level === 0 || n.pos > at) continue;
+			const h = headlineAt(file.source, n.pos, file.index.keywords, lines);
+			if (h && subtreeEnd(lines, h) > at && (!owner || owner.level < n.level)) owner = n;
+		}
+		if (owner && owner.level > 0 && owner.pos === at)
+			return { href: href.node(owner.id), title: owner.title };
+		return owner
+			? { href: href.node(owner.id, search), title: label }
+			: { href: href.file(path, search), title: label };
+	}
+
+	// ------------------------------------------------------------------ files
+
+	#urls = new Map<string, Promise<string | null>>();
+
+	/** A text file from the vault's storage (notes first, then any file), or `null`. */
+	async readText(path: string): Promise<string | null> {
+		const note = this.vault.file(path);
+		if (note) return note.source;
+		const ws = this.#ws;
+		return ws ? ws.readText(path).catch(() => null) : null;
+	}
+
+	/**
+	 * A displayable URL for a vault file (an image or attachment), or `null`
+	 * if it isn't there (or, for a cloud vault, can't be fetched right now).
+	 */
+	fileUrl(path: string): Promise<string | null> {
+		const key = `${this.activeId}\u0000${path}`;
+		let hit = this.#urls.get(key);
+		if (!hit) {
+			const ws = this.#ws;
+			hit = (async () => {
+				const bytes = ws ? await ws.readBytes(path).catch(() => null) : null;
+				if (!bytes) {
+					this.#urls.delete(key);
+					return null;
+				}
+				const { mediaType } = await import('$lib/vault/files');
+				return URL.createObjectURL(
+					new Blob([bytes as unknown as BlobPart], { type: mediaType(path) }),
+				);
+			})();
+			this.#urls.set(key, hit);
+		}
+		return hit;
+	}
+
+	/** Forget cached file URLs (another vault opened, or a file replaced). */
+	#dropUrls(path?: string) {
+		for (const [key, url] of this.#urls) {
+			if (path && !key.endsWith(`\u0000${path}`)) continue;
+			void url.then((u) => u && URL.revokeObjectURL(u));
+			this.#urls.delete(key);
+		}
 	}
 
 	/** Resolves once every pending autosave has been written. */
@@ -945,11 +1064,196 @@ class AppState {
 		});
 		if (result.steps.length === 0) return;
 		const heading = file.index.headlines.find((h) => h.pos === offset)?.title ?? this.#title(path);
+		// org-provide-todo-statistics: recount the parent's [n/m] / [%] cookie.
+		const parent = parentHeading(result.text, offset, file.index.keywords);
+		if (parent !== null)
+			result.text = applyChanges(
+				result.text,
+				updateTodoCookies(result.text, parent, file.index.keywords),
+			);
+		// org-clock-out-when-done: finishing a clocked task stops its clock (a
+		// repeating task too: the hook sees the done state before it repeats).
+		const target = keyword ?? '';
+		if (file.index.keywords.doneKeywords.includes(target))
+			result.text = applyChanges(
+				result.text,
+				clockOut(result.text, offset, localNow(), file.index.keywords),
+			);
 		this.#write(
 			path,
 			result.text,
 			`${result.repeated ? 'Repeat' : (result.keyword ?? 'Clear state')}: ${heading}`,
 		);
+	}
+
+	/** Turn an unlinked mention into a link to the node: `[[id:ID][mention]]`. */
+	linkMention(path: string, offset: number, text: string, id: string) {
+		const file = this.vault.file(path);
+		if (!file || file.source.slice(offset, offset + text.length) !== text) return;
+		this.#write(
+			path,
+			applyChanges(file.source, [
+				{ from: offset, to: offset + text.length, insert: `[[id:${id}][${text}]]` },
+			]),
+			`Link ${text}`,
+		);
+	}
+
+	// ------------------------------------------------------------------ refile and archive
+
+	/** Open the refile picker for a heading. */
+	refileSheet = $state<{ path: string; pos: number } | null>(null);
+
+	/**
+	 * Move a subtree (org-refile): the last child of `target.pos`, or a
+	 * top-level tree at the end of `target.path` when `pos` is null.
+	 */
+	refile(path: string, pos: number, target: { path: string; pos: number | null }): boolean {
+		const from = this.vault.file(path);
+		const to = this.vault.file(target.path);
+		if (!from || !to) return false;
+		const title = headlineAt(from.source, pos, from.index.keywords)?.title.value ?? 'heading';
+		const where =
+			target.pos === null
+				? to.index.title || target.path
+				: (headlineAt(to.source, target.pos, to.index.keywords)?.title.value ?? '');
+		const message = `Refile ${title} → ${where}`;
+		if (path === target.path) {
+			const changes = refileWithin(from.source, pos, target.pos, from.index.keywords);
+			if (!changes) return false;
+			this.#write(path, applyChanges(from.source, changes), message);
+			return true;
+		}
+		const r = refileAcross(
+			from.source,
+			pos,
+			to.source,
+			target.pos,
+			from.index.keywords,
+			to.index.keywords,
+		);
+		if (!r) return false;
+		this.#write(target.path, applyChanges(to.source, r.target), message);
+		this.#write(path, applyChanges(from.source, r.source), message);
+		return true;
+	}
+
+	/**
+	 * Archive a subtree (org-archive-subtree) to its archive location: by
+	 * default `<file>_archive` beside the file. Returns where it went, or an
+	 * error message.
+	 */
+	async archive(path: string, pos: number): Promise<{ to: string } | { error: string }> {
+		const file = this.vault.file(path);
+		const ws = this.#ws;
+		if (!file) return { error: 'File not found' };
+		if (!ws) return { error: "The demo's storage isn't ready yet; try again in a moment." };
+		const kw = file.index.keywords;
+		const entry = file.index.headlines.find((h) => h.pos === pos);
+		const h = headlineAt(file.source, pos, kw);
+		const own = h?.tags?.values ?? [];
+		const location = archiveLocation(file.source, pos, path, kw);
+		await this.flush();
+		const existing = location.file
+			? (this.vault.file(location.file)?.source ??
+				(await ws.readText(location.file).catch(() => null)))
+			: null;
+		const r = archiveSubtree(
+			file.source,
+			pos,
+			path,
+			{
+				now: localNow(),
+				file: path,
+				category:
+					entry?.category ??
+					path
+						.split('/')
+						.pop()!
+						.replace(/\.org$/i, ''),
+				inheritedTags: (entry?.tags ?? []).filter((t) => !own.includes(t)),
+			},
+			existing,
+			kw,
+		);
+		if (!r) return { error: 'Nothing to archive here' };
+		const message = `Archive ${h?.title.value ?? 'heading'}`;
+		if (r.archivePath && r.archiveText !== null)
+			this.#write(r.archivePath, r.archiveText, message, {
+				inVault: /\.org$/i.test(r.archivePath),
+			});
+		this.#write(path, applyChanges(file.source, r.source), message);
+		return { to: r.archivePath ?? path };
+	}
+
+	// ------------------------------------------------------------------ clock
+
+	/** Running clocks across the vault (normally one), newest first. */
+	get runningClocks() {
+		void this.rev;
+		const out: {
+			path: string;
+			heading: number;
+			title: string;
+			start: { date: string; time: string };
+		}[] = [];
+		for (const file of this.vault.files.values())
+			for (const c of runningClocks(file.source, file.index.keywords))
+				out.push({ path: file.path, heading: c.heading, title: c.title, start: c.start });
+		return out.sort((a, b) => clockMillis(b.start) - clockMillis(a.start));
+	}
+
+	/**
+	 * Clock in on a heading. Like `org-clock-in`, a clock running elsewhere is
+	 * clocked out first, at the same minute; one already running here goes on.
+	 */
+	clockIn(path: string, heading: number) {
+		const now = localNow();
+		for (const c of this.runningClocks) {
+			if (c.path === path && c.heading === heading) return;
+			this.#edit(
+				c.path,
+				(src) => clockOut(src, c.heading, now, this.#keywords(c.path)),
+				`Clock out: ${c.title}`,
+			);
+		}
+		const file = this.vault.file(path);
+		if (!file) return;
+		this.#edit(
+			path,
+			(src) =>
+				clockIn(src, heading, now, {
+					logDrawer: this.logSettings.logIntoDrawer,
+					config: file.index.keywords,
+				}),
+			`Clock in: ${headlineAt(file.source, heading, file.index.keywords)?.title.value ?? this.#title(path)}`,
+		);
+	}
+
+	clockOut(path: string, heading: number) {
+		this.#edit(
+			path,
+			(src) => clockOut(src, heading, localNow(), this.#keywords(path)),
+			'Clock out',
+		);
+	}
+
+	clockCancel(path: string, heading: number) {
+		this.#edit(path, (src) => clockCancel(src, heading, this.#keywords(path)), 'Cancel clock');
+	}
+
+	/** Minutes clocked in a heading's subtree, and its Effort, for display. */
+	clockSummary(path: string, heading: number): { minutes: number; effort: number | null } {
+		void this.rev;
+		const file = this.vault.file(path);
+		if (!file) return { minutes: 0, effort: null };
+		const minutes = subtreeClockSum(file.source, heading, file.index.keywords);
+		const effort = file.index.headlines.find((h) => h.pos === heading)?.effort ?? null;
+		return { minutes, effort };
+	}
+
+	#keywords(path: string) {
+		return this.vault.file(path)?.index.keywords ?? this.vault.keywords;
 	}
 
 	/** A heading's current state, read from its file (for the heading sheet). */

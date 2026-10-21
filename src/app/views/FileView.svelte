@@ -7,8 +7,19 @@
 	import Blocks from '../org/OrgBlocks.svelte';
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
+	import { scrollToSearch } from '../org/scroll-to';
+	import { tick } from 'svelte';
 
-	let { path }: { path: string } = $props();
+	let { path, at = null }: { path: string; at?: string | null } = $props();
+
+	let article: HTMLElement | undefined = $state();
+	$effect(() => {
+		const search = at;
+		const el = article;
+		const f = app.vault.file(path);
+		if (!search || !el || !f || app.editing) return;
+		void tick().then(() => scrollToSearch(el, f.source, search, f.index.keywords));
+	});
 
 	const file = $derived.by(() => {
 		void app.rev;
@@ -65,7 +76,7 @@
 <svelte:window {onkeydown} />
 
 {#if file}
-	<article class="file" aria-labelledby="file-title">
+	<article class="file" aria-labelledby="file-title" bind:this={article}>
 		<header>
 			<div class="toolbar">
 				<button

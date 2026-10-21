@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { EditorView } from '@codemirror/view';
+	import { nextTodoKeyword } from '$lib/org';
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
+	import FormatBar, { type FormatAction } from './FormatBar.svelte';
 
 	let {
 		path,
@@ -13,6 +15,11 @@
 	let view: EditorView | null = null;
 	let sync: ((view: EditorView, text: string) => void) | null = null;
 	let pending: string | null = null;
+	let focused = $state(false);
+	let level = $state(0);
+	let commands: typeof import('./format-commands') | null = null;
+	let history: typeof import('@codemirror/commands') | null = null;
+	let lists: typeof import('./list-commands') | null = null;
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
 	function save() {
@@ -34,8 +41,16 @@
 	$effect(() => {
 		if (!host) return;
 		let cancelled = false;
-		void import('./org-editor').then(({ createEditor, syncEditor }) => {
+		void Promise.all([
+			import('./org-editor'),
+			import('./format-commands'),
+			import('@codemirror/commands'),
+			import('./list-commands'),
+		]).then(([{ createEditor, syncEditor }, format, cm, list]) => {
 			if (cancelled || !host) return;
+			commands = format;
+			history = cm;
+			lists = list;
 			sync = syncEditor;
 			view = createEditor(
 				host.shadowRoot ?? host.attachShadow({ mode: 'open' }),
@@ -45,6 +60,10 @@
 					nodes: () => app.vault.nodes.values(),
 					createNode: (title) => app.createNode(title),
 					follow,
+					onCursor(v) {
+						focused = v.hasFocus;
+						level = format.headingLevelAt(v.state);
+					},
 					onChange(text) {
 						pending = text;
 						if (timer) clearTimeout(timer);
@@ -68,6 +87,85 @@
 		};
 	});
 
+	const keywords = () => app.vault.file(path)?.index.keywords ?? app.vault.keywords;
+
+	/** Cycle the TODO keyword of the cursor's heading, with org's logging and repeaters. */
+	function cycleTodo(v: EditorView) {
+		// A plain line becomes a heading first.
+		if (commands && !commands.headingLevelAt(v.state)) commands.setHeadingLevel(1)(v);
+		const line = v.state.doc.lineAt(v.state.selection.main.head);
+		const m = /^\*+[ \t]+(\S+)?/.exec(line.text);
+		if (!m) return;
+		const config = keywords();
+		const current =
+			m[1] && (config.todoKeywords.includes(m[1]) || config.doneKeywords.includes(m[1]))
+				? m[1]
+				: null;
+		save();
+		app.setTodo(path, line.from, nextTodoKeyword(current, config));
+	}
+
+	function act(action: FormatAction) {
+		const v = view;
+		if (!v || !commands || !history || !lists) return;
+		const run = (
+			cmd: (t: { state: EditorView['state']; dispatch: EditorView['dispatch'] }) => boolean,
+		) => cmd(v);
+		const f = commands;
+		switch (action) {
+			case 'heading':
+				run(f.cycleHeading);
+				break;
+			case 'todo':
+				cycleTodo(v);
+				break;
+			case 'bold':
+				run(f.toggleMark('*'));
+				break;
+			case 'italic':
+				run(f.toggleMark('/'));
+				break;
+			case 'underline':
+				run(f.toggleMark('_'));
+				break;
+			case 'strike':
+				run(f.toggleMark('+'));
+				break;
+			case 'code':
+				run(f.toggleMark('~'));
+				break;
+			case 'bullet':
+				run(f.toggleList('bullet'));
+				break;
+			case 'number':
+				run(f.toggleList('number'));
+				break;
+			case 'checkbox':
+				run(f.toggleList('checkbox'));
+				break;
+			case 'indent':
+				run(lists.indentItem);
+				break;
+			case 'outdent':
+				run(lists.outdentItem);
+				break;
+			case 'link':
+				run(f.insertLink);
+				void import('@codemirror/autocomplete').then((a) => a.startCompletion(v));
+				break;
+			case 'undo':
+				history.undo(v);
+				break;
+			case 'redo':
+				history.redo(v);
+				break;
+			case 'done':
+				v.contentDOM.blur();
+				break;
+		}
+		if (action !== 'done') v.focus();
+	}
+
 	// Changes made elsewhere (a TODO toggled, a pull) flow into the editor.
 	$effect(() => {
 		void app.rev;
@@ -77,6 +175,7 @@
 </script>
 
 <div class="editor" bind:this={host}></div>
+<FormatBar {focused} {level} onaction={act} />
 
 <style>
 	.editor {

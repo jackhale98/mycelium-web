@@ -2,6 +2,7 @@
 	import type { AgendaItem } from '$lib/vault/vault';
 	import AgendaFilters from '../components/AgendaFilters.svelte';
 	import AgendaList from '../components/AgendaList.svelte';
+	import ClockReport from '../components/ClockReport.svelte';
 	import SavedViews from '../components/SavedViews.svelte';
 	import {
 		activeFilters,
@@ -159,9 +160,16 @@
 			>
 				{section.title}<span class="count">{section.items.length}</span>
 			</h2>
-			<AgendaList items={section.items} {today} empty={section.empty} {onTop} />
+			<AgendaList
+				items={section.items}
+				{today}
+				empty={section.empty}
+				{onTop}
+				grid={section.id === 'today'}
+			/>
 		</section>
 	{/each}
+	<ClockReport {today} />
 </div>
 
 <style>

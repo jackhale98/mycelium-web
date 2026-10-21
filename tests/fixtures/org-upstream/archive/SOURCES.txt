@@ -1,0 +1,20 @@
+Transcribed from the Org test suite
+https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/lisp/test-org-archive.el
+commit 21e976594d3081f7bc45ebec312275aec49778e0 (main, Org 10.0-pre), fetched 2026-10-21.
+
+context-before.org / context-after-same-file.org
+    test-org-archive/context, case "* a\n<point>** TODO b" with
+    org-archive-location "::* Archived Tasks", time frozen at <2020-07-05 Sun>.
+    The test compares (string-trim (buffer-string)).  In the test ARCHIVE_FILE is
+    `buffer-file-name' of a temp file and ARCHIVE_CATEGORY is its non-directory
+    name; "/tmp/test.org" and "test" are illustrative stand-ins (for a real
+    file named test.org the category is the file name WITHOUT extension).
+itags-before.org / itags-after.org
+    test-org-archive/context with org-archive-save-context-info '(ltags itags)
+    and org-tags-column -10 (which is why tags are separated by one space).
+datetree-after.org
+    test-org-archive/datetree: the test only asserts the substring
+    "*** 2020-07-05 Sunday\n**** a" for location "::datetree/"; the year/month
+    lines above it are the standard org-datetree layout (not asserted by the test).
+archive-sibling.txt
+    test-org-archive/to-archive-sibling, first case.

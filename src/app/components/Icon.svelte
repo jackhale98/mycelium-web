@@ -54,6 +54,15 @@
 			'<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
 		commit: '<circle cx="12" cy="12" r="3.5"/><path d="M3 12h5.5M15.5 12H21"/>',
 		undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+		redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+		list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
+		listOrdered:
+			'<path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5h1.5V9M4 9h3"/><path d="M4 14.5a1.5 1.5 0 0 1 3 .5c0 1-3 2.5-3 4h3"/>',
+		checkSquare: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12 3 3 5-6"/>',
+		indent: '<path d="M10 6h10M10 12h10M10 18h10"/><path d="m3.5 9 3 3-3 3"/>',
+		outdent: '<path d="M10 6h10M10 12h10M10 18h10"/><path d="m6.5 9-3 3 3 3"/>',
+		keyboardDown:
+			'<rect x="2.5" y="3.5" width="19" height="12" rx="2"/><path d="M6.5 7.5h1M10.5 7.5h1M14.5 7.5h1M7 11.5h10"/><path d="m9 19 3 2.5 3-2.5"/>',
 		history:
 			'<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 3.5v5h5"/><path d="M12 7.5V12l3 2"/>',
 		folder:

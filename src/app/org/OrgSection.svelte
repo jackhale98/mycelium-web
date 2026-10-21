@@ -51,7 +51,7 @@
 </script>
 
 {#if headline && !headline.commented}
-	<section class="org-section" data-level={headline.level}>
+	<section class="org-section" data-level={headline.level} data-pos={offset}>
 		<div class="heading-row">
 			<button
 				type="button"

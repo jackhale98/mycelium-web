@@ -2,9 +2,10 @@
 
 export type Route =
 	| { name: 'home' }
-	| { name: 'node'; id: string }
+	/** `at`: an org search option to scroll to (`*Heading`, `#custom-id`, `target`). */
+	| { name: 'node'; id: string; at: string | null }
 	/** An org file with no `:ID:` (not an org-roam node), by vault path. */
-	| { name: 'file'; path: string }
+	| { name: 'file'; path: string; at: string | null }
 	| { name: 'daily'; date: string | null }
 	| { name: 'agenda'; query: string }
 	| { name: 'tags'; tag: string | null }
@@ -28,9 +29,9 @@ export function parseHash(hash: string): Route {
 		case '':
 			return { name: 'home' };
 		case 'node':
-			return tail ? { name: 'node', id: tail } : { name: 'notfound', path };
+			return tail ? { name: 'node', id: tail, at: searchAt(query) } : { name: 'notfound', path };
 		case 'file':
-			return tail ? { name: 'file', path: tail } : { name: 'notfound', path };
+			return tail ? { name: 'file', path: tail, at: searchAt(query) } : { name: 'notfound', path };
 		case 'daily':
 			return { name: 'daily', date: /^\d{4}-\d{2}-\d{2}$/.test(tail) ? tail : null };
 		case 'agenda':
@@ -54,10 +55,15 @@ export function parseHash(hash: string): Route {
 	}
 }
 
+const searchAt = (query: string) => new URLSearchParams(query).get('at');
+const withAt = (base: string, at?: string | null) =>
+	at ? `${base}?${new URLSearchParams({ at }).toString()}` : base;
+
 export const href = {
 	home: () => '#/',
-	node: (id: string) => `#/node/${encodeURIComponent(id)}`,
-	file: (path: string) => `#/file/${path.split('/').map(encodeURIComponent).join('/')}`,
+	node: (id: string, at?: string | null) => withAt(`#/node/${encodeURIComponent(id)}`, at),
+	file: (path: string, at?: string | null) =>
+		withAt(`#/file/${path.split('/').map(encodeURIComponent).join('/')}`, at),
 	daily: (date?: string) => (date ? `#/daily/${date}` : '#/daily'),
 	agenda: (query = '') => (query ? `#/agenda?${query}` : '#/agenda'),
 	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),

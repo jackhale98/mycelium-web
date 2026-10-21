@@ -1,0 +1,8 @@
+* a  :top:
+* Archived Tasks
+
+** b :top:b_tag:
+:PROPERTIES:
+:ARCHIVE_LTAGS: b_tag
+:ARCHIVE_ITAGS: top
+:END:

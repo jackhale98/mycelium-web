@@ -244,6 +244,23 @@ export class GitRepo {
 		await this.flush();
 	}
 
+	/** The working-tree bytes of a file, or `null` if it does not exist. */
+	async readWorkingBytes(path: string): Promise<Uint8Array | null> {
+		try {
+			return (await this.fs.promises.readFile(`${this.dir}/${path}`)) as Uint8Array;
+		} catch {
+			return null;
+		}
+	}
+
+	/** Write a binary file (an attachment) into the working tree. */
+	async writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+		const full = `${this.dir}/${path}`;
+		await mkdirp(this.fs, full.slice(0, full.lastIndexOf('/')));
+		await this.fs.promises.writeFile(full, bytes);
+		await this.flush();
+	}
+
 	/** The working-tree text of a file, or `null` if it does not exist. */
 	async readWorking(path: string): Promise<string | null> {
 		try {

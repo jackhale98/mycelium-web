@@ -1,0 +1,3 @@
+Transcribed from https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/lisp/test-org.el
+(test-org/refile, test-org/paste-subtree), commit 21e976594d3081f7bc45ebec312275aec49778e0, fetched 2026-10-21.
+There is no testing/lisp/test-org-refile.el in the repository (404).

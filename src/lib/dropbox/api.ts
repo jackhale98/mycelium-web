@@ -13,6 +13,7 @@ import {
 	RemoteConflict,
 	RemoteError,
 	RemoteNotFound,
+	type RemoteBlobs,
 	type RemoteBrowser,
 	type RemoteEntry,
 	type RemoteFiles,
@@ -59,7 +60,7 @@ const entry = (e: Raw): DropboxEntry => ({
 	...(e.rev ? { rev: e.rev } : {}),
 });
 
-export class DropboxApi implements RemoteFiles, RemoteBrowser {
+export class DropboxApi implements RemoteFiles, RemoteBrowser, RemoteBlobs {
 	constructor(
 		/** A valid access token (refreshing it first if needed). `force` asks for a fresh one. */
 		private token: (force?: boolean) => Promise<string>,
@@ -194,6 +195,36 @@ export class DropboxApi implements RemoteFiles, RemoteBrowser {
 		if (/not_found/.test(err.summary)) return;
 		if (/conflict|parent_rev/.test(err.summary)) throw new RemoteConflict(path);
 		throw err;
+	}
+
+	async downloadBytes(path: string): Promise<Uint8Array> {
+		const res = await this.#call(`${CONTENT}/files/download`, {
+			method: 'POST',
+			headers: { 'Dropbox-API-Arg': apiArg({ path }) },
+		});
+		if (!res.ok) {
+			const err = await failure(res);
+			if (/not_found/.test(err.summary)) throw new RemoteNotFound(path);
+			throw err;
+		}
+		return new Uint8Array(await res.arrayBuffer());
+	}
+
+	async uploadBytes(path: string, bytes: Uint8Array): Promise<void> {
+		const res = await this.#call(`${CONTENT}/files/upload`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/octet-stream',
+				'Dropbox-API-Arg': apiArg({ path, mode: { '.tag': 'add' }, autorename: false, mute: true }),
+			},
+			body: bytes as unknown as BodyInit,
+		});
+		if (res.status === 409) {
+			const err = await failure(res);
+			if (/conflict/.test(err.summary)) throw new RemoteConflict(path);
+			throw err;
+		}
+		if (!res.ok) throw await failure(res);
 	}
 
 	async browse(path: string) {

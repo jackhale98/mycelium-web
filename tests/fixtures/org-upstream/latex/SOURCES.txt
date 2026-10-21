@@ -1,0 +1,3 @@
+manual-fragments.org  verbatim example from https://orgmode.org/manual/LaTeX-fragments.html
+dollar-cases.txt      transcribed from testing/lisp/test-org-element.el (test-org-element/latex-fragment-parser),
+                      commit 21e976594d3081f7bc45ebec312275aec49778e0, fetched 2026-10-21.

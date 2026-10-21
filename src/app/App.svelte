@@ -15,6 +15,8 @@
 	import AgendaView from './views/AgendaView.svelte';
 	import DailyView from './views/DailyView.svelte';
 	import FileView from './views/FileView.svelte';
+	import ClockBar from './components/ClockBar.svelte';
+	import RefileDialog from './components/RefileDialog.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
 	import TagsView from './views/TagsView.svelte';
@@ -144,6 +146,7 @@
 	></button>
 
 	<main id="main-content" bind:this={main} tabindex="-1">
+		<ClockBar />
 		{#if (app.loadError || app.folderAccess) && router.route.name !== 'vaults'}
 			<div class="vault-notice" role="alert">
 				{#if app.folderAccess}
@@ -188,9 +191,9 @@
 		{:else if router.route.name === 'home'}
 			<HomeView />
 		{:else if router.route.name === 'node'}
-			{#key router.route.id}<NodeView id={router.route.id} />{/key}
+			{#key router.route.id}<NodeView id={router.route.id} at={router.route.at} />{/key}
 		{:else if router.route.name === 'file'}
-			{#key router.route.path}<FileView path={router.route.path} />{/key}
+			{#key router.route.path}<FileView path={router.route.path} at={router.route.at} />{/key}
 		{:else if router.route.name === 'daily'}
 			<DailyView date={router.route.date} />
 		{:else if router.route.name === 'agenda'}
@@ -234,6 +237,7 @@
 <CommandPalette />
 <SyncDialog />
 <NewNoteDialog />
+<RefileDialog />
 <HeadingSheet />
 <CaptureSheet />
 
@@ -507,6 +511,9 @@
 	@media (max-width: 960px) {
 		:global(html) {
 			scroll-padding-top: 4rem;
+			/* The page itself scrolls here: never let something a little too
+			   wide make iOS pan the whole page sideways. */
+			overflow-x: hidden;
 		}
 	}
 </style>

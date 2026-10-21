@@ -5,7 +5,11 @@
 	import Inline from './OrgInline.svelte';
 	import Self from './OrgBlocks.svelte';
 	import Section from './OrgSection.svelte';
+	import { highlighted } from './code';
+	import { imageAttrs } from './context';
+	import { math } from './math';
 	import OrgTable from './OrgTable.svelte';
+	import Transclusion from './Transclusion.svelte';
 	import type { RenderContext } from './context';
 
 	let { nodes, ctx }: { nodes: OrgNode[]; ctx: RenderContext } = $props();
@@ -22,12 +26,18 @@
 </script>
 
 {#each nodes as node, i (i)}
-	{#if HIDDEN.has(node.type)}
+	{#if node.type === 'keyword' && node.key.toUpperCase() === 'TRANSCLUDE'}
+		<Transclusion value={node.value} offset={startOf(node)} {ctx} />
+	{:else if HIDDEN.has(node.type)}
 		<!-- metadata is shown elsewhere -->
 	{:else if node.type === 'section'}
 		<Section section={node} {ctx} />
 	{:else if node.type === 'paragraph'}
-		<p><Inline nodes={node.children} {ctx} /></p>
+		{@const attrs =
+			node.affiliated && Object.keys(node.affiliated).some((k) => /^ATTR_/i.test(k))
+				? imageAttrs(node.affiliated)
+				: null}
+		<p><Inline nodes={node.children} ctx={attrs ? { ...ctx, image: attrs } : ctx} /></p>
 	{:else if node.type === 'plain-list'}
 		{#if node.listType === 'descriptive'}
 			<dl>
@@ -76,7 +86,9 @@
 	{:else if node.type === 'src-block'}
 		<figure class="code">
 			{#if node.language}<figcaption>{node.language}</figcaption>{/if}
-			<pre><code>{node.value.replace(/\n$/, '')}</code></pre>
+			<pre><code
+					use:highlighted={{ code: node.value.replace(/\n$/, ''), lang: node.language ?? null }}
+				></code></pre>
 		</figure>
 	{:else if node.type === 'example-block' || node.type === 'fixed-width'}
 		<pre class="block">{node.value.replace(/\n$/, '')}</pre>
@@ -86,7 +98,7 @@
 			<pre><code>{node.value.replace(/\n$/, '')}</code></pre>
 		</figure>
 	{:else if node.type === 'latex-environment'}
-		<pre class="block latex">{node.value}</pre>
+		<div class="math-block" use:math={{ tex: node.value, display: true, source: node.value }}></div>
 	{:else if node.type === 'quote-block'}
 		<blockquote><Self nodes={node.children} {ctx} /></blockquote>
 	{:else if node.type === 'verse-block'}

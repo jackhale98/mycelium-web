@@ -1,0 +1,6 @@
+Byte-exact copies of org-roam's test fixtures (GPLv3+), fetched 2026-10-21 from
+https://raw.githubusercontent.com/org-roam/org-roam/main/tests/roam-files/foo.org
+https://raw.githubusercontent.com/org-roam/org-roam/main/tests/roam-files/bar.org
+bar.org links to foo.org by id (a *linked* reference: excluded from unlinked references because
+the rg pattern consumes the whole bracketed link).  A plain-text "Foo" in bar.org would be an
+unlinked reference to node "Foo".

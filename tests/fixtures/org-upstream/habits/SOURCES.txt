@@ -1,0 +1,8 @@
+shave-manual.org         Org manual, "Tracking your habits": https://orgmode.org/manual/Tracking-your-habits.html (verbatim example)
+shave-test-suite.org     testing/lisp/test-org-habit.el, `org-test-habit-agenda-string' with repeater ".+",
+                         deadline "/4d", org-log-states-order-reversed t (verbatim except the repeater substitution).
+simple-habit-catchup.org test-org-habit/simple-habit
+simple-habit-week.org    test-org-habit/simple-habit/week
+expected-agenda-lines.txt expected strings from those tests (string-equal assertions).
+Source: https://git.savannah.gnu.org/cgit/emacs/org-mode.git/plain/testing/lisp/test-org-habit.el
+commit 21e976594d3081f7bc45ebec312275aec49778e0 (main, Org 10.0-pre), fetched 2026-10-21.
