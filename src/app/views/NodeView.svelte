@@ -130,6 +130,7 @@
 		if (!head || !wrap) return;
 		let last: number | null = null;
 		let travel = 0;
+		let down = 0;
 		const onScroll = (e: Event) => {
 			const t = e.target;
 			const y =
@@ -141,10 +142,12 @@
 					travel = 0;
 				} else if (last !== null) {
 					const dy = y - last;
-					// Small moves in the other direction reset the count: a deliberate
-					// upward scroll of ~40px shows it, any downward scroll hides it.
+					// A deliberate upward scroll (~40px) shows it and a deliberate
+					// downward one (~16px) hides it; the editor's own small scroll
+					// adjustments as it measures lines do neither.
 					travel = dy < 0 ? Math.min(0, travel) + dy : 0;
-					if (dy > 0) floating = false;
+					down = dy > 0 ? down + dy : 0;
+					if (down > 16) floating = false;
 					else if (travel < -40) floating = true;
 				}
 				last = y;

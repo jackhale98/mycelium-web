@@ -144,7 +144,7 @@ test('a custom template with prompts writes into a file under a heading', async 
 	await sheet.getByRole('button', { name: 'Capture', exact: true }).click();
 	await expect(page.getByRole('status').filter({ hasText: 'Saved to' })).toBeVisible();
 	await page.getByRole('status').getByRole('link', { name: 'Open' }).click();
-	await expect(page).toHaveURL(/#\/file\/inbox\.org$/);
+	await expect(page).toHaveURL(/#\/file\/inbox\.org(\?at=\d+)?$/);
 	await expect(page.getByText('Call Alex').first()).toBeVisible();
 
 	// The task shows on the agenda, and the diff shows exactly what was written.
@@ -201,7 +201,7 @@ test('files without an ID open on their own page and can become notes', async ({
 		.getByRole('link', { name: /Email Sam about the reading group/ })
 		.first()
 		.click();
-	await expect(page).toHaveURL(/#\/file\/inbox\.org$/);
+	await expect(page).toHaveURL(/#\/file\/inbox\.org(\?at=\d+)?$/);
 	await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
 	await expect(page.getByText('Email Sam about the reading group').first()).toBeVisible();
 	await expectAccessible(page);
@@ -743,6 +743,9 @@ test('on a long note the toolbar comes back when you scroll up', async ({ page }
 	await expect(page.locator('.floating')).toBeHidden();
 	await page.mouse.wheel(0, -80);
 	await expect(page.locator('.floating')).toBeVisible();
+	// Wait for it to finish sliding in: clicking mid-slide makes the test scroll
+	// it into view, which brings the real toolbar back instead.
+	await expect(page.locator('.floating')).toHaveCSS('transform', 'none');
 	await page.locator('.floating').getByRole('button', { name: 'Read' }).click();
 	await expect(page.locator('.cm-content')).toHaveCount(0);
 });
