@@ -1,4 +1,5 @@
 <script lang="ts">
+	const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 	import { serviceLabel } from '$lib/sync/services';
 	import type { CommitSummary } from '$lib/git/repo';
 	import { PROVIDERS } from '$lib/git/providers';
@@ -316,9 +317,34 @@
 			</div>
 		</section>
 	{/if}
+
+	<section class="panel stack" aria-labelledby="about-h">
+		<h2 id="about-h">About Mycelium</h2>
+		<p class="hint">
+			Mycelium is free software: you can redistribute it and change it under the terms of the GNU
+			General Public License, version 3 or (at your option) any later version. It comes with no
+			warranty.
+		</p>
+		<p class="about-links">
+			<a href="https://github.com/jackhale98/mycelium-web" rel="noopener noreferrer">Source code</a>
+			<a href="https://www.gnu.org/licenses/gpl-3.0.html" rel="noopener noreferrer">GNU GPL v3</a>
+			<a href={`${BASE}/third-party-licenses.txt`}>Third-party licences</a>
+		</p>
+		<p class="hint">Not affiliated with org-roam or the GNU Emacs project.</p>
+	</section>
 </div>
 
 <style>
+	.about-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 1.2rem;
+		margin: 0;
+		font-size: 0.88rem;
+	}
+	.about-links a {
+		color: var(--link);
+	}
 	.preview {
 		margin: 0.4rem 0 0;
 		font-family: var(--font-read);

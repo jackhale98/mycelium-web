@@ -39,7 +39,7 @@ agenda semantics) but not its UI.
 | Editor    | CodeMirror 6, org language + live-preview decorations; separate reading view                                                                                            |
 | Graph     | d3-force simulation in a Web Worker, rendered on `<canvas>`                                                                                                             |
 | Offline   | Service worker + web app manifest; installable on iOS/Android/desktop                                                                                                   |
-| License   | Apache-2.0 (matches the original project)                                                                                                                               |
+| License   | GPL-3.0-or-later (uniorg, the org parser, is GPL; the worker stays Apache-2.0)                                                                                          |
 
 ## Architecture
 

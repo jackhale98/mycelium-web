@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"description": "A fast, accessible web app for reading, editing and exploring org-roam knowledge bases stored in git.",
-	"license": "Apache-2.0",
+	"license": "GPL-3.0-or-later",
 	"scripts": {
 		"dev": "astro dev",
 		"build": "astro build",
@@ -62,6 +62,7 @@
 		"prettier": "^3.9.10",
 		"prettier-plugin-astro": "^1.1.1",
 		"prettier-plugin-svelte": "^4.1.1",
+		"rollup-plugin-license": "^3.7.1",
 		"svelte-check": "^4.7.7",
 		"typescript": "^6.0.3",
 		"vitest": "^5.0.5"

@@ -77,4 +77,14 @@ Set `SITE_BASE=/` when building for a custom domain.
 
 ## Licence
 
-Apache 2.0. Not affiliated with org-roam or the GNU Emacs project.
+Mycelium is free software under the [GNU General Public License v3.0 or
+later](LICENSE). It renders org with [uniorg](https://github.com/rasendubi/uniorg),
+which is GPL-3.0-or-later, so the app as a whole is distributed under the same
+terms: you may use, study, share and change it, and anything you distribute
+that is based on it must stay under the GPL with its source available.
+
+The sync worker in [`worker/`](worker) is a separate program and stays under
+the [Apache License 2.0](worker/LICENSE). Bundled third-party components and
+their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Not affiliated with org-roam or the GNU Emacs project.
