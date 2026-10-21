@@ -17,6 +17,8 @@
 	import FileView from './views/FileView.svelte';
 	import ClockBar from './components/ClockBar.svelte';
 	import RefileDialog from './components/RefileDialog.svelte';
+	import TableSheet from './components/TableSheet.svelte';
+	import MathSheet from './components/MathSheet.svelte';
 	import HomeView from './views/HomeView.svelte';
 	import NodeView from './views/NodeView.svelte';
 	import TagsView from './views/TagsView.svelte';
@@ -238,6 +240,8 @@
 <SyncDialog />
 <NewNoteDialog />
 <RefileDialog />
+<TableSheet />
+<MathSheet />
 <HeadingSheet />
 <CaptureSheet />
 

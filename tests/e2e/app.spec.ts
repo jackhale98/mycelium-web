@@ -747,6 +747,103 @@ test('on a long note the toolbar comes back when you scroll up', async ({ page }
 	await expect(page.locator('.cm-content')).toHaveCount(0);
 });
 
+const READING = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d13';
+
+test('a table is edited in the table sheet and saved aligned, as org does', async ({ page }) => {
+	await open(page, `app#/node/${READING}`);
+	await page.getByRole('button', { name: 'Edit table' }).click();
+	const sheet = page.getByRole('dialog', { name: 'Edit table' });
+	await expect(sheet).toBeVisible();
+	// Row 1 is the table's <l>/<c> alignment row.
+	await sheet.getByRole('textbox', { name: 'Row 4, Status' }).fill('reading');
+	// Enter goes down a row, as in org (over the rule, to Total).
+	await sheet.getByRole('textbox', { name: 'Row 4, Status' }).press('Enter');
+	await expect(sheet.getByRole('textbox', { name: 'Row 5, Status' })).toBeFocused();
+	await sheet.getByRole('button', { name: 'Add row below' }).click();
+	await sheet.getByRole('radio', { name: 'One row' }).click();
+	await sheet.getByRole('textbox', { name: 'Book' }).fill('Braiding Sweetgrass');
+	await sheet.getByRole('textbox', { name: 'Pages' }).fill('408');
+	await sheet.getByRole('button', { name: 'Save table' }).click();
+	await expect(sheet).toBeHidden();
+	await expect(page.locator('.node-body table')).toContainText('Braiding Sweetgrass');
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const lines = () => page.locator('.cm-line').allInnerTexts();
+	await expect
+		.poll(lines)
+		.toContain('| Entangled Life           | Merlin Sheldrake |   368 |    0 | reading |');
+	expect(await lines()).toContain(
+		'| Braiding Sweetgrass      |                  |   408 |      |         |',
+	);
+});
+
+test('maths: the formula sheet checks LaTeX as you type, and the editor previews it', async ({
+	page,
+}) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText('\nEnergy: ');
+	await page
+		.getByRole('toolbar', { name: 'Formatting' })
+		.getByRole('button', { name: 'Maths (LaTeX)' })
+		.click();
+	const sheet = page.getByRole('dialog', { name: 'Insert formula' });
+	await sheet.getByRole('textbox', { name: 'LaTeX' }).fill('\\frac{E}{m');
+	await expect(sheet.getByText('A { is never closed')).toBeVisible();
+	await expect(sheet.getByRole('button', { name: 'Insert', exact: true })).toBeDisabled();
+	await sheet.getByRole('textbox', { name: 'LaTeX' }).fill('\\frac{E}{m} = ');
+	await sheet.getByRole('button', { name: 'Square root', exact: true }).click();
+	await page.keyboard.type('c');
+	await expect(sheet.locator('.typeset .katex')).toBeVisible();
+	await sheet.getByRole('button', { name: 'Insert', exact: true }).click();
+	await expect(page.locator('.cm-line').last()).toHaveText(
+		'Energy: \\(\\frac{E}{m} = \\sqrt{c}\\)',
+	);
+	// The cursor sits in the formula: its preview shows under the line.
+	await page.keyboard.press('ArrowLeft');
+	await expect(page.locator('.cm-tex-preview math')).toBeVisible();
+	// A broken formula is underlined, with the reason.
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText('\nOops \\(\\alhpa\\)');
+	await expect(page.locator('.cm-tex-error')).toHaveAttribute('title', /\\alhpa isn't a command/);
+	// Typing a command inside maths offers LaTeX commands, filled in as snippets.
+	await page.keyboard.insertText('\nMore \\(');
+	await page.keyboard.type('\\fra');
+	await page.locator('.cm-tooltip-autocomplete li', { hasText: '\\frac' }).first().click();
+	await page.keyboard.type('x');
+	await expect(page.locator('.cm-line').last()).toHaveText('More \\(\\frac{x}{b}');
+});
+
+test('tables in the source editor: the bar inserts one, Tab moves and realigns', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(isMobile, 'phones edit tables in the sheet');
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.press('Enter');
+	await page
+		.getByRole('toolbar', { name: 'Formatting' })
+		.getByRole('button', { name: 'Table' })
+		.click();
+	await page.keyboard.type('Name');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('Phone');
+	await page.keyboard.press('Tab');
+	const lines = () => page.locator('.cm-line').allInnerTexts();
+	await expect
+		.poll(async () => (await lines()).slice(-4))
+		.toEqual([
+			'| Name | Phone |   |',
+			'|------+-------+---|',
+			'|      |       |   |',
+			'|      |       |   |',
+		]);
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {

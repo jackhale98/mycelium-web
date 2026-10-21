@@ -20,6 +20,8 @@
 	let commands: typeof import('./format-commands') | null = null;
 	let history: typeof import('@codemirror/commands') | null = null;
 	let lists: typeof import('./list-commands') | null = null;
+	let tables: typeof import('./table-commands') | null = null;
+	let texTools: typeof import('./tex') | null = null;
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
 	function save() {
@@ -46,8 +48,12 @@
 			import('./format-commands'),
 			import('@codemirror/commands'),
 			import('./list-commands'),
-		]).then(([{ createEditor, syncEditor }, format, cm, list]) => {
+			import('./table-commands'),
+			import('./tex'),
+		]).then(([{ createEditor, syncEditor }, format, cm, list, table, tex]) => {
 			if (cancelled || !host) return;
+			tables = table;
+			texTools = tex;
 			commands = format;
 			history = cm;
 			lists = list;
@@ -105,6 +111,55 @@
 		app.setTodo(path, line.from, nextTodoKeyword(current, config));
 	}
 
+	/** In a table: edit it in the table sheet. Elsewhere: insert a new table (and edit it, on touch screens). */
+	function openTable(v: EditorView) {
+		if (!tables) return;
+		if (!tables.tableHere(v.state)) {
+			tables.insertTable(v);
+			if (!matchMedia('(pointer: coarse)').matches) {
+				v.focus();
+				return;
+			}
+		}
+		const offset = v.state.doc.lineAt(v.state.selection.main.head).from;
+		save();
+		app.tableSheet = { path, offset };
+	}
+
+	/** Write a formula in the maths sheet; edit the one at the cursor, if it's in one. */
+	function openMath(v: EditorView) {
+		if (!texTools) return;
+		const sel = v.state.selection.main;
+		const line = v.state.doc.lineAt(sel.head);
+		const frag = texTools.fragmentAt(line.text, sel.head - line.from);
+		const range = frag
+			? { from: line.from + frag.from, to: line.from + frag.to }
+			: { from: sel.from, to: sel.to };
+		const selected = v.state.sliceDoc(sel.from, sel.to);
+		app.mathSheet = {
+			tex: frag?.tex ?? selected,
+			display: frag?.display ?? false,
+			editing: !!frag,
+			apply(tex, display) {
+				let insert = display ? `\\[${tex}\\]` : `\\(${tex}\\)`;
+				// Display maths goes on a line of its own.
+				if (display && !frag) {
+					const l = v.state.doc.lineAt(range.from);
+					if (range.from > l.from && l.text.slice(0, range.from - l.from).trim())
+						insert = `\n${insert}`;
+					if (range.to < l.to && l.text.slice(range.to - l.from).trim()) insert = `${insert}\n`;
+				}
+				v.dispatch({
+					changes: { ...range, insert },
+					selection: { anchor: range.from + insert.length },
+					scrollIntoView: true,
+					userEvent: 'input',
+				});
+				v.focus();
+			},
+		};
+	}
+
 	function act(action: FormatAction) {
 		const v = view;
 		if (!v || !commands || !history || !lists) return;
@@ -153,6 +208,12 @@
 				run(f.insertLink);
 				void import('@codemirror/autocomplete').then((a) => a.startCompletion(v));
 				break;
+			case 'table':
+				openTable(v);
+				return;
+			case 'math':
+				openMath(v);
+				return;
 			case 'undo':
 				history.undo(v);
 				break;

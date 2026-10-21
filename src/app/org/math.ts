@@ -34,7 +34,13 @@ export function texOf(fragment: string): Tex | null {
 
 let katex: Promise<typeof import('katex').default> | null = null;
 function load() {
-	katex ??= import('katex').then((m) => m.default);
+	katex ??= import('katex').then(
+		(m) => m.default,
+		(e) => {
+			katex = null; // try again next time
+			throw e;
+		},
+	);
 	return katex;
 }
 

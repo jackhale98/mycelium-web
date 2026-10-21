@@ -7,6 +7,7 @@
 		type OrgNode,
 		type TableRow,
 	} from '$lib/org';
+	import Icon from '../components/Icon.svelte';
 	import { app } from '../state.svelte';
 	import Inline from './OrgInline.svelte';
 	import type { RenderContext } from './context';
@@ -88,8 +89,24 @@
 		{/each}
 	</table>
 </div>
+{#if ctx.interactive && rows[0]}
+	<div class="table-actions">
+		<button
+			type="button"
+			class="btn small"
+			onclick={() =>
+				(app.tableSheet = { path: ctx.path, offset: startOf(rows[0] as unknown as OrgNode) })}
+			><Icon name="edit" size={13} />Edit table</button
+		>
+	</div>
+{/if}
 
 <style>
+	.table-actions {
+		display: flex;
+		justify-content: flex-end;
+		margin: -0.6rem 0 1.2rem;
+	}
 	caption {
 		padding: 0.6rem 0.85rem 0.5rem;
 		caption-side: top;

@@ -14,6 +14,7 @@ export * from './highlight';
 export * from './duration';
 export * from './match';
 export * from './table';
+export * from './table-edit';
 export * from './todo';
 export * from './parse';
 export * from './roam';

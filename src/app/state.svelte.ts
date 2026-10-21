@@ -33,6 +33,9 @@ import {
 	clockIn,
 	clockMillis,
 	formatDuration,
+	formatTable,
+	tableAt,
+	type TableRow,
 	clockOut,
 	runningClocks,
 	subtreeClockSum,
@@ -1101,6 +1104,41 @@ class AppState {
 	}
 
 	// ------------------------------------------------------------------ refile and archive
+
+	/**
+	 * The maths sheet: the formula being written (or edited), and what to do
+	 * with it. The editor opens it and puts the result where the cursor was.
+	 */
+	mathSheet = $state<{
+		tex: string;
+		display: boolean;
+		editing: boolean;
+		apply: (tex: string, display: boolean) => void;
+	} | null>(null);
+
+	// ------------------------------------------------------------------ tables
+
+	/** The table editor sheet: the table at `offset` in `path`. */
+	tableSheet = $state<{ path: string; offset: number } | null>(null);
+
+	/**
+	 * Write a table back, aligned as org-table-align does. `before` is the
+	 * table's text when editing began: if it has changed since (a sync, or
+	 * Emacs), nothing is written and this returns false.
+	 */
+	replaceTable(path: string, offset: number, before: string, rows: TableRow[]): boolean {
+		const file = this.vault.file(path);
+		const t = file && tableAt(file.source, offset);
+		if (!file || !t || file.source.slice(t.from, t.to) !== before) return false;
+		const text = formatTable(rows, t.indent);
+		if (text !== before)
+			this.#write(
+				path,
+				applyChanges(file.source, [{ from: t.from, to: t.to, insert: text }]),
+				`Edit table in ${this.#title(path)}`,
+			);
+		return true;
+	}
 
 	/** Open the refile picker for a heading. */
 	refileSheet = $state<{ path: string; pos: number } | null>(null);

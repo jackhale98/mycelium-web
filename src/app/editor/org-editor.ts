@@ -13,6 +13,8 @@ import {
 	type CompletionResult,
 } from '@codemirror/autocomplete';
 import { continueList, indentItem, outdentItem, toggleItemCheckbox } from './list-commands';
+import * as table from './table-commands';
+import { texCompletion, texSupport } from './tex-editor';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Annotation, EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
@@ -378,14 +380,22 @@ export function createEditor(
 					spellcheck: 'true',
 					autocapitalize: 'sentences',
 				}),
-				autocompletion({ override: [linkCompletion(hooks)], icons: false }),
+				autocompletion({ override: [linkCompletion(hooks), texCompletion], icons: false }),
+				texSupport,
 				keymap.of([
 					{ key: 'Alt-Enter', run: newHeading },
-					{ key: 'Enter', run: continueList },
-					{ key: 'Tab', run: indentItem },
-					{ key: 'Shift-Tab', run: outdentItem },
-					{ key: 'Alt-ArrowRight', run: indentItem },
-					{ key: 'Alt-ArrowLeft', run: outdentItem },
+					// Inside a table, org's table keys come first.
+					{ key: 'Enter', run: (v) => table.nextRow(v) || continueList(v) },
+					{ key: 'Tab', run: (v) => table.nextField(v) || indentItem(v) },
+					{ key: 'Shift-Tab', run: (v) => table.previousField(v) || outdentItem(v) },
+					{ key: 'Alt-ArrowRight', run: (v) => table.moveColumnRight(v) || indentItem(v) },
+					{ key: 'Alt-ArrowLeft', run: (v) => table.moveColumnLeft(v) || outdentItem(v) },
+					{ key: 'Alt-ArrowUp', run: table.moveRowUp },
+					{ key: 'Alt-ArrowDown', run: table.moveRowDown },
+					{ key: 'Alt-Shift-ArrowDown', run: table.insertRowAbove },
+					{ key: 'Alt-Shift-ArrowUp', run: table.deleteThisRow },
+					{ key: 'Alt-Shift-ArrowRight', run: table.insertColumnHere },
+					{ key: 'Alt-Shift-ArrowLeft', run: table.deleteThisColumn },
 					{ key: 'Ctrl-c Ctrl-c', run: toggleItemCheckbox },
 					...closeBracketsKeymap,
 					...completionKeymap,

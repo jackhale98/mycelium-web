@@ -19,6 +19,13 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   editor (press <kbd>E</kbd>). Typing `[[` links to any note — or creates one.
   A formatting bar (above the keyboard on phones) makes headings, TODOs,
   emphasis, lists and checkboxes without typing org markup.
+- **Tables, the org way:** Tab, Enter and M-arrows realign and reshape tables
+  exactly as `org-table-align` does; on phones, a table sheet edits cells in a
+  grid (or one row at a time) and writes the table back aligned.
+- **Maths that works first time:** a formula sheet with a palette and a live
+  KaTeX preview explains mistakes in plain words; in the editor the formula
+  under the cursor is previewed, broken ones are underlined, and `\` offers
+  commands.
 - **Rich notes:** inline images and attachments (`attachment:` links and
   `#+ATTR_ORG` widths), LaTeX maths, highlighted source blocks, `<<targets>>`,
   `[[file::search]]` links and org-transclusion. Line breaks show as written,

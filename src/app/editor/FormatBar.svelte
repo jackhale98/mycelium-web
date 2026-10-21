@@ -21,6 +21,8 @@
 		| 'indent'
 		| 'outdent'
 		| 'link'
+		| 'table'
+		| 'math'
 		| 'undo'
 		| 'redo'
 		| 'done';
@@ -91,6 +93,8 @@
 			{ action: 'indent', label: 'Indent or demote', icon: 'indent' },
 		],
 		[
+			{ action: 'table', label: 'Table', icon: 'table' },
+			{ action: 'math', label: 'Maths (LaTeX)', icon: 'sigma' },
 			{ action: 'link', label: 'Link to a note', icon: 'link' },
 			{ action: 'undo', label: 'Undo', icon: 'undo' },
 			{ action: 'redo', label: 'Redo', icon: 'redo' },
