@@ -10,6 +10,28 @@
 	const clock = $derived(app.runningClocks[0] ?? null);
 	let now = $state(Date.now());
 
+	// The bar appears after the page (once the vault has loaded) and pushes it
+	// down: a tap aimed at what was there before mustn't land on Stop. Its
+	// buttons wait a moment after it first shows.
+	const showing = $derived(!!clock);
+	let armed = $state(false);
+	$effect(() => {
+		if (!showing) return;
+		armed = false;
+		const t = setTimeout(() => (armed = true), 1000);
+		return () => clearTimeout(t);
+	});
+
+	// Stop and Cancel can be undone for a few seconds.
+	const undo = $derived(app.clockUndo);
+	$effect(() => {
+		if (!undo) return;
+		const t = setTimeout(() => {
+			if (app.clockUndo === undo) app.clockUndo = null;
+		}, 8000);
+		return () => clearTimeout(t);
+	});
+
 	$effect(() => {
 		if (!clock) return;
 		now = Date.now();
@@ -45,7 +67,16 @@
 	});
 </script>
 
-{#if clock}
+{#if undo}
+	<div class="clockbar done" role="status" aria-live="polite" bind:this={bar}>
+		<Icon name="clock" size={15} />
+		<span class="title">{undo.text}</span>
+		<button type="button" class="btn small" onclick={() => app.undoClock()}>Undo</button>
+		<button type="button" class="x" aria-label="Dismiss" onclick={() => (app.clockUndo = null)}
+			><Icon name="close" size={14} /></button
+		>
+	</div>
+{:else if clock}
 	<div class="clockbar" role="status" aria-live="polite" bind:this={bar}>
 		<Icon name="clock" size={15} />
 		<a class="title" href={link}>{clock.title}</a>
@@ -56,13 +87,15 @@
 			type="button"
 			class="btn small primary"
 			title="Stop the clock and record the time"
-			onclick={() => app.clockOut(clock.path, clock.heading)}>Stop</button
+			aria-disabled={!armed}
+			onclick={() => armed && app.clockOut(clock.path, clock.heading)}>Stop</button
 		>
 		<button
 			type="button"
 			class="btn small"
 			title="Discard this clock without recording any time"
-			onclick={() => app.clockCancel(clock.path, clock.heading)}>Cancel</button
+			aria-disabled={!armed}
+			onclick={() => armed && app.clockCancel(clock.path, clock.heading)}>Cancel</button
 		>
 	</div>
 {/if}
@@ -80,6 +113,19 @@
 		background: color-mix(in oklab, var(--todo-soft) 70%, var(--surface));
 		color: var(--todo);
 		font-size: 0.86rem;
+	}
+	.done {
+		color: var(--text-muted);
+	}
+	.x {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border: 0;
+		border-radius: 8px;
+		background: none;
+		color: var(--text-muted);
 	}
 	.title {
 		flex: 1;

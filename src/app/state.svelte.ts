@@ -32,6 +32,7 @@ import {
 	clockCancel,
 	clockIn,
 	clockMillis,
+	formatDuration,
 	clockOut,
 	runningClocks,
 	subtreeClockSum,
@@ -1235,15 +1236,47 @@ class AppState {
 	}
 
 	clockOut(path: string, heading: number) {
-		this.#edit(
+		const minutes = this.#clockMinutes(path, heading);
+		this.#undoable(
 			path,
-			(src) => clockOut(src, heading, localNow(), this.#keywords(path)),
-			'Clock out',
+			minutes === null ? 'Clock stopped' : `Clock stopped · ${formatDuration(minutes)}`,
+			() =>
+				this.#edit(
+					path,
+					(src) => clockOut(src, heading, localNow(), this.#keywords(path)),
+					'Clock out',
+				),
 		);
 	}
 
 	clockCancel(path: string, heading: number) {
-		this.#edit(path, (src) => clockCancel(src, heading, this.#keywords(path)), 'Cancel clock');
+		this.#undoable(path, 'Clock cancelled', () =>
+			this.#edit(path, (src) => clockCancel(src, heading, this.#keywords(path)), 'Cancel clock'),
+		);
+	}
+
+	/** The last clock stop or cancel, which can be undone for a few seconds. */
+	clockUndo = $state<{ path: string; before: string; after: string; text: string } | null>(null);
+
+	#undoable(path: string, text: string, run: () => void) {
+		const before = this.vault.file(path)?.source;
+		run();
+		const after = this.vault.file(path)?.source;
+		if (before !== undefined && after !== undefined && after !== before)
+			this.clockUndo = { path, before, after, text };
+	}
+
+	/** Put back the clock that was just stopped or cancelled (if the file hasn't changed since). */
+	undoClock() {
+		const u = this.clockUndo;
+		this.clockUndo = null;
+		if (u && this.vault.file(u.path)?.source === u.after)
+			this.#write(u.path, u.before, 'Undo clock change');
+	}
+
+	#clockMinutes(path: string, heading: number): number | null {
+		const c = this.runningClocks.find((r) => r.path === path && r.heading === heading);
+		return c ? Math.max(0, Math.floor((Date.now() - clockMillis(c.start)) / 60_000)) : null;
 	}
 
 	/** Minutes clocked in a heading's subtree, and its Effort, for display. */

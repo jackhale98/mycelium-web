@@ -392,6 +392,9 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 	await page.getByRole('button', { name: 'Clock in' }).click();
 	const bar = page.locator('.clockbar');
 	await expect(bar).toContainText('Ship the design system');
+	// A tap that lands on Stop as the bar appears (pushing the page down) is ignored.
+	await bar.getByRole('button', { name: 'Stop' }).dispatchEvent('click');
+	await expect(bar).toContainText('Ship the design system');
 	// Clocking in elsewhere stops (and records) the running clock.
 	await page.keyboard.press('Escape');
 	const other = page.locator('.org-section', { hasText: 'Write the self-hosting guide' }).first();
@@ -399,8 +402,15 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 	await expect(page.getByText('Stops and records “Ship the design system”')).toBeVisible();
 	await page.getByRole('button', { name: 'Clock in' }).click();
 	await expect(bar).toContainText('Write the self-hosting guide');
-	// Cancel discards it; Stop records it.
+	// Cancel discards it, and can be undone; Stop records it.
+	await page.waitForTimeout(1100); // the bar's buttons wait a moment after it appears
 	await bar.getByRole('button', { name: 'Cancel' }).click();
+	await expect(bar).toContainText('Clock cancelled');
+	await bar.getByRole('button', { name: 'Undo' }).click();
+	await expect(bar).toContainText('Write the self-hosting guide');
+	await page.waitForTimeout(1100);
+	await bar.getByRole('button', { name: 'Cancel' }).click();
+	await bar.getByRole('button', { name: 'Dismiss' }).click();
 	await expect(bar).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
