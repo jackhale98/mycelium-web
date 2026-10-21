@@ -2,8 +2,8 @@
 	import type { CommitSummary } from '$lib/git/repo';
 	import { diffLines, type DiffHunk } from '$lib/git/diff';
 	import Icon from '../components/Icon.svelte';
-	import { RENEW_KEY } from '../components/DropboxConnect.svelte';
-	import { beginDropboxSignIn } from '$lib/auth/oauth';
+	import { beginCloudSignIn } from '$lib/auth/oauth';
+	import { serviceLabel } from '$lib/sync/services';
 	import { OAUTH_CONFIG, OAUTH_REDIRECT } from '../config';
 	import { app } from '../state.svelte';
 
@@ -120,21 +120,30 @@
 		if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void commit(e);
 	}
 
-	const dbx = $derived(app.dropboxSync);
+	const dbx = $derived(app.cloudSync);
+	const serviceName = $derived(app.cloud?.service.name ?? '');
 	const toUpload = $derived.by(() => {
-		void app.dropboxSync;
-		return [...(app.dropbox?.pending ?? [])].sort();
+		void app.cloudSync;
+		return [...(app.cloud?.pending ?? [])].sort();
 	});
+	let newPassword = $state('');
 
-	async function reconnectDropbox() {
-		const id = app.dropbox?.record.id;
-		if (!id) return;
-		try {
-			sessionStorage.setItem(RENEW_KEY, id);
-		} catch {
-			/* storage unavailable: the sign-in opens the folder picker instead */
+	/** Sign in again (Dropbox, OneDrive) or enter a new app password (WebDAV). */
+	async function reconnect(e?: Event) {
+		e?.preventDefault();
+		const ws = app.cloud;
+		if (!ws) return;
+		const cloud = ws.record.cloud;
+		if (cloud.service === 'webdav') {
+			if (!newPassword) return;
+			await app.reconnectCloud(ws.record.id, { password: newPassword });
+			newPassword = '';
+			return;
 		}
-		await beginDropboxSignIn(OAUTH_CONFIG, OAUTH_REDIRECT(), 'app#/vaults');
+		await beginCloudSignIn(cloud.service, OAUTH_CONFIG, OAUTH_REDIRECT(), 'app#/vaults', {
+			renew: ws.record.id,
+			sharepoint: !!cloud.sharepoint,
+		});
 	}
 
 	async function discard(path: string) {
@@ -166,29 +175,30 @@
 
 <div class="page wide">
 	<h1>Changes</h1>
-	{#if !app.dropbox}
+	{#if !app.cloud}
 		<p class="lede">
 			Edits save to the working tree as you type. Pick what to commit, write a message, and push
 			when you're ready.
 		</p>
 	{/if}
 
-	{#if app.dropbox}
+	{#if app.cloud}
 		<section class="panel stack" aria-labelledby="dbx-h">
 			<div class="row dbx-head">
-				<h2 id="dbx-h"><Icon name="cloud" size={16} />Dropbox</h2>
+				<h2 id="dbx-h"><Icon name="cloud" size={16} />{serviceName}</h2>
 				<button
 					type="button"
 					class="btn small primary"
 					disabled={dbx.state === 'syncing'}
-					onclick={() => app.syncDropbox()}
+					onclick={() => app.syncCloud()}
 					><Icon name="sync" size={14} />{dbx.state === 'syncing' ? 'Syncing…' : 'Sync now'}</button
 				>
 			</div>
 			<p class="muted">
-				This vault is the Dropbox folder <strong>{app.dropbox.record.dropbox.root || '/'}</strong>.
-				Edits are kept in this browser and upload a few seconds after you stop typing; changes from
-				your other devices come in when you open the app and every minute while it's open.
+				This vault is the folder <strong>{app.cloud.record.cloud.root || '/'}</strong> in {serviceLabel(
+					app.cloud.record.cloud,
+				)}. Edits are kept in this browser and upload a few seconds after you stop typing; changes
+				from your other devices come in when you open the app and every minute while it's open.
 				{#if dbx.lastSync}Last synced {new Date(dbx.lastSync).toLocaleString(undefined, {
 						dateStyle: 'medium',
 						timeStyle: 'short',
@@ -203,12 +213,25 @@
 			{:else if dbx.state === 'error'}
 				<p class="notice warn" role="alert">
 					<Icon name="alert" size={16} /><span>{dbx.message ?? 'The last sync failed.'}</span>
-					{#if dbx.message?.includes('signed you out')}<button
+					{#if dbx.message?.includes('signed you out') && app.cloud.record.cloud.service !== 'webdav'}<button
 							type="button"
 							class="btn small"
-							onclick={reconnectDropbox}>Reconnect Dropbox</button
+							onclick={() => reconnect()}>Reconnect {serviceName}</button
 						>{/if}
 				</p>
+				{#if dbx.message?.includes('signed you out') && app.cloud.record.cloud.service === 'webdav'}
+					<form class="row" onsubmit={reconnect}>
+						<input
+							class="input"
+							type="password"
+							aria-label="New app password"
+							placeholder="New app password"
+							autocomplete="current-password"
+							bind:value={newPassword}
+						/>
+						<button class="btn small" disabled={!newPassword}>Save and sync</button>
+					</form>
+				{/if}
 			{/if}
 			{#if dbx.conflicts}
 				<p class="notice warn">
@@ -216,8 +239,7 @@
 						>{dbx.conflicts === 1 ? 'A file was' : `${dbx.conflicts} files were`} changed here and elsewhere
 						in the same place.</span
 					>
-					<button type="button" class="btn small" onclick={() => app.syncDropbox()}>Resolve…</button
-					>
+					<button type="button" class="btn small" onclick={() => app.syncCloud()}>Resolve…</button>
 				</p>
 			{/if}
 			{#if toUpload.length}
@@ -228,7 +250,7 @@
 					{/each}
 				</ul>
 			{:else if dbx.state !== 'error'}
-				<p class="muted"><Icon name="check" size={14} /> Everything is in Dropbox.</p>
+				<p class="muted"><Icon name="check" size={14} /> Everything is in {serviceName}.</p>
 			{/if}
 		</section>
 	{:else if app.folder}

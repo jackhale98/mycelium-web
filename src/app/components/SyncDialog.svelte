@@ -23,7 +23,7 @@
 		void app.pull(resolutions);
 	}
 
-	const dropbox = $derived(!!app.dropbox);
+	const cloud = $derived(app.cloud?.service.name ?? null);
 	const trim = (s: string) => (s.endsWith('\n') ? s.slice(0, -1) : s) || '(empty)';
 </script>
 
@@ -38,8 +38,8 @@
 		<p>
 			{conflicts.length === 1 ? 'One file was' : `${conflicts.length} files were`} edited here and elsewhere
 			in a way that can't be combined automatically. Choose which version to keep for each — everything
-			else has merged cleanly. {dropbox
-				? 'Your choice is uploaded to Dropbox.'
+			else has merged cleanly. {cloud
+				? `Your choice is uploaded to ${cloud}.`
 				: "The merge is committed locally; push when you're ready."}
 		</p>
 	</header>
@@ -50,11 +50,11 @@
 				{#each file.hunks.filter((h) => h.conflict) as hunk, i (i)}
 					<div class="hunk">
 						<div class="side" class:chosen={choices[file.path] !== 'theirs'}>
-							<span class="who">{dropbox ? 'This device' : 'Yours (HEAD)'}</span>
+							<span class="who">{cloud ? 'This device' : 'Yours (HEAD)'}</span>
 							<pre>{trim(hunk.conflict!.ours)}</pre>
 						</div>
 						<div class="side" class:chosen={choices[file.path] === 'theirs'}>
-							<span class="who">{dropbox ? 'Dropbox' : 'Theirs (origin)'}</span>
+							<span class="who">{cloud ?? 'Theirs (origin)'}</span>
 							<pre>{trim(hunk.conflict!.theirs)}</pre>
 						</div>
 					</div>

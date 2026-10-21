@@ -5,7 +5,7 @@
 /// are stored only in this browser, with the vault.
 
 import type { Credentials, ProviderId } from '$lib/git/providers';
-import { dropboxAuthorizeUrl, exchangeDropboxCode, type DropboxTokens } from '$lib/dropbox/api';
+import type { OAuthTokens } from '$lib/sync/services';
 
 export type OAuthProvider = Exclude<ProviderId, 'other'>;
 
@@ -17,6 +17,8 @@ export interface OAuthConfig {
 	githubAppSlug?: string | undefined;
 	/** Dropbox app key (public; Dropbox sign-in needs no secret or worker). */
 	dropboxAppKey?: string | undefined;
+	/** Microsoft Entra client ID for OneDrive/SharePoint (public; no secret or worker). */
+	onedriveClientId?: string | undefined;
 }
 
 export interface TokenSet {
@@ -27,7 +29,11 @@ export interface TokenSet {
 }
 
 interface PendingSignIn {
-	provider: OAuthProvider | 'dropbox';
+	provider: OAuthProvider | CloudSignIn;
+	/** Microsoft: the scopes asked for (the token request repeats them). */
+	scopes?: string;
+	/** Signing in again for this cloud vault. */
+	renew?: string;
 	state: string;
 	verifier: string;
 	redirectUri: string;
@@ -36,7 +42,20 @@ interface PendingSignIn {
 
 const PENDING_KEY = 'mycelium:oauth-pending';
 export const RESULT_KEY = 'mycelium:oauth-result';
-const DROPBOX_RESULT_KEY = 'mycelium:dropbox-result';
+const CLOUD_RESULT_KEY = 'mycelium:cloud-result';
+
+/** Cloud services that sign in from the browser (PKCE, no worker). */
+export type CloudSignIn = 'dropbox' | 'onedrive';
+
+/** What a cloud sign-in leaves for the app. */
+export interface CloudSignInResult {
+	service: CloudSignIn;
+	tokens: OAuthTokens;
+	/** OneDrive: whether SharePoint sites can be searched (Sites.Read.All was asked for). */
+	sharepoint: boolean;
+	/** Set when this signed in again for an existing vault. */
+	renew: string | null;
+}
 
 const AUTHORIZE: Record<OAuthProvider, string> = {
 	github: 'https://github.com/login/oauth/authorize',
@@ -173,15 +192,35 @@ export async function completeSignIn(
 		throw new Error('Sign-in state mismatch. Start again from Mycelium.');
 	const code = params.get('code');
 	if (!code) throw new Error('No authorization code came back.');
-	if (pending.provider === 'dropbox') {
-		if (!config.dropboxAppKey) throw new Error("Dropbox isn't configured for this site");
-		const tokens = await exchangeDropboxCode({
-			appKey: config.dropboxAppKey,
-			code,
-			verifier: pending.verifier,
-			redirectUri: pending.redirectUri,
-		});
-		sessionStorage.setItem(DROPBOX_RESULT_KEY, JSON.stringify(tokens));
+	if (pending.provider === 'dropbox' || pending.provider === 'onedrive') {
+		let tokens: OAuthTokens;
+		if (pending.provider === 'dropbox') {
+			if (!config.dropboxAppKey) throw new Error("Dropbox isn't configured for this site");
+			const { exchangeDropboxCode } = await import('$lib/dropbox/api');
+			tokens = await exchangeDropboxCode({
+				appKey: config.dropboxAppKey,
+				code,
+				verifier: pending.verifier,
+				redirectUri: pending.redirectUri,
+			});
+		} else {
+			if (!config.onedriveClientId) throw new Error("OneDrive isn't configured for this site");
+			const { exchangeMicrosoftCode } = await import('$lib/onedrive/api');
+			tokens = await exchangeMicrosoftCode({
+				clientId: config.onedriveClientId,
+				code,
+				verifier: pending.verifier,
+				redirectUri: pending.redirectUri,
+				scopes: pending.scopes ?? '',
+			});
+		}
+		const result: CloudSignInResult = {
+			service: pending.provider,
+			tokens,
+			sharepoint: !!pending.scopes?.includes('Sites.Read.All'),
+			renew: pending.renew ?? null,
+		};
+		sessionStorage.setItem(CLOUD_RESULT_KEY, JSON.stringify(result));
 		return pending.returnTo;
 	}
 	// Bitbucket's authorize link carries no redirect_uri or PKCE challenge (it uses the
@@ -206,38 +245,55 @@ export function hasPendingSignIn(): boolean {
 	}
 }
 
-/** Leave for Dropbox's sign-in page (PKCE; the code is traded for tokens in the browser). */
-export async function beginDropboxSignIn(
+/**
+ * Leave for Dropbox's or Microsoft's sign-in page (PKCE: the code is traded
+ * for tokens in the browser, with no secret and no worker).
+ */
+export async function beginCloudSignIn(
+	service: CloudSignIn,
 	config: OAuthConfig,
 	redirectUri: string,
 	returnTo: string,
+	options: { sharepoint?: boolean; renew?: string } = {},
 ): Promise<void> {
-	if (!config.dropboxAppKey) throw new Error("Dropbox isn't configured for this site");
 	const pending: PendingSignIn = {
-		provider: 'dropbox',
+		provider: service,
 		state: randomString(16),
 		verifier: randomString(48),
 		redirectUri,
 		returnTo,
+		...(options.renew ? { renew: options.renew } : {}),
 	};
-	sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
-	location.assign(
-		dropboxAuthorizeUrl(
-			config.dropboxAppKey,
+	const challenge = await challengeFor(pending.verifier);
+	let url: string;
+	if (service === 'dropbox') {
+		if (!config.dropboxAppKey) throw new Error("Dropbox isn't configured for this site");
+		const { dropboxAuthorizeUrl } = await import('$lib/dropbox/api');
+		url = dropboxAuthorizeUrl(config.dropboxAppKey, redirectUri, pending.state, challenge);
+	} else {
+		if (!config.onedriveClientId) throw new Error("OneDrive isn't configured for this site");
+		const { microsoftAuthorizeUrl, ONEDRIVE_SCOPES, SHAREPOINT_SCOPES } =
+			await import('$lib/onedrive/api');
+		pending.scopes = options.sharepoint ? SHAREPOINT_SCOPES : ONEDRIVE_SCOPES;
+		url = microsoftAuthorizeUrl(
+			config.onedriveClientId,
 			redirectUri,
 			pending.state,
-			await challengeFor(pending.verifier),
-		),
-	);
+			challenge,
+			pending.scopes,
+		);
+	}
+	sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+	location.assign(url);
 }
 
-/** Pick up Dropbox tokens left by the callback page (once). */
-export function takeDropboxResult(): DropboxTokens | null {
+/** Pick up a cloud sign-in left by the callback page (once). */
+export function takeCloudResult(): CloudSignInResult | null {
 	try {
-		const raw = sessionStorage.getItem(DROPBOX_RESULT_KEY);
+		const raw = sessionStorage.getItem(CLOUD_RESULT_KEY);
 		if (!raw) return null;
-		sessionStorage.removeItem(DROPBOX_RESULT_KEY);
-		return JSON.parse(raw) as DropboxTokens;
+		sessionStorage.removeItem(CLOUD_RESULT_KEY);
+		return JSON.parse(raw) as CloudSignInResult;
 	} catch {
 		return null;
 	}

@@ -1,6 +1,7 @@
 # Mycelium sync worker
 
-A stateless Cloudflare Worker that lets the browser app talk to git hosts.
+A stateless Cloudflare Worker that lets the browser app talk to git hosts and
+WebDAV servers.
 
 - **Git proxy.** Browsers can't call `github.com`/`gitlab.com`/`bitbucket.org`
   git endpoints directly (no CORS). The app sends them here as
@@ -10,6 +11,13 @@ A stateless Cloudflare Worker that lets the browser app talk to git hosts.
 - **OAuth token exchange** (for “Sign in with GitHub/GitLab/Bitbucket”): adds
   the client secret the browser must never hold, and returns the provider's
   response unchanged.
+- **WebDAV relay** (for Nextcloud and other WebDAV vaults): most servers don't
+  allow cross-origin requests, so the app sends them to
+  `https://<worker>/dav/<host>/<path>`. Only `PROPFIND`, `GET`, `PUT`,
+  `DELETE` and `MKCOL`; only HTTPS host names (no IP addresses, `localhost` or
+  `.local` names); only requests with credentials; at most 20 MB; redirects
+  aren't followed. Set `DAV_HOSTS` (comma-separated host names) to allow only
+  your own servers. See [docs/setup-cloud-storage.md](../docs/setup-cloud-storage.md#webdav-and-nextcloud).
 
 It has no storage bindings and logging is disabled. Tokens pass through in
 memory for the duration of a request and are never written anywhere. The free

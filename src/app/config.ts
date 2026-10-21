@@ -40,6 +40,16 @@ export const OAUTH_CONFIG = {
 			: undefined),
 	/** Dropbox app key (public). Dropbox sign-in and sync go straight to Dropbox, never the worker. */
 	dropboxAppKey: import.meta.env.PUBLIC_DROPBOX_APP_KEY || undefined,
+	/** Microsoft Entra client ID (public). OneDrive sign-in and sync go straight to Microsoft. */
+	onedriveClientId: import.meta.env.PUBLIC_ONEDRIVE_CLIENT_ID || undefined,
+};
+
+/** Cloud vaults: public app IDs, enabled per service by setting them at build time. */
+export const CLOUD_CONFIG = {
+	dropboxAppKey: import.meta.env.PUBLIC_DROPBOX_APP_KEY || undefined,
+	onedriveClientId: import.meta.env.PUBLIC_ONEDRIVE_CLIENT_ID || undefined,
+	/** WebDAV servers rarely allow cross-origin requests, so they go through the sync worker. */
+	davProxy: WORKER_URL ? `${WORKER_URL.replace(/\/$/, '')}/dav/` : null,
 };
 
 /** Absolute URL of a page on this site (e.g. the OAuth callback). */

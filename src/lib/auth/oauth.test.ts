@@ -5,7 +5,7 @@ import {
 	challengeFor,
 	completeSignIn,
 	needsRefresh,
-	takeDropboxResult,
+	takeCloudResult,
 	takeSignInResult,
 	refreshCredentials,
 } from './oauth';
@@ -84,8 +84,47 @@ describe('oauth', () => {
 		expect(new URLSearchParams(String(init.body)).get('client_id')).toBe('dbx');
 		// Only the Dropbox panel picks it up; the git sign-in doesn't.
 		expect(takeSignInResult()).toBeNull();
-		expect(takeDropboxResult()).toMatchObject({ accessToken: 'sl.a', refreshToken: 'r' });
-		expect(takeDropboxResult()).toBeNull();
+		expect(takeCloudResult()).toMatchObject({
+			service: 'dropbox',
+			tokens: { accessToken: 'sl.a', refreshToken: 'r' },
+			renew: null,
+		});
+		expect(takeCloudResult()).toBeNull();
+	});
+
+	it('trades a Microsoft code with Microsoft, repeating the scopes asked for', async () => {
+		store.set(
+			'mycelium:oauth-pending',
+			JSON.stringify({
+				provider: 'onedrive',
+				state: 'abc',
+				verifier: 'v',
+				redirectUri: 'https://app/cb/',
+				returnTo: '/app#/vaults',
+				scopes: 'offline_access User.Read Files.ReadWrite.All Sites.Read.All',
+				renew: 'vault-1',
+			}),
+		);
+		const fetch = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ access_token: 'ey', refresh_token: 'r', expires_in: 3600 })),
+		);
+		vi.stubGlobal('fetch', fetch);
+		await completeSignIn(new URLSearchParams('code=xyz&state=abc'), {
+			...config,
+			onedriveClientId: 'ms',
+		});
+		const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+		expect(url).toBe('https://login.microsoftonline.com/common/oauth2/v2.0/token');
+		const form = new URLSearchParams(String(init.body));
+		expect(form.get('client_id')).toBe('ms');
+		expect(form.get('code_verifier')).toBe('v');
+		expect(form.get('scope')).toContain('Sites.Read.All');
+		expect(takeCloudResult()).toMatchObject({
+			service: 'onedrive',
+			sharepoint: true,
+			renew: 'vault-1',
+		});
 	});
 
 	it('checks state and trades the code through the worker', async () => {

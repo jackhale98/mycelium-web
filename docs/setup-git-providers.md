@@ -41,8 +41,8 @@ update it in all three providers and in the worker's `ALLOWED_ORIGINS`. (A
 copy also builds to `https://jackhale98.github.io/mycelium-web/`; sign-in is
 set up for my-celium.org only, while pasted access tokens work on both.)
 
-Dropbox is set up separately, and needs no worker: see
-[Setting up Dropbox](setup-dropbox.md).
+Dropbox, OneDrive/SharePoint and WebDAV are set up separately: see
+[Setting up cloud storage](setup-cloud-storage.md).
 
 Until these are registered the site still works: people paste an access token
 on the Vaults page, as described in Step 6.

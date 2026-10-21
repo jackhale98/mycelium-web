@@ -40,24 +40,41 @@ export interface VaultRecord {
 	agendaViews?: SavedAgendaView[];
 	/**
 	 * `folder`: a directory on this computer opened with the File System Access API (no git here).
-	 * `dropbox`: a Dropbox folder, synced automatically (see `dropbox`).
+	 * `cloud`: a folder in Dropbox, OneDrive/SharePoint or on a WebDAV server, synced
+	 * automatically (see `cloud`).
 	 */
-	kind?: 'git' | 'folder' | 'dropbox';
-	dropbox?: DropboxState;
+	kind?: 'git' | 'folder' | 'cloud';
+	cloud?: CloudState;
 }
 
-/** A Dropbox vault's connection and sync position. Tokens stay in this browser. */
-export interface DropboxState {
-	/** The vault's folder in Dropbox: `''` (the app folder or Dropbox root) or `/Notes`. */
+export type CloudService = 'dropbox' | 'onedrive' | 'webdav';
+
+/** A cloud vault's connection and sync position. Sign-ins and passwords stay in this browser. */
+export interface CloudState {
+	service: CloudService;
+	/** The vault's folder in the service: `''` (the top) or `/Notes`. */
 	root: string;
-	/** Where the last sync left off in Dropbox's change list (`null`: never synced). */
+	/** Where the last sync left off in the service's change list (`null`: never synced). */
 	cursor: string | null;
+	/** Who's signed in, for display. */
 	account: string;
-	accessToken: string;
-	refreshToken: string | null;
-	expiresAt: number | null;
 	/** Files edited here and not yet uploaded. */
 	pending: string[];
+	/** Dropbox and OneDrive: the OAuth sign-in. */
+	accessToken?: string | undefined;
+	refreshToken?: string | null | undefined;
+	expiresAt?: number | null | undefined;
+	/** OneDrive: which drive (personal OneDrive or a SharePoint library), and its name. */
+	driveId?: string | undefined;
+	driveName?: string | undefined;
+	/** OneDrive: signed in with SharePoint access (asked for again on reconnecting). */
+	sharepoint?: boolean | undefined;
+	/** WebDAV: the server address, user name and (app) password. */
+	url?: string | undefined;
+	username?: string | undefined;
+	password?: string | undefined;
+	/** WebDAV: the relay for servers that don't allow cross-origin requests (`null`: direct). */
+	proxy?: string | null | undefined;
 }
 
 /** The text and revision of a Dropbox file as of the last sync (the base for merging). */
@@ -110,6 +127,20 @@ class MyceliumDB extends Dexie {
 			.stores({})
 			.upgrade((tx) => tx.table('files').clear());
 		this.version(4).stores({ syncbase: 'key, vaultId' });
+		// v5: Dropbox vaults became one kind of cloud vault.
+		this.version(5)
+			.stores({})
+			.upgrade((tx) =>
+				tx
+					.table('vaults')
+					.toCollection()
+					.modify((v: Record<string, unknown>) => {
+						if (v.kind !== 'dropbox' || !v.dropbox) return;
+						v.kind = 'cloud';
+						v.cloud = { service: 'dropbox', ...(v.dropbox as object) };
+						delete v.dropbox;
+					}),
+			);
 	}
 }
 

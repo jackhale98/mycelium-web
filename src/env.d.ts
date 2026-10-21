@@ -5,6 +5,7 @@ interface ImportMetaEnv {
 	readonly PUBLIC_GITLAB_CLIENT_ID?: string;
 	readonly PUBLIC_BITBUCKET_CLIENT_ID?: string;
 	readonly PUBLIC_DROPBOX_APP_KEY?: string;
+	readonly PUBLIC_ONEDRIVE_CLIENT_ID?: string;
 }
 
 interface ImportMeta {

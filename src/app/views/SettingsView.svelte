@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serviceLabel } from '$lib/sync/services';
 	import type { CommitSummary } from '$lib/git/repo';
 	import { PROVIDERS } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
@@ -170,21 +171,30 @@
 		>
 	</section>
 
-	{#if vault?.kind === 'dropbox' && vault.dropbox}
+	{#if vault?.cloud}
 		<section class="panel stack" aria-labelledby="conn-h">
-			<h2 id="conn-h">Dropbox</h2>
+			<h2 id="conn-h">{serviceLabel(vault.cloud)}</h2>
 			<dl class="facts">
 				<dt>Folder</dt>
-				<dd><code>{vault.dropbox.root || '/'}</code></dd>
-				{#if vault.dropbox.account}<dt>Account</dt>
-					<dd>{vault.dropbox.account}</dd>{/if}
+				<dd><code>{vault.cloud.root || '/'}</code></dd>
+				{#if vault.cloud.url}<dt>Server</dt>
+					<dd><code>{vault.cloud.url}</code></dd>{/if}
+				{#if vault.cloud.account}<dt>Account</dt>
+					<dd>{vault.cloud.account}</dd>{/if}
 				<dt>Access</dt>
-				<dd>Signed in; the sign-in is kept only in this browser</dd>
+				<dd>
+					{vault.cloud.service === 'webdav'
+						? 'App password kept only in this browser'
+						: 'Signed in; the sign-in is kept only in this browser'}{vault.cloud.service ===
+						'webdav' && vault.cloud.proxy
+						? ' · through the sync relay'
+						: ''}
+				</dd>
 			</dl>
 		</section>
 	{/if}
 	{#if vault}
-		{#if vault.kind !== 'dropbox'}
+		{#if !vault.cloud}
 			<form class="panel stack" onsubmit={saveConnection} aria-labelledby="conn-h">
 				<h2 id="conn-h">Repository</h2>
 				<dl class="facts">
@@ -257,7 +267,7 @@
 			<div class="row"><button class="btn primary" type="submit">Save and re-index</button></div>
 		</form>
 
-		{#if vault.kind !== 'dropbox'}
+		{#if !vault.cloud}
 			<section class="panel" aria-labelledby="history-h">
 				<h2 id="history-h">Recent history</h2>
 				{#if history === null}
@@ -284,8 +294,8 @@
 		<section class="panel stack" aria-labelledby="danger-h">
 			<h2 id="danger-h">Remove from this browser</h2>
 			<p class="hint">
-				{vault.kind === 'dropbox'
-					? "Deletes this browser's copy. Your Dropbox folder is not affected"
+				{vault.cloud
+					? `Deletes this browser's copy. The folder in ${serviceLabel(vault.cloud)} is not affected`
 					: 'Deletes the local clone and index. The remote repository is not affected'}{app.unsynced
 					? `, but your ${app.unsynced} unsynced ${app.unsynced === 1 ? 'change' : 'changes'} will be lost`
 					: ''}.

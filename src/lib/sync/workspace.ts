@@ -1,6 +1,7 @@
-/// A vault kept in a Dropbox folder. The notes live in this browser
-/// (IndexedDB), so the vault opens and edits offline; `sync()` exchanges
-/// changes with Dropbox, merging edits made on other devices.
+/// A vault kept in a folder in Dropbox, OneDrive/SharePoint or on a WebDAV
+/// server. The notes live in this browser (IndexedDB), so the vault opens
+/// and edits offline; `sync()` exchanges changes with the service, merging
+/// edits made on other devices.
 
 import { scanFile } from '$lib/org';
 import {
@@ -8,52 +9,58 @@ import {
 	fileKey,
 	requestPersistence,
 	type CachedFile,
-	type DropboxState,
+	type CloudState,
 	type VaultRecord,
 } from '$lib/store/db';
 import type { LoadProgress } from '$lib/git/workspace';
 import { detectKeywords, detectLayout, inVault } from '$lib/vault/layout';
 import type { VaultFile } from '$lib/vault/vault';
-import { DropboxApi, refreshDropboxToken, type DropboxTokens } from './api';
-import { syncDropbox, type Base, type SyncResult } from './sync';
+import { syncFolder, type Base, type SyncResult } from './engine';
+import { RemoteAuthError, syncable } from './remote';
+import {
+	openClient,
+	refreshTokens,
+	SERVICES,
+	type CloudClient,
+	type CloudConfig,
+	type OAuthTokens,
+} from './services';
 
-/** Org files, outside hidden folders (`.git`, `.trash`…). */
-export const syncable = (path: string) =>
-	/\.org$/i.test(path) && !path.split('/').some((part) => part.startsWith('.'));
+export { syncable };
 
-export interface DropboxSyncOutcome extends Pick<SyncResult, 'conflicts' | 'pulled' | 'pushed'> {
+export type CloudRecord = VaultRecord & { cloud: CloudState };
+
+export interface CloudSyncOutcome extends Pick<SyncResult, 'conflicts' | 'pulled' | 'pushed'> {
 	/** Local files that changed (`null`: deleted), for the open vault to apply. */
 	changes: { path: string; source: string | null }[];
 }
 
-export class DropboxWorkspace {
-	readonly kind = 'dropbox';
-	readonly api: DropboxApi;
+export class CloudWorkspace {
+	readonly kind = 'cloud';
+	#client: Promise<CloudClient> | null = null;
 	#syncing: Promise<unknown> = Promise.resolve();
 	/** Paths saved while a sync is running: they stay pending, and sync doesn't overwrite them. */
 	#touched = new Set<string>();
 
 	private constructor(
-		public record: VaultRecord & { dropbox: DropboxState },
-		readonly appKey: string,
-		fetcher?: typeof fetch,
-	) {
-		this.api = new DropboxApi((force) => this.#token(force), fetcher);
+		public record: CloudRecord,
+		readonly config: CloudConfig,
+		readonly fetcher?: typeof fetch,
+	) {}
+
+	static open(record: VaultRecord, config: CloudConfig, fetcher?: typeof fetch): CloudWorkspace {
+		if (!record.cloud) throw new Error('This vault has no cloud connection.');
+		return new CloudWorkspace(record as CloudRecord, config, fetcher);
 	}
 
-	static open(record: VaultRecord, appKey: string, fetcher?: typeof fetch): DropboxWorkspace {
-		if (!record.dropbox) throw new Error('This vault has no Dropbox connection.');
-		return new DropboxWorkspace(record as VaultRecord & { dropbox: DropboxState }, appKey, fetcher);
-	}
-
-	/** A new vault from a Dropbox folder: download it, detect its layout, save the record. */
+	/** A new vault from a cloud folder: download it, detect its layout, save the record. */
 	static async create(
-		record: VaultRecord & { dropbox: DropboxState },
-		appKey: string,
+		record: CloudRecord,
+		config: CloudConfig,
 		onProgress?: (p: LoadProgress) => void,
 		fetcher?: typeof fetch,
-	): Promise<DropboxWorkspace> {
-		const ws = new DropboxWorkspace(record, appKey, fetcher);
+	): Promise<CloudWorkspace> {
+		const ws = new CloudWorkspace(record, config, fetcher);
 		await db().vaults.put(record);
 		try {
 			await ws.sync(undefined, onProgress);
@@ -73,48 +80,64 @@ export class DropboxWorkspace {
 		return ws;
 	}
 
-	/** A valid access token, refreshed shortly before it expires (or when `force`d). */
-	#refreshing: Promise<void> | null = null;
-
-	async #token(force = false): Promise<string> {
-		const d = this.record.dropbox;
-		const stale = d.expiresAt !== null && d.expiresAt - 60_000 < Date.now();
-		if ((force || stale) && d.refreshToken) {
-			// Parallel requests share one refresh.
-			this.#refreshing ??= this.#refresh(d.refreshToken).finally(() => (this.#refreshing = null));
-			await this.#refreshing;
-		}
-		return this.record.dropbox.accessToken;
+	get service() {
+		return SERVICES[this.record.cloud.service];
 	}
 
-	async #refresh(refreshToken: string) {
-		let next: DropboxTokens;
+	/** The service's client (made once). */
+	client(): Promise<CloudClient> {
+		this.#client ??= openClient(this.record.cloud, (force) => this.#token(force), this.fetcher);
+		return this.#client;
+	}
+
+	#refreshing: Promise<void> | null = null;
+
+	/** A valid access token, refreshed shortly before it expires (or when `force`d). */
+	async #token(force = false): Promise<string> {
+		const c = this.record.cloud;
+		const stale = !!c.expiresAt && c.expiresAt - 60_000 < Date.now();
+		if ((force || stale) && c.refreshToken) {
+			// Parallel requests share one refresh.
+			this.#refreshing ??= this.#refresh().finally(() => (this.#refreshing = null));
+			await this.#refreshing;
+		}
+		return this.record.cloud.accessToken ?? '';
+	}
+
+	async #refresh() {
+		let next: OAuthTokens;
 		try {
-			next = await refreshDropboxToken(this.appKey, refreshToken);
+			next = await refreshTokens(this.record.cloud, this.config, this.fetcher);
 		} catch (e) {
 			// Offline isn't signed out.
 			if (e instanceof TypeError || (e as Error)?.name === 'TimeoutError') throw e;
-			throw new Error('Dropbox signed you out. Reconnect Dropbox to keep syncing.');
+			throw new RemoteAuthError(`${this.service.name} signed you out.`);
 		}
-		await this.#updateDropbox({
+		await this.#updateCloud({
 			accessToken: next.accessToken,
-			refreshToken: next.refreshToken,
+			refreshToken: next.refreshToken ?? this.record.cloud.refreshToken ?? null,
 			expiresAt: next.expiresAt,
 		});
 	}
 
-	async #updateDropbox(patch: Partial<DropboxState>) {
-		this.record.dropbox = { ...this.record.dropbox, ...patch };
+	async #updateCloud(patch: Partial<CloudState>) {
+		this.record.cloud = { ...this.record.cloud, ...patch };
 		await db().vaults.put(this.record);
 	}
 
+	/** New sign-in or password for the same folder. */
+	async reconnect(patch: Partial<CloudState>) {
+		this.#client = null;
+		await this.#updateCloud(patch);
+	}
+
 	get pending(): string[] {
-		return this.record.dropbox.pending;
+		return this.record.cloud.pending;
 	}
 
 	/** The vault's files from this browser's copy (downloading it first if it's never synced). */
 	async load(onProgress?: (p: LoadProgress) => void): Promise<VaultFile[]> {
-		if (this.record.dropbox.cursor === null) await this.sync(undefined, onProgress);
+		if (this.record.cloud.cursor === null) await this.sync(undefined, onProgress);
 		onProgress?.({ phase: 'Opening vault', ratio: null });
 		const cached = await db().files.where('vaultId').equals(this.record.id).toArray();
 		const out: VaultFile[] = [];
@@ -134,12 +157,12 @@ export class DropboxWorkspace {
 	/** Keep edits in this browser and mark them for upload on the next sync. */
 	async save(changes: { path: string; source: string | null; file?: VaultFile }[]): Promise<void> {
 		await this.cache(changes);
-		const pending = new Set(this.record.dropbox.pending);
+		const pending = new Set(this.record.cloud.pending);
 		for (const c of changes) {
 			pending.add(c.path);
 			this.#touched.add(c.path);
 		}
-		await this.#updateDropbox({ pending: [...pending] });
+		await this.#updateCloud({ pending: [...pending] });
 	}
 
 	async cache(changes: { path: string; source: string | null; file?: VaultFile }[]) {
@@ -161,13 +184,13 @@ export class DropboxWorkspace {
 	}
 
 	/**
-	 * Exchange changes with Dropbox. Runs one at a time; `resolutions` are the
+	 * Exchange changes with the service. Runs one at a time; `resolutions` are the
 	 * texts chosen for files that conflicted last time.
 	 */
 	sync(
 		resolutions?: Map<string, string>,
 		onProgress?: (p: LoadProgress) => void,
-	): Promise<DropboxSyncOutcome> {
+	): Promise<CloudSyncOutcome> {
 		const run = this.#syncing.then(() => this.#sync(resolutions, onProgress));
 		this.#syncing = run.catch(() => undefined);
 		return run;
@@ -176,14 +199,15 @@ export class DropboxWorkspace {
 	async #sync(
 		resolutions?: Map<string, string>,
 		onProgress?: (p: LoadProgress) => void,
-	): Promise<DropboxSyncOutcome> {
+	): Promise<CloudSyncOutcome> {
 		const id = this.record.id;
 		this.#touched.clear();
-		const result = await syncDropbox({
-			api: this.api,
-			root: this.record.dropbox.root,
-			cursor: this.record.dropbox.cursor,
-			pending: this.record.dropbox.pending,
+		const result = await syncFolder({
+			api: await this.client(),
+			caseSensitive: this.service.caseSensitive,
+			root: this.record.cloud.root,
+			cursor: this.record.cloud.cursor,
+			pending: this.record.cloud.pending,
 			include: syncable,
 			resolutions,
 			onProgress: (phase, ratio) => onProgress?.({ phase, ratio }),
@@ -212,7 +236,7 @@ export class DropboxWorkspace {
 			}
 		});
 		this.record.lastSync = Date.now();
-		await this.#updateDropbox({
+		await this.#updateCloud({
 			cursor: result.cursor,
 			pending: [...new Set([...result.pending, ...touched, ...this.#touched])],
 		});
@@ -231,8 +255,8 @@ export class DropboxWorkspace {
 	async rebase(path: string, base: string): Promise<void> {
 		const key = fileKey(this.record.id, path);
 		await db().syncbase.put({ key, vaultId: this.record.id, path, rev: 'stale', source: base });
-		if (!this.record.dropbox.pending.includes(path))
-			await this.#updateDropbox({ pending: [...this.record.dropbox.pending, path] });
+		if (!this.record.cloud.pending.includes(path))
+			await this.#updateCloud({ pending: [...this.record.cloud.pending, path] });
 	}
 
 	async updateRecord(patch: Partial<VaultRecord>) {
@@ -248,7 +272,7 @@ export class DropboxWorkspace {
 		);
 	}
 
-	/** Forget the vault here. Dropbox is untouched. */
+	/** Forget the vault here. The folder in the service is untouched. */
 	async destroy(): Promise<void> {
 		const id = this.record.id;
 		await db().transaction('rw', db().files, db().syncbase, db().vaults, async () => {

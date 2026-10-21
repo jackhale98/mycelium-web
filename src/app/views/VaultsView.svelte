@@ -2,7 +2,8 @@
 	import { parseRepo, PROVIDERS, type ProviderId } from '$lib/git/providers';
 	import Icon from '../components/Icon.svelte';
 	import SignIn from '../components/SignIn.svelte';
-	import DropboxConnect from '../components/DropboxConnect.svelte';
+	import CloudConnect from '../components/CloudConnect.svelte';
+	import { serviceLabel } from '$lib/sync/services';
 	import { DEFAULT_GIT_PROXY, DEMO_REPO, PUBLIC_TEST_PROXY } from '../config';
 	import { href, router } from '../router.svelte';
 	import { app, DEMO_ID } from '../state.svelte';
@@ -103,16 +104,16 @@
 	}
 
 	async function remove(id: string, name: string) {
-		const dropbox = app.vaults.find((v) => v.id === id)?.kind === 'dropbox';
+		const cloud = app.vaults.find((v) => v.id === id)?.cloud;
 		if (
-			dropbox &&
+			cloud &&
 			!confirm(
-				`Remove ${name} from this browser? Edits not yet uploaded will be lost. Your Dropbox folder is not affected.`,
+				`Remove ${name} from this browser? Edits not yet uploaded will be lost. The folder in ${serviceLabel(cloud)} is not affected.`,
 			)
 		)
 			return;
 		if (
-			!dropbox &&
+			!cloud &&
 			!confirm(
 				`Remove the local copy of ${name}? Uncommitted and unpushed work will be lost. The remote repository is not affected.`,
 			)
@@ -155,16 +156,18 @@
 			<li class="vault" class:active={app.activeId === vault.id}>
 				<span class="v-icon"
 					><Icon
-						name={vault.kind === 'folder' ? 'folder' : vault.kind === 'dropbox' ? 'cloud' : 'git'}
+						name={vault.kind === 'folder' ? 'folder' : vault.kind === 'cloud' ? 'cloud' : 'git'}
 						size={16}
 					/></span
 				>
 				<span class="v-text">
 					<span class="v-name">{vault.name}</span>
 					<span class="v-sub"
-						>{#if vault.kind === 'folder'}Folder on this computer{:else if vault.kind === 'dropbox'}Dropbox
-							· {vault.dropbox?.root || '/'}{vault.dropbox?.account
-								? ` · ${vault.dropbox.account}`
+						>{#if vault.kind === 'folder'}Folder on this computer{:else if vault.cloud}{serviceLabel(
+								vault.cloud,
+							)}
+							· {vault.cloud.root || '/'}{vault.cloud.account
+								? ` · ${vault.cloud.account}`
 								: ''}{:else}{PROVIDERS[vault.provider].name} · {vault.branch ??
 								'default branch'}{vault.credentials ? '' : ' · read-only'}{/if}</span
 					>
@@ -189,7 +192,7 @@
 
 	<SignIn />
 
-	<DropboxConnect />
+	<CloudConnect />
 
 	<section class="panel stack" aria-labelledby="folder-h">
 		<h2 id="folder-h">Open a folder on this computer</h2>

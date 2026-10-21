@@ -144,7 +144,7 @@ async function connect(page: Page, dbx: FakeDropbox) {
 	await expect(page.getByRole('heading', { name: /Choose your notes folder/ })).toBeVisible({
 		timeout: 15_000,
 	});
-	await expect(page.getByText('Dropbox · ada@example.com')).toBeVisible();
+	await expect(page.getByText('ada@example.com')).toBeVisible();
 	await page.getByRole('button', { name: 'Notes' }).click();
 	await expect(page.getByText('2 org files here')).toBeVisible();
 	await page.getByRole('button', { name: 'Use Notes' }).click();
@@ -223,4 +223,72 @@ test('changes made elsewhere come in, and overlapping edits ask which to keep', 
 	await page.goto(`app#/daily/${today}`);
 	await expect(page.getByText('From the laptop')).toBeVisible();
 	await expect(page.getByText('From this device')).toHaveCount(0);
+});
+
+test('a Dropbox vault from before cloud vaults carries over', async ({ page }) => {
+	await page.goto('app#/vaults');
+	const button = page.getByRole('button', { name: 'Connect Dropbox' });
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	test.skip((await button.count()) === 0, 'build has no Dropbox app key');
+	const dbx = seed();
+	await dbx.install(page);
+	// The database as the first Dropbox release left it (Dexie version 4 is IndexedDB version 40).
+	await page.evaluate(async () => {
+		await new Promise<void>((resolve, reject) => {
+			const del = indexedDB.deleteDatabase('mycelium');
+			del.onsuccess = () => resolve();
+			del.onerror = () => reject(del.error);
+			del.onblocked = () => resolve();
+		});
+		const db: IDBDatabase = await new Promise((resolve, reject) => {
+			const req = indexedDB.open('mycelium', 40);
+			req.onupgradeneeded = () => {
+				const d = req.result;
+				d.createObjectStore('vaults', { keyPath: 'id' });
+				d.createObjectStore('files', { keyPath: 'key' }).createIndex('vaultId', 'vaultId');
+				d.createObjectStore('handles', { keyPath: 'id' });
+				d.createObjectStore('syncbase', { keyPath: 'key' }).createIndex('vaultId', 'vaultId');
+			};
+			req.onsuccess = () => resolve(req.result);
+			req.onerror = () => reject(req.error);
+		});
+		await new Promise<void>((resolve) => {
+			const tx = db.transaction('vaults', 'readwrite');
+			tx.objectStore('vaults').put({
+				id: 'old-dropbox',
+				name: 'Notes',
+				kind: 'dropbox',
+				provider: 'other',
+				url: null,
+				branch: null,
+				corsProxy: null,
+				author: { name: '', email: '' },
+				credentials: null,
+				layout: { roamDir: '', dailyDir: 'daily', dailyFormat: 'YYYY-MM-DD' },
+				keywords: { todoKeywords: ['TODO'], doneKeywords: ['DONE'] },
+				log: {},
+				createdAt: 1,
+				lastSync: null,
+				dropbox: {
+					root: '/Notes',
+					cursor: null,
+					account: 'ada@example.com',
+					accessToken: 'sl.old',
+					refreshToken: 'refresh',
+					expiresAt: Date.now() + 3_600_000,
+					pending: [],
+				},
+			});
+			tx.oncomplete = () => resolve();
+		});
+		db.close();
+		localStorage.setItem('mycelium:active-vault', 'old-dropbox');
+	});
+	await page.goto('app#/node/garden-1');
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'Plant tulips' })).toBeVisible({
+		timeout: 15_000,
+	});
+	await page.goto('app#/changes');
+	await expect(page.getByText('Everything is in Dropbox.')).toBeVisible();
 });

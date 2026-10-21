@@ -37,10 +37,10 @@ import {
 	type Change,
 } from '$lib/org';
 import type { FileConflict, FileStatus, LoadProgress, Workspace } from '$lib/git/workspace';
-import type { DropboxState, KeywordTone, SavedAgendaView, VaultRecord } from '$lib/store/db';
+import type { CloudState, KeywordTone, SavedAgendaView, VaultRecord } from '$lib/store/db';
 import type { FolderWorkspace } from '$lib/vault/folder';
-import type { DropboxWorkspace } from '$lib/dropbox/workspace';
-import type { DropboxTokens } from '$lib/dropbox/api';
+import type { CloudWorkspace } from '$lib/sync/workspace';
+import { RemoteAuthError, RemoteNotFound } from '$lib/sync/remote';
 import {
 	dailyDate,
 	dailyPath,
@@ -120,7 +120,7 @@ export type SyncState =
 	| { kind: 'error'; message: string }
 	| { kind: 'done'; message: string };
 
-export interface DropboxSyncStatus {
+export interface CloudSyncStatus {
 	state: 'idle' | 'syncing' | 'offline' | 'error';
 	/** Files edited here and not yet uploaded. */
 	pending: number;
@@ -130,12 +130,10 @@ export interface DropboxSyncStatus {
 	message?: string;
 }
 
-type DropboxSyncOptions = { auto?: boolean; resolutions?: Map<string, string> | undefined };
+type CloudSyncOptions = { auto?: boolean; resolutions?: Map<string, string> | undefined };
 
 /** Wait after an edit before uploading, so typing becomes one upload. */
-const DROPBOX_EDIT_DELAY = 2500;
-/** Check Dropbox for changes from other devices this often while the app is open. */
-const DROPBOX_POLL = 60_000;
+const CLOUD_EDIT_DELAY = 2500;
 
 export interface GitState {
 	branch: string;
@@ -206,10 +204,10 @@ class AppState {
 	workspace: Workspace | null = $state.raw(null);
 	/** The open local-folder vault, if any. */
 	folder: FolderWorkspace | null = $state.raw(null);
-	/** The open Dropbox vault, if any. */
-	dropbox: DropboxWorkspace | null = $state.raw(null);
-	/** Dropbox sync status, for the sidebar and Changes page. */
-	dropboxSync = $state<DropboxSyncStatus>({ state: 'idle', pending: 0, lastSync: null });
+	/** The open cloud vault (Dropbox, OneDrive, WebDAV), if any. */
+	cloud: CloudWorkspace | null = $state.raw(null);
+	/** Cloud sync status, for the sidebar and Changes page. */
+	cloudSync = $state<CloudSyncStatus>({ state: 'idle', pending: 0, lastSync: null });
 	/** A folder vault waiting for the person to grant access again (needs a click). */
 	folderAccess = $state<{ id: string; name: string } | null>(null);
 	vaults = $state<VaultRecord[]>([]);
@@ -226,7 +224,7 @@ class AppState {
 	ready = $state(false);
 
 	#saving: Promise<void> = Promise.resolve();
-	#dropboxTimer: ReturnType<typeof setTimeout> | null = null;
+	#cloudTimer: ReturnType<typeof setTimeout> | null = null;
 	/** Counts edits, so a sync can tell whether any were made while it ran. */
 	#edits = 0;
 	#statusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -237,8 +235,8 @@ class AppState {
 	#trees = new Map<string, { source: string; tree: OrgData }>();
 
 	/** Whichever kind of vault is open. */
-	get #ws(): Workspace | FolderWorkspace | DropboxWorkspace | null {
-		return this.workspace ?? this.folder ?? this.dropbox;
+	get #ws(): Workspace | FolderWorkspace | CloudWorkspace | null {
+		return this.workspace ?? this.folder ?? this.cloud;
 	}
 
 	get demo() {
@@ -329,9 +327,9 @@ class AppState {
 		return this.vaults.find((v) => v.id === this.activeId) ?? null;
 	}
 
-	/** Things not yet pushed: uncommitted files plus local commits (or Dropbox uploads). */
+	/** Things not yet pushed: uncommitted files plus local commits (or cloud uploads). */
 	get unsynced(): number {
-		if (this.dropbox) return this.dropboxSync.pending;
+		if (this.cloud) return this.cloudSync.pending;
 		return this.git.changes.length + this.git.ahead;
 	}
 
@@ -356,7 +354,7 @@ class AppState {
 		}
 		this.loading = null;
 		this.ready = true;
-		this.#watchDropbox();
+		this.#watchCloud();
 	}
 
 	/** Parsed tree for a file, cached by content. */
@@ -427,7 +425,7 @@ class AppState {
 	#showDemo() {
 		this.workspace = null;
 		this.folder = null;
-		this.dropbox = null;
+		this.cloud = null;
 		this.activeId = DEMO_ID;
 		this.layout = DEFAULT_LAYOUT;
 		this.vault = Vault.fromSources(demoSources, DEMO_KEYWORDS);
@@ -487,15 +485,12 @@ class AppState {
 		this.folderAccess = null;
 		this.loading = { phase: 'Opening vault', ratio: null };
 		try {
-			if (record.kind === 'dropbox') {
-				const [{ DropboxWorkspace }, { OAUTH_CONFIG }] = await Promise.all([
-					import('$lib/dropbox/workspace'),
+			if (record.kind === 'cloud') {
+				const [{ CloudWorkspace }, { CLOUD_CONFIG }] = await Promise.all([
+					import('$lib/sync/workspace'),
 					import('./config'),
 				]);
-				const ws = DropboxWorkspace.open(
-					$state.snapshot(record) as VaultRecord,
-					OAUTH_CONFIG.dropboxAppKey ?? '',
-				);
+				const ws = CloudWorkspace.open($state.snapshot(record) as VaultRecord, CLOUD_CONFIG);
 				await this.#activate(ws);
 				return;
 			}
@@ -634,7 +629,7 @@ class AppState {
 	}
 
 	async #activate(
-		ws: Workspace | FolderWorkspace | DropboxWorkspace,
+		ws: Workspace | FolderWorkspace | CloudWorkspace,
 		options: { quiet?: boolean } = {},
 	) {
 		// Vaults saved with the public test proxy move to this site's own worker, so
@@ -652,10 +647,10 @@ class AppState {
 		});
 		this.workspace = ws.kind === 'git' ? ws : null;
 		this.folder = ws.kind === 'folder' ? ws : null;
-		this.dropbox = ws.kind === 'dropbox' ? ws : null;
-		this.dropboxSync = {
+		this.cloud = ws.kind === 'cloud' ? ws : null;
+		this.cloudSync = {
 			state: 'idle',
-			pending: ws.kind === 'dropbox' ? ws.pending.length : 0,
+			pending: ws.kind === 'cloud' ? ws.pending.length : 0,
 			lastSync: ws.record.lastSync,
 		};
 		this.activeId = ws.record.id;
@@ -667,7 +662,7 @@ class AppState {
 		writeLocal(ACTIVE_KEY, ws.record.id);
 		this.rev += 1;
 		await this.refreshGit();
-		if (ws.kind === 'dropbox') this.#queueDropboxSync(0);
+		if (ws.kind === 'cloud') this.#queueCloudSync(0);
 	}
 
 	async updateVault(patch: Partial<VaultRecord>) {
@@ -689,14 +684,14 @@ class AppState {
 	async removeVault(id: string, reopen = true) {
 		const record = this.vaults.find((v) => v.id === id);
 		if (!record) return;
-		if (record.kind === 'dropbox') {
-			const { DropboxWorkspace } = await import('$lib/dropbox/workspace');
+		if (record.kind === 'cloud') {
+			const { CloudWorkspace } = await import('$lib/sync/workspace');
 			const ws =
-				this.dropbox?.record.id === id
-					? this.dropbox
-					: DropboxWorkspace.open($state.snapshot(record) as VaultRecord, '');
+				this.cloud?.record.id === id
+					? this.cloud
+					: CloudWorkspace.open($state.snapshot(record) as VaultRecord, {});
 			await ws.destroy();
-			if (this.dropbox?.record.id === id) this.dropbox = null;
+			if (this.cloud?.record.id === id) this.cloud = null;
 		} else if (record.kind === 'folder') {
 			const { FolderWorkspace } = await import('$lib/vault/folder');
 			const ws =
@@ -750,9 +745,9 @@ class AppState {
 			.then(async () => {
 				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);
 				if (ws.kind === 'git' && ws.record.autoCommit) await ws.commit([path], message);
-				if (ws.kind === 'dropbox') {
-					this.dropboxSync = { ...this.dropboxSync, pending: ws.pending.length };
-					this.#queueDropboxSync(DROPBOX_EDIT_DELAY);
+				if (ws.kind === 'cloud') {
+					this.cloudSync = { ...this.cloudSync, pending: ws.pending.length };
+					this.#queueCloudSync(CLOUD_EDIT_DELAY);
 				}
 				this.#scheduleStatus();
 			})
@@ -1148,7 +1143,7 @@ class AppState {
 
 	/** Fetch, then fast-forward or merge. Conflicts open the resolver; uncommitted files are never overwritten. */
 	async pull(resolutions?: Map<string, string>) {
-		if (this.dropbox) return this.syncDropbox({ resolutions });
+		if (this.cloud) return this.syncCloud({ resolutions });
 		await this.#run('Pulling', async (ws) => {
 			const result = await ws.pull(
 				resolutions,
@@ -1246,49 +1241,50 @@ class AppState {
 		});
 	}
 
-	// ------------------------------------------------------------------ dropbox
+	// ------------------------------------------------------------------ cloud
 
-	/** Sync the Dropbox vault soon (edits are batched; `0`: now). */
-	#queueDropboxSync(delay: number) {
-		if (this.#dropboxTimer) clearTimeout(this.#dropboxTimer);
-		this.#dropboxTimer = setTimeout(() => {
-			this.#dropboxTimer = null;
-			void this.syncDropbox({ auto: true });
+	/** Sync the cloud vault soon (edits are batched; `0`: now). */
+	#queueCloudSync(delay: number) {
+		if (this.#cloudTimer) clearTimeout(this.#cloudTimer);
+		this.#cloudTimer = setTimeout(() => {
+			this.#cloudTimer = null;
+			void this.syncCloud({ auto: true });
 		}, delay);
 	}
 
-	#dropboxRun: Promise<void> | null = null;
+	#cloudRun: Promise<void> | null = null;
 	#shownConflicts = '';
 
 	/**
-	 * Exchange changes with Dropbox. Automatic runs stay quiet (a status in the
+	 * Exchange changes with the cloud service. Automatic runs stay quiet (a status in the
 	 * sidebar); conflicts open the resolver, whose choices come back as
 	 * `resolutions`.
 	 */
-	async syncDropbox(options: DropboxSyncOptions = {}): Promise<void> {
-		const ws = this.dropbox;
+	async syncCloud(options: CloudSyncOptions = {}): Promise<void> {
+		const ws = this.cloud;
 		if (!ws) return;
-		if (this.#dropboxRun) {
+		if (this.#cloudRun) {
 			// One at a time; an edit or a click during a sync runs another after it.
 			if (!options.auto || ws.pending.length) {
-				await this.#dropboxRun;
-				return this.syncDropbox(options);
+				await this.#cloudRun;
+				return this.syncCloud(options);
 			}
-			return this.#dropboxRun;
+			return this.#cloudRun;
 		}
 		// An automatic sync never reopens a conflict someone is looking at.
 		if (options.auto && this.sync.kind === 'conflict') return;
 		if (options.auto && typeof navigator !== 'undefined' && navigator.onLine === false) {
-			this.dropboxSync = { ...this.dropboxSync, state: 'offline' };
+			this.cloudSync = { ...this.cloudSync, state: 'offline' };
 			return;
 		}
-		this.#dropboxRun = this.#syncDropbox(ws, options).finally(() => (this.#dropboxRun = null));
-		return this.#dropboxRun;
+		this.#cloudRun = this.#syncCloud(ws, options).finally(() => (this.#cloudRun = null));
+		return this.#cloudRun;
 	}
 
-	async #syncDropbox(ws: DropboxWorkspace, options: DropboxSyncOptions) {
-		this.dropboxSync = { ...this.dropboxSync, state: 'syncing' };
-		if (!options.auto) this.sync = { kind: 'busy', phase: 'Syncing with Dropbox' };
+	async #syncCloud(ws: CloudWorkspace, options: CloudSyncOptions) {
+		this.cloudSync = { ...this.cloudSync, state: 'syncing' };
+		const name = ws.service.name;
+		if (!options.auto) this.sync = { kind: 'busy', phase: `Syncing with ${name}` };
 		// What's on screen now, to merge with anything typed while the sync runs.
 		const before = new Map([...this.vault.files].map(([p, f]) => [p, f.source]));
 		const edits = this.#edits;
@@ -1297,16 +1293,16 @@ class AppState {
 			const outcome = await ws.sync(options.resolutions, (p) => {
 				if (!options.auto) this.sync = { kind: 'busy', phase: p.phase };
 			});
-			if (this.dropbox !== ws) return;
+			if (this.cloud !== ws) return;
 			await this.flush();
-			await this.#applyDropbox(ws, outcome.changes, before, edits !== this.#edits);
-			this.dropboxSync = {
+			await this.#applyCloud(ws, outcome.changes, before, edits !== this.#edits);
+			this.cloudSync = {
 				state: 'idle',
 				pending: ws.pending.length,
 				lastSync: ws.record.lastSync,
 			};
 			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
-			this.dropboxSync.conflicts = outcome.conflicts.length;
+			this.cloudSync.conflicts = outcome.conflicts.length;
 			if (outcome.conflicts.length) {
 				// Automatic syncs don't reopen conflicts someone chose to decide later.
 				const key = outcome.conflicts
@@ -1327,40 +1323,40 @@ class AppState {
 				].filter(Boolean);
 				this.sync = {
 					kind: 'done',
-					message: parts.length ? `Synced (${parts.join(', ')})` : 'Up to date with Dropbox',
+					message: parts.length ? `Synced (${parts.join(', ')})` : `Up to date with ${name}`,
 				};
-			} else if (this.sync.kind === 'error' && this.sync.message.startsWith('Dropbox'))
+			} else if (this.sync.kind === 'error' && this.sync.message.startsWith(`${name}:`))
 				this.sync = { kind: 'idle' };
 		} catch (e) {
 			const offline =
 				typeof navigator !== 'undefined' && navigator.onLine === false
 					? true
 					: e instanceof TypeError || (e as Error)?.name === 'TimeoutError';
-			this.dropboxSync = {
-				...this.dropboxSync,
+			this.cloudSync = {
+				...this.cloudSync,
 				state: offline ? 'offline' : 'error',
 				pending: ws.pending.length,
-				message: offline ? 'Offline: edits upload when you reconnect' : describeDropboxError(e),
+				message: offline ? 'Offline: edits upload when you reconnect' : describeCloudError(e, name),
 			};
 			// Being offline is normal on a phone; only a real failure (or a click) says so loudly.
 			if (!options.auto || !offline)
 				this.sync = {
 					kind: 'error',
 					message: offline
-						? 'Dropbox: couldn’t reach Dropbox. Your edits are kept here and upload when you’re back online.'
-						: `Dropbox: ${describeDropboxError(e)}`,
+						? `${name}: couldn’t reach ${name}. Your edits are kept here and upload when you’re back online.`
+						: `${name}: ${describeCloudError(e, name)}`,
 				};
 		} finally {
 			if (this.sync.kind === 'busy') this.sync = { kind: 'idle' };
 			// Edits made while syncing go up next.
-			if (this.dropbox === ws && ws.pending.length && this.dropboxSync.state === 'idle')
-				this.#queueDropboxSync(DROPBOX_EDIT_DELAY);
+			if (this.cloud === ws && ws.pending.length && this.cloudSync.state === 'idle')
+				this.#queueCloudSync(CLOUD_EDIT_DELAY);
 		}
 	}
 
 	/** Bring synced files into the open vault, merging with anything typed meanwhile. */
-	async #applyDropbox(
-		ws: DropboxWorkspace,
+	async #applyCloud(
+		ws: CloudWorkspace,
 		changes: { path: string; source: string | null }[],
 		before: Map<string, string>,
 		edited: boolean,
@@ -1389,36 +1385,44 @@ class AppState {
 	}
 
 	/** Watch for moments to sync: coming back to the app, reconnecting, and every minute. */
-	#watchDropbox() {
+	#watchCloud() {
 		if (typeof window === 'undefined') return;
 		const poke = () => {
-			if (this.dropbox && document.visibilityState === 'visible')
-				void this.syncDropbox({ auto: true });
+			if (this.cloud && document.visibilityState === 'visible') void this.syncCloud({ auto: true });
 		};
 		document.addEventListener('visibilitychange', poke);
 		window.addEventListener('online', poke);
 		window.addEventListener('focus', poke);
-		setInterval(poke, DROPBOX_POLL);
+		// Each service sets its own pace; check every 15 s whether its interval has passed.
+		setInterval(() => {
+			const ws = this.cloud;
+			const last = this.cloudSync.lastSync ?? 0;
+			if (ws && Date.now() - last >= ws.service.poll) poke();
+		}, 15_000);
 		// Leaving the app: upload what's waiting.
 		window.addEventListener('pagehide', () => {
-			if (this.dropbox?.pending.length) void this.syncDropbox({ auto: true });
+			if (this.cloud?.pending.length) void this.syncCloud({ auto: true });
 		});
 	}
 
-	/** Make a vault from a Dropbox folder (after signing in) and open it. */
-	async connectDropbox(tokens: DropboxTokens, root: string, account: string): Promise<boolean> {
+	/** Make a vault from a cloud folder (after signing in or entering a password) and open it. */
+	async connectCloud(
+		cloud: Omit<CloudState, 'cursor' | 'pending'>,
+		name?: string,
+	): Promise<boolean> {
 		this.loadError = null;
-		this.connecting = { phase: 'Connecting to Dropbox', ratio: null };
+		const [{ CloudWorkspace }, { SERVICES }, { CLOUD_CONFIG }] = await Promise.all([
+			import('$lib/sync/workspace'),
+			import('$lib/sync/services'),
+			import('./config'),
+		]);
+		const service = SERVICES[cloud.service].name;
+		this.connecting = { phase: `Connecting to ${service}`, ratio: null };
 		try {
-			const [{ DropboxWorkspace }, { OAUTH_CONFIG }] = await Promise.all([
-				import('$lib/dropbox/workspace'),
-				import('./config'),
-			]);
-			const name = root.split('/').filter(Boolean).pop() ?? 'Dropbox';
-			const record: VaultRecord & { dropbox: DropboxState } = {
+			const record: VaultRecord & { cloud: CloudState } = {
 				id: crypto.randomUUID(),
-				name,
-				kind: 'dropbox',
+				name: name ?? (cloud.root.split('/').filter(Boolean).pop() || service),
+				kind: 'cloud',
 				provider: 'other',
 				url: null,
 				branch: null,
@@ -1430,27 +1434,15 @@ class AppState {
 				log: {},
 				createdAt: Date.now(),
 				lastSync: null,
-				dropbox: {
-					root,
-					cursor: null,
-					account,
-					accessToken: tokens.accessToken,
-					refreshToken: tokens.refreshToken,
-					expiresAt: tokens.expiresAt,
-					pending: [],
-				},
+				cloud: { ...cloud, cursor: null, pending: [] },
 			};
-			const ws = await DropboxWorkspace.create(
-				record,
-				OAUTH_CONFIG.dropboxAppKey ?? '',
-				(p) => (this.connecting = p),
-			);
+			const ws = await CloudWorkspace.create(record, CLOUD_CONFIG, (p) => (this.connecting = p));
 			this.connecting = null;
 			this.vaults = [...this.vaults, ws.record];
 			await this.#activate(ws);
 			return true;
 		} catch (e) {
-			this.loadError = `Couldn't open the Dropbox folder: ${describeDropboxError(e)}`;
+			this.loadError = `Couldn't open the ${service} folder: ${describeCloudError(e, service)}`;
 			return false;
 		} finally {
 			this.connecting = null;
@@ -1458,23 +1450,18 @@ class AppState {
 		}
 	}
 
-	/** Sign in to Dropbox again for an existing vault (new tokens, same folder). */
-	async renewDropbox(id: string, tokens: DropboxTokens) {
+	/** New sign-in or password for an existing cloud vault (same folder). */
+	async reconnectCloud(id: string, patch: Partial<CloudState>) {
 		const record = this.vaults.find((v) => v.id === id);
-		if (!record?.dropbox) return;
-		const dropbox = {
-			...$state.snapshot(record.dropbox),
-			accessToken: tokens.accessToken,
-			refreshToken: tokens.refreshToken,
-			expiresAt: tokens.expiresAt,
-		};
-		if (this.dropbox?.record.id === id) await this.dropbox.updateRecord({ dropbox });
+		if (!record?.cloud) return;
+		const cloud = { ...$state.snapshot(record.cloud), ...patch };
+		if (this.cloud?.record.id === id) await this.cloud.reconnect(patch);
 		else {
 			const { db } = await import('$lib/store/db');
-			await db().vaults.update(id, { dropbox });
+			await db().vaults.update(id, { cloud });
 		}
-		this.vaults = this.vaults.map((v) => (v.id === id ? { ...v, dropbox } : v));
-		if (this.dropbox?.record.id === id) void this.syncDropbox();
+		this.vaults = this.vaults.map((v) => (v.id === id ? { ...v, cloud } : v));
+		if (this.cloud?.record.id === id) void this.syncCloud();
 	}
 
 	dismissSync() {
@@ -1482,15 +1469,21 @@ class AppState {
 	}
 }
 
-export function describeDropboxError(e: unknown): string {
-	const err = e as { status?: number; summary?: string; message?: string };
-	if (err?.status === 401) return 'Dropbox signed you out. Reconnect Dropbox to keep syncing.';
-	if (err?.summary?.startsWith('path/not_found') || err?.summary?.includes('not_found'))
-		return 'The folder is no longer in Dropbox. Was it moved or renamed?';
-	if (err?.summary?.includes('insufficient_space')) return 'Your Dropbox is full.';
-	if (err?.status === 429) return 'Dropbox asked us to slow down. Sync will try again shortly.';
-	return (err?.message ?? String(e)).replace(/^Dropbox: /, '');
+/** A cloud sync failure, for people. */
+export function describeCloudError(e: unknown, service = 'The service'): string {
+	const err = e as { name?: string; status?: number; summary?: string; message?: string };
+	if (e instanceof RemoteAuthError || err?.status === 401) return signedOut(service);
+	if (e instanceof RemoteNotFound || err?.status === 404)
+		return `The folder is no longer in ${service}. Was it moved or renamed?`;
+	if (err?.summary?.includes('insufficient_space') || err?.status === 507)
+		return `Your ${service} storage is full.`;
+	if (err?.status === 429 || err?.status === 503)
+		return `${service} asked us to slow down. Sync will try again shortly.`;
+	if (err?.status === 403) return `${service} refused access to this folder.`;
+	return (err?.message ?? String(e)).replace(`${service}: `, '');
 }
+
+const signedOut = (service: string) => `${service} signed you out. Reconnect to keep syncing.`;
 
 /** Turn isomorphic-git and network failures into something a person can act on. */
 export function describeGitError(e: unknown): string {

@@ -7,12 +7,19 @@
 /// 2. OAuth: exchanges an authorization code (or refresh token) for tokens,
 ///    adding the client secret the browser must not hold, and returns the
 ///    provider's response unchanged.
+/// 3. WebDAV relay: most WebDAV servers (Nextcloud…) don't allow cross-origin
+///    requests, so `/dav/<host>/<path>` passes WebDAV file requests through.
+///    Only WebDAV methods, only HTTPS host names (no IPs, no localhost), only
+///    requests that carry credentials, no redirects followed. Nothing is
+///    stored or logged; set DAV_HOSTS to allow only your own servers.
 
 export interface Env {
 	/** Comma-separated origins allowed to use the worker, e.g. `https://you.github.io`. */
 	ALLOWED_ORIGINS: string;
 	/** Optional comma-separated extra git hosts (self-hosted GitLab, Gitea, …). */
 	EXTRA_GIT_HOSTS?: string;
+	/** Optional comma-separated WebDAV hosts; when set, the relay serves only these. */
+	DAV_HOSTS?: string;
 	GITHUB_CLIENT_ID?: string;
 	GITHUB_CLIENT_SECRET?: string;
 	GITLAB_CLIENT_ID?: string;
@@ -56,10 +63,10 @@ function list(value: string | undefined): string[] {
 function cors(origin: string, extra: Record<string, string> = {}): Headers {
 	return new Headers({
 		'Access-Control-Allow-Origin': origin,
-		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+		'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PROPFIND, MKCOL, OPTIONS',
 		'Access-Control-Allow-Headers':
-			'Authorization, Content-Type, Content-Encoding, Git-Protocol, Accept',
-		'Access-Control-Expose-Headers': 'Content-Type, WWW-Authenticate',
+			'Authorization, Content-Type, Content-Encoding, Git-Protocol, Accept, Depth, If-Match, If-None-Match',
+		'Access-Control-Expose-Headers': 'Content-Type, WWW-Authenticate, ETag, OC-ETag',
 		'Access-Control-Max-Age': '86400',
 		Vary: 'Origin',
 		'Cache-Control': 'no-store',
@@ -96,6 +103,7 @@ export default {
 			return new Response(null, { status: 204, headers: cors(origin) });
 
 		if (url.pathname.startsWith('/oauth/')) return oauth(request, env, url, origin);
+		if (url.pathname.startsWith('/dav/')) return dav(request, env, url, origin);
 
 		// Git proxy: /<host>/<owner>/<repo>.git/<endpoint>
 		const [, host, ...rest] = url.pathname.split('/');
@@ -189,4 +197,55 @@ async function oauth(request: Request, env: Env, url: URL, origin: string): Prom
 			'Content-Type': upstream.headers.get('content-type') ?? 'application/json',
 		}),
 	});
+}
+
+const DAV_METHODS = new Set(['PROPFIND', 'GET', 'PUT', 'DELETE', 'MKCOL']);
+const DAV_REQUEST = ['authorization', 'content-type', 'depth', 'if-match', 'if-none-match'];
+const DAV_RESPONSE = ['content-type', 'etag', 'oc-etag', 'dav'];
+/** Notes are small; refuse anything that isn't. */
+const DAV_MAX_BODY = 20 * 1024 * 1024;
+
+/** A public host name: not an IP address, not localhost or an internal name. */
+export function isPublicHost(host: string): boolean {
+	const h = host.toLowerCase();
+	if (!/^[a-z0-9.-]+(:\d+)?$/.test(h)) return false;
+	const name = h.replace(/:\d+$/, '');
+	if (!name.includes('.') || /^[\d.]+$/.test(name)) return false;
+	return !/(^|\.)(localhost|local|internal|lan|home\.arpa)$/.test(name);
+}
+
+/** /dav/<host>/<path> → https://<host>/<path>, WebDAV methods only. */
+async function dav(request: Request, env: Env, url: URL, origin: string): Promise<Response> {
+	const [, , host, ...rest] = url.pathname.split('/');
+	if (!host || !isPublicHost(host)) return deny(403, 'WebDAV host not allowed', origin);
+	const allowed = list(env.DAV_HOSTS);
+	if (allowed.length && !allowed.includes(host.toLowerCase()))
+		return deny(403, 'WebDAV host not allowed on this relay', origin);
+	if (!DAV_METHODS.has(request.method)) return deny(405, 'Only WebDAV file requests', origin);
+	if (!request.headers.get('authorization'))
+		return deny(401, 'WebDAV requests need a user name and password', origin);
+	const length = Number(request.headers.get('content-length') ?? 0);
+	if (length > DAV_MAX_BODY) return deny(413, 'File too large', origin);
+	const path = `/${rest.join('/')}`;
+	if (path.split('/').includes('..')) return deny(403, 'Bad path', origin);
+
+	const headers = new Headers({ 'User-Agent': 'mycelium-dav-relay' });
+	for (const name of DAV_REQUEST) {
+		const value = request.headers.get(name);
+		if (value) headers.set(name, value);
+	}
+	const hasBody = request.method === 'PUT' || request.method === 'PROPFIND';
+	const upstream = await fetch(`https://${host}${path}`, {
+		method: request.method,
+		headers,
+		body: hasBody ? request.body : null,
+		// Never carry the password to wherever a redirect points.
+		redirect: 'manual',
+	});
+	const out = cors(origin);
+	for (const name of DAV_RESPONSE) {
+		const value = upstream.headers.get(name);
+		if (value) out.set(name, value);
+	}
+	return new Response(upstream.body, { status: upstream.status, headers: out });
 }

@@ -7,14 +7,19 @@ const CONTENT = 'https://content.dropboxapi.com/2';
 export const DROPBOX_AUTHORIZE = 'https://www.dropbox.com/oauth2/authorize';
 export const DROPBOX_TOKEN = 'https://api.dropboxapi.com/oauth2/token';
 
-export interface DropboxEntry {
-	tag: 'file' | 'folder' | 'deleted';
-	/** As Dropbox displays it (original case), absolute: `/Notes/inbox.org`. */
-	path: string;
-	pathLower: string;
-	/** Files only: the revision, used to detect concurrent changes. */
-	rev?: string;
-}
+import {
+	CursorExpired,
+	RemoteAuthError,
+	RemoteConflict,
+	RemoteError,
+	RemoteNotFound,
+	type RemoteBrowser,
+	type RemoteEntry,
+	type RemoteFiles,
+	type RemoteListing,
+} from '$lib/sync/remote';
+
+export type DropboxEntry = RemoteEntry;
 
 export interface ListResult {
 	entries: DropboxEntry[];
@@ -23,18 +28,11 @@ export interface ListResult {
 }
 
 /** Thrown when an upload or delete finds the file changed since `rev`. */
-export class DropboxConflict extends Error {
-	constructor(readonly path: string) {
-		super(`${path} changed in Dropbox`);
-	}
-}
+export { RemoteConflict as DropboxConflict };
 
-export class DropboxError extends Error {
-	constructor(
-		readonly status: number,
-		readonly summary: string,
-	) {
-		super(`Dropbox: ${summary || `HTTP ${status}`}`);
+export class DropboxError extends RemoteError {
+	constructor(status: number, summary: string) {
+		super(status, summary, 'Dropbox');
 	}
 }
 
@@ -61,7 +59,7 @@ const entry = (e: Raw): DropboxEntry => ({
 	...(e.rev ? { rev: e.rev } : {}),
 });
 
-export class DropboxApi {
+export class DropboxApi implements RemoteFiles, RemoteBrowser {
 	constructor(
 		/** A valid access token (refreshing it first if needed). `force` asks for a fresh one. */
 		private token: (force?: boolean) => Promise<string>,
@@ -79,6 +77,7 @@ export class DropboxApi {
 			},
 		});
 		if (res.status === 401 && !retried) return this.#call(url, init, true);
+		if (res.status === 401) throw new RemoteAuthError('Dropbox signed you out.');
 		return res;
 	}
 
@@ -88,7 +87,13 @@ export class DropboxApi {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(body),
 		});
-		if (!res.ok) throw await failure(res);
+		if (!res.ok) {
+			const err = await failure(res);
+			if (/^reset/.test(err.summary)) throw new CursorExpired();
+			if (/not_found/.test(err.summary))
+				throw new RemoteNotFound(String((body as { path?: string })?.path ?? ''));
+			throw err;
+		}
 		return (await res.json()) as T;
 	}
 
@@ -119,7 +124,7 @@ export class DropboxApi {
 	}
 
 	/** All pages of a listing or of changes since a cursor. */
-	async listAll(start: { path: string } | { cursor: string }): Promise<ListResult> {
+	async listAll(start: { path: string } | { cursor: string }): Promise<RemoteListing & ListResult> {
 		let page =
 			'cursor' in start ? await this.listContinue(start.cursor) : await this.list(start.path, true);
 		const entries = [...page.entries];
@@ -135,7 +140,11 @@ export class DropboxApi {
 			method: 'POST',
 			headers: { 'Dropbox-API-Arg': apiArg({ path }) },
 		});
-		if (!res.ok) throw await failure(res);
+		if (!res.ok) {
+			const err = await failure(res);
+			if (/not_found/.test(err.summary)) throw new RemoteNotFound(path);
+			throw err;
+		}
 		const meta = JSON.parse(res.headers.get('Dropbox-API-Result') ?? '{}') as { rev?: string };
 		return { text: await res.text(), rev: meta.rev ?? '' };
 	}
@@ -165,7 +174,7 @@ export class DropboxApi {
 		});
 		if (res.status === 409) {
 			const err = await failure(res);
-			if (/conflict/.test(err.summary)) throw new DropboxConflict(path);
+			if (/conflict/.test(err.summary)) throw new RemoteConflict(path);
 			throw err;
 		}
 		if (!res.ok) throw await failure(res);
@@ -183,8 +192,24 @@ export class DropboxApi {
 		if (res.ok) return;
 		const err = await failure(res);
 		if (/not_found/.test(err.summary)) return;
-		if (/conflict|parent_rev/.test(err.summary)) throw new DropboxConflict(path);
+		if (/conflict|parent_rev/.test(err.summary)) throw new RemoteConflict(path);
 		throw err;
+	}
+
+	async browse(path: string) {
+		const listing = await this.list(path, false);
+		let all = listing.entries;
+		for (let p = listing; p.hasMore;) {
+			p = await this.listContinue(p.cursor);
+			all = all.concat(p.entries);
+		}
+		return {
+			folders: all
+				.filter((e) => e.tag === 'folder' && !e.path.split('/').pop()!.startsWith('.'))
+				.map((e) => ({ name: e.path.split('/').pop()!, path: e.path }))
+				.sort((a, b) => a.name.localeCompare(b.name)),
+			orgFiles: all.filter((e) => e.tag === 'file' && /\.org$/i.test(e.path)).length,
+		};
 	}
 }
 

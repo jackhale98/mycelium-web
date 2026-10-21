@@ -5,7 +5,8 @@
 
 	const busy = $derived(app.sync.kind === 'busy');
 	const changes = $derived(app.git.changes.length);
-	const dbx = $derived(app.dropboxSync);
+	const dbx = $derived(app.cloudSync);
+	const serviceName = $derived(app.cloud?.service.name ?? '');
 	const dbxLabel = $derived(
 		dbx.state === 'syncing'
 			? 'Syncing…'
@@ -21,10 +22,10 @@
 	);
 </script>
 
-{#if app.dropbox}
+{#if app.cloud}
 	<div class="git">
-		<a class="branch" href={href.changes()} title={dbx.message ?? 'Dropbox sync'}>
-			<Icon name="cloud" size={14} /><span class="name">{app.dropbox.record.name}</span>
+		<a class="branch" href={href.changes()} title={dbx.message ?? `${serviceName} sync`}>
+			<Icon name="cloud" size={14} /><span class="name">{app.cloud.record.name}</span>
 		</a>
 		<span
 			class="counts"
@@ -35,10 +36,10 @@
 		<button
 			type="button"
 			class="icon-btn"
-			aria-label="Sync with Dropbox now"
+			aria-label={`Sync with ${serviceName} now`}
 			title="Sync now"
 			disabled={dbx.state === 'syncing'}
-			onclick={() => app.syncDropbox()}><Icon name="sync" size={15} /></button
+			onclick={() => app.syncCloud()}><Icon name="sync" size={15} /></button
 		>
 	</div>
 {:else if app.folder}

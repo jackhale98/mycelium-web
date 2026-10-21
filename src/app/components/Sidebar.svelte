@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serviceLabel } from '$lib/sync/services';
 	import { href, router } from '../router.svelte';
 	import { app, localNow, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
@@ -55,7 +56,7 @@
 	<a class="vault" href={href.vaults()} title="Switch vault">
 		<span class="vault-icon"
 			><Icon
-				name={app.demo ? 'zap' : app.dropbox ? 'cloud' : app.folder ? 'folder' : 'git'}
+				name={app.demo ? 'zap' : app.cloud ? 'cloud' : app.folder ? 'folder' : 'git'}
 				size={15}
 			/></span
 		>
@@ -64,8 +65,8 @@
 				>{app.activeVault?.name.split('/').pop() ?? 'Demo vault'}</span
 			>
 			<span class="vault-sub">
-				{#if app.activeVault}{app.activeVault.kind === 'dropbox'
-						? 'Dropbox'
+				{#if app.activeVault}{app.activeVault.cloud
+						? serviceLabel(app.activeVault.cloud)
 						: app.activeVault.kind === 'folder'
 							? 'Folder'
 							: (app.activeVault.branch ?? 'default branch')} · {app.vault.files.size} files{:else}{app

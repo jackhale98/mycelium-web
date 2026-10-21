@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DropboxConflict, DropboxError, type DropboxEntry } from './api';
-import { syncDropbox, type Base, type DropboxFiles, type SyncResult } from './sync';
+import { CursorExpired, RemoteConflict, RemoteNotFound, type RemoteEntry } from './remote';
+import { syncFolder, type Base, type SyncResult } from './engine';
+import type { RemoteFiles } from './remote';
 
-/** An in-memory Dropbox with revisions and a change log. */
-class FakeDropbox implements DropboxFiles {
+/** An in-memory file service with revisions and a change log. */
+class FakeRemote implements RemoteFiles {
 	files = new Map<string, { path: string; rev: string; text: string }>();
-	log: DropboxEntry[] = [];
+	log: RemoteEntry[] = [];
 	#rev = 0;
 	uploads = 0;
 	/** Called before each upload (to simulate another device racing it). */
@@ -24,7 +25,7 @@ class FakeDropbox implements DropboxFiles {
 
 	async listAll(start: { path: string } | { cursor: string }) {
 		if ('cursor' in start) {
-			if (start.cursor === 'stale') throw new DropboxError(409, 'reset/..');
+			if (start.cursor === 'stale') throw new CursorExpired();
 			return { entries: this.log.slice(Number(start.cursor)), cursor: String(this.log.length) };
 		}
 		const prefix = start.path.toLowerCase();
@@ -40,20 +41,20 @@ class FakeDropbox implements DropboxFiles {
 	}
 	async download(path: string) {
 		const f = this.files.get(path.toLowerCase());
-		if (!f) throw new DropboxError(409, 'path/not_found/');
+		if (!f) throw new RemoteNotFound(path);
 		return { text: f.text, rev: f.rev };
 	}
 	async upload(path: string, text: string, rev: string | null) {
 		this.beforeUpload?.();
 		const f = this.files.get(path.toLowerCase());
-		if (rev ? f?.rev !== rev : f) throw new DropboxConflict(path);
+		if (rev ? f?.rev !== rev : f) throw new RemoteConflict(path);
 		this.uploads += 1;
-		return { rev: this.put(path, text), path };
+		return { rev: this.put(path, text) };
 	}
 	async delete(path: string, rev: string | null) {
 		const f = this.files.get(path.toLowerCase());
 		if (!f) return;
-		if (rev && f.rev !== rev) throw new DropboxConflict(path);
+		if (rev && f.rev !== rev) throw new RemoteConflict(path);
 		this.remove(path);
 	}
 }
@@ -66,7 +67,7 @@ class Device {
 	pending = new Set<string>();
 
 	constructor(
-		readonly dropbox: FakeDropbox,
+		readonly dropbox: FakeRemote,
 		readonly root = '/Notes',
 	) {}
 
@@ -77,7 +78,7 @@ class Device {
 	}
 
 	async sync(resolutions?: Map<string, string>): Promise<SyncResult> {
-		const result = await syncDropbox({
+		const result = await syncFolder({
 			api: this.dropbox,
 			root: this.root,
 			cursor: this.cursor,
@@ -102,11 +103,11 @@ class Device {
 	}
 }
 
-const remote = (d: FakeDropbox, path: string) => d.files.get(`/notes/${path}`.toLowerCase())?.text;
+const remote = (d: FakeRemote, path: string) => d.files.get(`/notes/${path}`.toLowerCase())?.text;
 
-describe('syncDropbox', () => {
+describe('syncFolder', () => {
 	it('downloads a folder on first sync, ignoring files outside it and non-org files', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		dbx.put('/Notes/daily/2026-10-21.org', '* Today\n');
 		dbx.put('/Notes/picture.png', 'binary');
@@ -119,7 +120,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('uploads local edits and new files, then sees nothing new', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -136,7 +137,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('carries edits from one device to another', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		const phone = new Device(dbx);
 		const laptop = new Device(dbx);
@@ -150,7 +151,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('merges edits to different lines made on two devices', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/list.org', '* TODO one\n* TODO two\n* TODO three\n');
 		const phone = new Device(dbx);
 		const laptop = new Device(dbx);
@@ -169,7 +170,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('reports overlapping edits as conflicts until the chosen text is applied', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* Title\n');
 		const phone = new Device(dbx);
 		const laptop = new Device(dbx);
@@ -202,7 +203,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('deletes locally what was deleted in Dropbox, unless it was edited here', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		dbx.put('/Notes/b.org', '* B\n');
 		const dev = new Device(dbx);
@@ -216,7 +217,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('deletes in Dropbox what was deleted here', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -227,7 +228,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('keeps a remote edit over a local delete', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -239,7 +240,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('drops everything under a deleted folder', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/daily/a.org', '* A\n');
 		dbx.put('/Notes/daily/b.org', '* B\n');
 		dbx.put('/Notes/c.org', '* C\n');
@@ -253,7 +254,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('merges a change that lands in Dropbox while uploading', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', 'one\ntwo\nthree\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -272,7 +273,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('merges with a base that is behind Dropbox (e.g. an edit made during a sync)', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', 'one\ntwo\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -285,7 +286,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('keeps the local spelling of a path when Dropbox reports another case', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/Inbox.org', '* In\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -302,7 +303,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('starts over with a full listing when the cursor has expired', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/Notes/a.org', '* A\n');
 		const dev = new Device(dbx);
 		await dev.sync();
@@ -314,7 +315,7 @@ describe('syncDropbox', () => {
 	});
 
 	it('syncs the whole app folder when the root is empty', async () => {
-		const dbx = new FakeDropbox();
+		const dbx = new FakeRemote();
 		dbx.put('/a.org', '* A\n');
 		const dev = new Device(dbx, '');
 		dbx.listAll = async (start) => {

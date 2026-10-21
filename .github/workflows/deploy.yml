@@ -39,6 +39,7 @@ jobs:
           PUBLIC_GITLAB_CLIENT_ID: ${{ vars.PUBLIC_GITLAB_CLIENT_ID }}
           PUBLIC_BITBUCKET_CLIENT_ID: ${{ vars.PUBLIC_BITBUCKET_CLIENT_ID }}
           PUBLIC_DROPBOX_APP_KEY: ${{ vars.PUBLIC_DROPBOX_APP_KEY }}
+          PUBLIC_ONEDRIVE_CLIENT_ID: ${{ vars.PUBLIC_ONEDRIVE_CLIENT_ID }}
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

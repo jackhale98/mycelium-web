@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import worker, { isGitRequest, type Env } from './index';
+import worker, { isGitRequest, isPublicHost, type Env } from './index';
 
 const env: Env = {
 	ALLOWED_ORIGINS: 'https://app.example, http://localhost:4321',
@@ -139,5 +139,76 @@ describe('oauth', () => {
 			(await call('/oauth/bitbucket/token', { method: 'POST', body: '{"code":"c"}' })).status,
 		).toBe(501);
 		expect((await call('/oauth/nope/token', { method: 'POST', body: '{}' })).status).toBe(404);
+	});
+});
+
+describe('WebDAV relay', () => {
+	const auth = { Authorization: 'Basic YWRhOnB3' };
+
+	it('only relays to public HTTPS host names', () => {
+		expect(isPublicHost('cloud.example.com')).toBe(true);
+		expect(isPublicHost('cloud.example.com:8443')).toBe(true);
+		for (const bad of [
+			'localhost',
+			'127.0.0.1',
+			'10.0.0.1',
+			'nas',
+			'nas.local',
+			'box.internal',
+			'a@b.com',
+			'[::1]',
+		])
+			expect(isPublicHost(bad), bad).toBe(false);
+	});
+
+	it('passes WebDAV requests through with their conditions, and exposes ETags', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('<multistatus/>', {
+					status: 207,
+					headers: { ETag: '"e1"', 'Set-Cookie': 'x=y', 'Content-Type': 'application/xml' },
+				}),
+		);
+		vi.stubGlobal('fetch', fetch);
+		const res = await call('/dav/cloud.example.com/remote.php/dav/files/ada/Notes/', {
+			method: 'PROPFIND',
+			headers: { ...auth, Depth: '1', Cookie: 'session=1', 'If-Match': '"e0"' },
+			body: '<propfind/>',
+		});
+		expect(res.status).toBe(207);
+		expect(res.headers.get('ETag')).toBe('"e1"');
+		expect(res.headers.get('Set-Cookie')).toBeNull();
+		expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+		const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+		expect(url).toBe('https://cloud.example.com/remote.php/dav/files/ada/Notes/');
+		const sent = new Headers(init.headers);
+		expect(sent.get('depth')).toBe('1');
+		expect(sent.get('if-match')).toBe('"e0"');
+		expect(sent.get('authorization')).toBe(auth.Authorization);
+		expect(sent.get('cookie')).toBeNull();
+		expect(init.redirect).toBe('manual');
+	});
+
+	it('refuses other methods, anonymous requests, private hosts and hosts not allowed', async () => {
+		vi.stubGlobal('fetch', vi.fn());
+		expect((await call('/dav/cloud.example.com/x', { method: 'POST', headers: auth })).status).toBe(
+			405,
+		);
+		expect((await call('/dav/cloud.example.com/x', { method: 'GET' })).status).toBe(401);
+		expect((await call('/dav/192.168.1.2/x', { method: 'GET', headers: auth })).status).toBe(403);
+		const pinned = { ...env, DAV_HOSTS: 'mine.example.com' };
+		const req = new Request('https://proxy.example/dav/cloud.example.com/x', {
+			method: 'GET',
+			headers: { ...auth, Origin: ORIGIN },
+		});
+		expect((await worker.fetch(req, pinned)).status).toBe(403);
+	});
+
+	it('answers preflights for WebDAV methods and headers', async () => {
+		const res = await call('/dav/cloud.example.com/x', { method: 'OPTIONS' });
+		expect(res.status).toBe(204);
+		expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PROPFIND');
+		expect(res.headers.get('Access-Control-Allow-Headers')).toContain('If-Match');
+		expect(res.headers.get('Access-Control-Expose-Headers')).toContain('ETag');
 	});
 });
