@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { drag } from 'd3-drag';
 	import type { Simulation, SimulationLinkDatum, SimulationNodeDatum } from 'd3-force';
-	import { select } from 'd3-selection';
+	import { pointer, select } from 'd3-selection';
 	import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
 	import { buildGraph, type GraphNode } from '$lib/vault/graph';
 	import { createLayout, seedPositions, warmupTicks } from '$lib/vault/graph-layout';
@@ -322,19 +322,25 @@
 				redraw();
 			});
 		const sel = select(el);
+		let grab: [number, number] = [0, 0];
 		sel.call(
 			drag<HTMLCanvasElement, unknown, SimNode | undefined>()
 				.container(el)
 				.subject((e: { x: number; y: number }) => nodeAt(e.x, e.y) ?? undefined)
-				.on('start', (e: { active: number; subject: SimNode }) => {
+				.on('start', (e: { active: number; subject: SimNode; sourceEvent: Event }) => {
 					if (!e.active) sim?.alphaTarget(0.25).restart();
 					e.subject.fx = e.subject.x;
 					e.subject.fy = e.subject.y;
+					// Where on the node it was grabbed, so it doesn't jump to the pointer.
+					const [x, y] = transform.invert(pointer(e.sourceEvent, el));
+					grab = [e.subject.x! - x, e.subject.y! - y];
 				})
-				.on('drag', (e: { x: number; y: number; subject: SimNode }) => {
-					const [x, y] = transform.invert([e.x, e.y]);
-					e.subject.fx = x;
-					e.subject.fy = y;
+				.on('drag', (e: { subject: SimNode; sourceEvent: Event }) => {
+					// The pointer in screen space, mapped through the current zoom and pan
+					// (the event's own x/y are already in the node's space).
+					const [x, y] = transform.invert(pointer(e.sourceEvent, el));
+					e.subject.fx = x + grab[0];
+					e.subject.fy = y + grab[1];
 				})
 				.on('end', (e: { active: number; subject: SimNode }) => {
 					if (!e.active) sim?.alphaTarget(0);

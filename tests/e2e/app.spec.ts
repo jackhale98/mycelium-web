@@ -912,6 +912,39 @@ test('switching between reading and editing keeps your place', async ({ page }) 
 	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(30);
 });
 
+test('dragging a node in the graph moves it with the pointer, zoomed in or not', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(isMobile, 'mouse drag');
+	test.setTimeout(60_000);
+	await open(page, 'app#/graph');
+	const canvas = page.locator('canvas');
+	await page.waitForTimeout(2500); // let the layout settle
+	const box = (await canvas.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.wheel(0, -300); // zoom in
+	await page.waitForTimeout(400);
+	const overNode = () => canvas.evaluate((el) => el.style.cursor === 'pointer');
+	let at: [number, number] | null = null;
+	for (let y = box.y + 80; y < box.y + box.height - 80 && !at; y += 20)
+		for (let x = box.x + 80; x < box.x + box.width - 240; x += 20) {
+			await page.mouse.move(x, y);
+			if (await overNode()) {
+				at = [x, y];
+				break;
+			}
+		}
+	expect(at).not.toBeNull();
+	const [x, y] = at!;
+	await page.mouse.down();
+	for (let i = 1; i <= 10; i++) await page.mouse.move(x + i * 15, y + i * 8);
+	await page.mouse.up();
+	// The node is where it was dropped, under the pointer.
+	await page.mouse.move(x + 150, y + 80);
+	await expect.poll(overNode).toBe(true);
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {
