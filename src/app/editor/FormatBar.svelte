@@ -37,21 +37,26 @@
 		onaction: (action: FormatAction) => void;
 	} = $props();
 
-	// How far the keyboard (or anything else) covers the bottom of the layout viewport.
-	let keyboard = $state(0);
+	// How far the keyboard (or anything else) covers the bottom of the layout
+	// viewport. iOS reports visual-viewport scrolls only after the page has
+	// moved (pressing Return scrolls it), so the bar would trail a frame or
+	// more behind. While typing on a phone, re-measure every frame instead and
+	// write the offset straight to the element: two reads a frame, and a style
+	// write only when it changes.
+	let bar: HTMLDivElement | undefined = $state();
 	$effect(() => {
 		const vv = window.visualViewport;
-		if (!vv) return;
+		const el = bar;
+		if (!vv || !el || !focused || !window.matchMedia('(max-width: 960px)').matches) return;
+		let last = -1;
+		let frame = 0;
 		const place = () => {
-			keyboard = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+			const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+			if (kb !== last) el.style.setProperty('--kb', `${(last = kb)}px`);
+			frame = requestAnimationFrame(place);
 		};
 		place();
-		vv.addEventListener('resize', place);
-		vv.addEventListener('scroll', place);
-		return () => {
-			vv.removeEventListener('resize', place);
-			vv.removeEventListener('scroll', place);
-		};
+		return () => cancelAnimationFrame(frame);
 	});
 
 	type Button = {
@@ -96,7 +101,7 @@
 <div
 	class="format-bar"
 	class:focused
-	style:--kb={`${keyboard}px`}
+	bind:this={bar}
 	role="toolbar"
 	aria-label="Formatting"
 	tabindex="-1"
@@ -244,6 +249,7 @@
 			border-radius: 0;
 			box-shadow: none;
 			transform: translateY(calc(-1 * var(--kb, 0px)));
+			will-change: transform;
 		}
 		.format-bar.focused {
 			display: flex;
