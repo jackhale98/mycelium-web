@@ -728,6 +728,25 @@ test('the formatting bar shapes the line, and reading keeps line breaks', async 
 	expect(await lines()).toBe(1);
 });
 
+test('on a long note the toolbar comes back when you scroll up', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText(
+		'\n' + Array.from({ length: 80 }, (_, i) => `line ${i}`).join('\n'),
+	);
+	await page.mouse.move(600, 400);
+	await page.mouse.wheel(0, -900);
+	await page.mouse.wheel(0, 400);
+	// Scrolled down: only the toolbar at the top of the note, now out of view.
+	await expect(page.locator('.floating')).toBeHidden();
+	await page.mouse.wheel(0, -80);
+	await expect(page.locator('.floating')).toBeVisible();
+	await page.locator('.floating').getByRole('button', { name: 'Read' }).click();
+	await expect(page.locator('.cm-content')).toHaveCount(0);
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {

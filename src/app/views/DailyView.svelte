@@ -18,14 +18,25 @@
 	const prev = $derived(days.find((d) => d < day));
 	const next = $derived([...days].reverse().find((d) => d > day));
 
+	// Sticky things inside the note (its floating toolbar) sit below the date bar.
+	let dayNav: HTMLElement | undefined = $state();
+	let navHeight = $state(0);
+	$effect(() => {
+		const el = dayNav;
+		if (!el) return;
+		const ro = new ResizeObserver(() => (navHeight = el.offsetHeight));
+		ro.observe(el);
+		return () => ro.disconnect();
+	});
+
 	function create() {
 		const id = app.ensureDaily(day);
 		if (id) router.go(href.daily(day));
 	}
 </script>
 
-<div class="daily">
-	<nav class="day-nav" aria-label="Daily notes">
+<div class="daily" style:--sticky-top={`calc(var(--clock-h, 0px) + ${navHeight}px)`}>
+	<nav class="day-nav" aria-label="Daily notes" bind:this={dayNav}>
 		<a class="nav-btn" href={href.daily(prev ?? addDays(day, -1))} aria-label="Previous daily note"
 			><Icon name="chevronLeft" size={16} /></a
 		>

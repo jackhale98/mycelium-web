@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { OrgNode, Section } from 'uniorg';
-	import { startOf } from '$lib/org';
+	import { startOf, type RoamNode } from '$lib/org';
 	import Backlinks from '../components/Backlinks.svelte';
 	import OrgEditor from '../editor/OrgEditor.svelte';
 	import DateChip from '../org/DateChip.svelte';
@@ -78,6 +78,42 @@
 		if (!app.editing) app.editAt = null;
 	});
 
+	// On a long note the toolbar comes back, floating at the top, when you
+	// scroll up a little (and goes again when you scroll down), so switching
+	// between reading and editing never means scrolling back to the top.
+	let header: HTMLElement | undefined = $state();
+	let floatWrap: HTMLElement | undefined = $state();
+	let floating = $state(false);
+	$effect(() => {
+		const head = header;
+		const wrap = floatWrap;
+		if (!head || !wrap) return;
+		let last: number | null = null;
+		let travel = 0;
+		const onScroll = (e: Event) => {
+			const t = e.target;
+			const y =
+				t instanceof Element ? t.scrollTop : (document.scrollingElement?.scrollTop ?? scrollY);
+			if (!(t instanceof Element) || t.contains(head)) {
+				const top = parseFloat(getComputedStyle(wrap).top) || 0;
+				if (head.getBoundingClientRect().bottom > top) {
+					floating = false;
+					travel = 0;
+				} else if (last !== null) {
+					const dy = y - last;
+					// Small moves in the other direction reset the count: a deliberate
+					// upward scroll of ~40px shows it, any downward scroll hides it.
+					travel = dy < 0 ? Math.min(0, travel) + dy : 0;
+					if (dy > 0) floating = false;
+					else if (travel < -40) floating = true;
+				}
+				last = y;
+			}
+		};
+		document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+		return () => document.removeEventListener('scroll', onScroll, { capture: true });
+	});
+
 	function onkeydown(e: KeyboardEvent) {
 		// The editor lives in a shadow root, so look at the real target.
 		const target = e.composedPath()[0];
@@ -95,40 +131,45 @@
 	}
 </script>
 
+{#snippet tools(n: RoamNode)}
+	<a
+		class="btn small icon-only"
+		href={href.graph(n.id)}
+		title="Graph around this note"
+		aria-label="Graph around this note"><Icon name="graph" size={15} /></a
+	>
+	{#if n.level > 0 && !app.editing}
+		<button
+			type="button"
+			class="btn small"
+			aria-haspopup="dialog"
+			onclick={() => (app.headingSheet = { path: n.file, pos: n.pos })}
+			><Icon name="settings" size={14} />Properties</button
+		>
+	{/if}
+	<button
+		type="button"
+		class="btn small"
+		class:primary={app.editing}
+		aria-pressed={app.editing}
+		title={app.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
+		onclick={() => (app.editing = !app.editing)}
+		><Icon name={app.editing ? 'eye' : 'edit'} size={14} />{app.editing ? 'Read' : 'Edit'}</button
+	>
+{/snippet}
+
 <svelte:window {onkeydown} />
 
 {#if node}
 	<div class="node-layout" class:with-panel={app.panelOpen}>
 		<article class="node" aria-labelledby="node-title" bind:this={article}>
-			<header class="node-header">
-				<div class="toolbar">
-					<a
-						class="btn small icon-only"
-						href={href.graph(node.id)}
-						title="Graph around this note"
-						aria-label="Graph around this note"><Icon name="graph" size={15} /></a
-					>
-					{#if node.level > 0 && !app.editing}
-						<button
-							type="button"
-							class="btn small"
-							aria-haspopup="dialog"
-							onclick={() => (app.headingSheet = { path: node.file, pos: node.pos })}
-							><Icon name="settings" size={14} />Properties</button
-						>
-					{/if}
-					<button
-						type="button"
-						class="btn small"
-						class:primary={app.editing}
-						aria-pressed={app.editing}
-						title={app.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
-						onclick={() => (app.editing = !app.editing)}
-						><Icon name={app.editing ? 'eye' : 'edit'} size={14} />{app.editing
-							? 'Read'
-							: 'Edit'}</button
-					>
+			<div class="float-wrap" bind:this={floatWrap}>
+				<div class="toolbar floating" class:shown={floating} inert={!floating}>
+					{@render tools(node)}
 				</div>
+			</div>
+			<header class="node-header" bind:this={header}>
+				<div class="toolbar">{@render tools(node)}</div>
 				<nav class="crumbs" aria-label="Location">
 					{#if eyebrow}
 						<span class="path">{eyebrow}</span>
@@ -250,6 +291,44 @@
 		right: 0;
 		display: flex;
 		gap: 0.4rem;
+	}
+	/* The toolbar's floating copy: sticks to the top of the page (below the
+	   clock bar and the daily note's date bar) and slides in on scroll up. */
+	.float-wrap {
+		position: sticky;
+		top: var(--sticky-top, var(--clock-h, 0px));
+		z-index: 4;
+		height: 0;
+	}
+	.floating {
+		top: 0.5rem;
+		padding: 0.3rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: color-mix(in oklab, var(--bg-raised) 92%, transparent);
+		box-shadow: var(--shadow-md);
+		backdrop-filter: blur(12px);
+		visibility: hidden;
+		opacity: 0;
+		transform: translateY(-0.75rem);
+		transition:
+			opacity 0.15s var(--ease),
+			transform 0.15s var(--ease),
+			visibility 0s linear 0.15s;
+	}
+	.floating.shown {
+		visibility: visible;
+		opacity: 1;
+		transform: none;
+		transition:
+			opacity 0.15s var(--ease),
+			transform 0.15s var(--ease);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.floating,
+		.floating.shown {
+			transition: none;
+		}
 	}
 	.crumbs {
 		padding-right: 7.5rem;
