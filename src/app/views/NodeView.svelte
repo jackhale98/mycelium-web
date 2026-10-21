@@ -10,6 +10,8 @@
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import { scrollToSearch } from '../org/scroll-to';
+	import { readingAnchor, restoreReading, type Anchor } from '../anchor';
+	import { preloadEditor } from '../editor/load';
 	import { tick } from 'svelte';
 
 	let {
@@ -73,6 +75,27 @@
 		document.title = node ? `${node.title} · Mycelium` : 'Not found · Mycelium';
 	});
 
+	// Switching between reading and editing keeps the same part of the note
+	// at the same place on screen.
+	let editor: ReturnType<typeof OrgEditor> | undefined = $state();
+	let openAt = $state<Anchor | null>(null);
+	function setEditing(on: boolean) {
+		if (on === app.editing) return;
+		const el = article;
+		if (on) {
+			openAt = el ? readingAnchor(el) : null;
+			app.editing = true;
+			return;
+		}
+		const at = el && editor ? editor.topAnchor(el) : null;
+		openAt = null;
+		app.editing = false;
+		if (at && el) void tick().then(() => restoreReading(el, at));
+	}
+
+	// The editor's code loads in the background while you read.
+	$effect(() => preloadEditor());
+
 	// The editor reads editAt once on open; clear it for next time.
 	$effect(() => {
 		if (!app.editing) app.editAt = null;
@@ -121,12 +144,12 @@
 			target instanceof HTMLElement &&
 			target.closest('input, textarea, select, [contenteditable="true"], dialog')
 		) {
-			if (e.key === 'Escape' && app.editing && target.closest('.cm-editor')) app.editing = false;
+			if (e.key === 'Escape' && app.editing && target.closest('.cm-editor')) setEditing(false);
 			return;
 		}
 		if (e.key === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
 			e.preventDefault();
-			app.editing = true;
+			setEditing(true);
 		}
 	}
 </script>
@@ -153,7 +176,7 @@
 		class:primary={app.editing}
 		aria-pressed={app.editing}
 		title={app.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
-		onclick={() => (app.editing = !app.editing)}
+		onclick={() => setEditing(!app.editing)}
 		><Icon name={app.editing ? 'eye' : 'edit'} size={14} />{app.editing ? 'Read' : 'Edit'}</button
 	>
 {/snippet}
@@ -236,7 +259,9 @@
 			{#if app.editing}
 				{#key node.file}
 					<OrgEditor
+						bind:this={editor}
 						path={node.file}
+						anchor={app.editAt === null ? openAt : null}
 						focusAt={app.editAt ?? (node.level > 0 ? node.pos : null)}
 						label={`Org source of ${node.title}`}
 					/>

@@ -878,6 +878,40 @@ test('on phones the bottom bar steps aside while the keyboard is up', async ({
 	await expect(nav).toBeVisible();
 });
 
+test('switching between reading and editing keeps your place', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	const scrollTo = (y: number) =>
+		page.evaluate((y) => {
+			const main = document.getElementById('main-content')!;
+			if (getComputedStyle(main).overflowY === 'auto') main.scrollTop = y;
+			else window.scrollTo(0, y);
+		}, y);
+	// Click the toolbar button in place (a normal click would scroll it into view first).
+	const toggle = () =>
+		page.evaluate(() =>
+			document.querySelector<HTMLElement>('.toolbar:not(.floating) [aria-pressed]')!.click(),
+		);
+	const top = (text: string) =>
+		page.evaluate((text) => {
+			const host = document.querySelector('.editor');
+			const els = [
+				...document.querySelectorAll('.node-body li'),
+				...(host?.shadowRoot?.querySelectorAll('.cm-line') ?? []),
+			];
+			const el = els.find((e) => e.textContent?.includes(text));
+			return el ? el.getBoundingClientRect().top : null;
+		}, text);
+	await scrollTo(450);
+	const line = 'Git sync through a stateless worker';
+	const reading = (await top(line))!;
+	await toggle();
+	await expect(page.locator('.cm-content')).toBeVisible();
+	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(30);
+	await toggle();
+	await expect(page.locator('.node-body')).toBeVisible();
+	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(30);
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {

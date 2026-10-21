@@ -1,15 +1,32 @@
 <script lang="ts">
 	import type { EditorView } from '@codemirror/view';
 	import { nextTodoKeyword } from '$lib/org';
+	import { editorAnchor, restoreEditor, type Anchor } from '../anchor';
 	import { href, router } from '../router.svelte';
+	import { loadEditor } from './load';
 	import { app } from '../state.svelte';
 	import FormatBar, { type FormatAction } from './FormatBar.svelte';
 
 	let {
 		path,
 		focusAt = null,
+		anchor = null,
 		label = 'Org source',
-	}: { path: string; focusAt?: number | null; label?: string } = $props();
+	}: {
+		path: string;
+		focusAt?: number | null;
+		/** Keep this part of the note where it was on screen (switching from reading). */
+		anchor?: Anchor | null;
+		label?: string;
+	} = $props();
+
+	/** Until the editor is up, the source shows as plain text in the same place. */
+	let ready = $state(false);
+
+	/** The line at the top of the screen (for switching back to reading). */
+	export function topAnchor(container: HTMLElement): Anchor | null {
+		return view ? editorAnchor(view, container) : null;
+	}
 
 	let host: HTMLDivElement | undefined = $state();
 	let view: EditorView | null = null;
@@ -43,14 +60,7 @@
 	$effect(() => {
 		if (!host) return;
 		let cancelled = false;
-		void Promise.all([
-			import('./org-editor'),
-			import('./format-commands'),
-			import('@codemirror/commands'),
-			import('./list-commands'),
-			import('./table-commands'),
-			import('./tex'),
-		]).then(([{ createEditor, syncEditor }, format, cm, list, table, tex]) => {
+		void loadEditor().then(([{ createEditor, syncEditor }, format, cm, list, table, tex]) => {
 			if (cancelled || !host) return;
 			tables = table;
 			texTools = tex;
@@ -78,12 +88,19 @@
 				},
 				label,
 			);
-			if (focusAt !== null) {
-				const at = Math.min(focusAt, view.state.doc.length);
-				const lineEnd = view.state.doc.lineAt(at).to;
-				view.dispatch({ selection: { anchor: lineEnd }, scrollIntoView: true });
+			ready = true;
+			const v = view;
+			if (anchor) {
+				// Same place on screen as in reading: no jump.
+				v.dispatch({ selection: { anchor: Math.min(anchor.pos, v.state.doc.length) } });
+				restoreEditor(v, anchor);
+				requestAnimationFrame(() => restoreEditor(v, anchor));
+			} else if (focusAt !== null) {
+				const at = Math.min(focusAt, v.state.doc.length);
+				const lineEnd = v.state.doc.lineAt(at).to;
+				v.dispatch({ selection: { anchor: lineEnd }, scrollIntoView: true });
 			}
-			view.focus();
+			v.focus();
 		});
 		return () => {
 			cancelled = true;
@@ -263,11 +280,35 @@
 	});
 </script>
 
-<div class="editor" bind:this={host}></div>
+{#if !ready}
+	<pre class="fallback" aria-hidden="true">{app.vault.file(path)?.source ?? ''}</pre>
+{/if}
+<div class="editor" class:loading={!ready} bind:this={host}></div>
 <FormatBar {focused} {level} onaction={act} />
 
 <style>
 	.editor {
 		min-height: 60vh;
+	}
+	.editor.loading {
+		min-height: 0;
+	}
+	/* Shaped like the editor's text, so nothing moves when it takes over. */
+	.fallback {
+		min-height: 60vh;
+		margin: 0;
+		padding: 0.5rem 0 40vh;
+		color: var(--text);
+		font-family: var(--font-read);
+		font-size: 1.08rem;
+		font-variant-ligatures: none;
+		line-height: 1.7;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	@media (pointer: coarse) {
+		.fallback {
+			font-size: max(16px, 1.08rem);
+		}
 	}
 </style>

@@ -37,10 +37,12 @@
 			node.affiliated && Object.keys(node.affiliated).some((k) => /^ATTR_/i.test(k))
 				? imageAttrs(node.affiliated)
 				: null}
-		<p><Inline nodes={node.children} ctx={attrs ? { ...ctx, image: attrs } : ctx} /></p>
+		{@const pctx = attrs ? { ...ctx, image: attrs } : ctx}
+		<!-- No whitespace inside: paragraphs keep their line breaks (white-space: pre-line). -->
+		<p data-pos={startOf(node)}><Inline nodes={node.children} ctx={pctx} /></p>
 	{:else if node.type === 'plain-list'}
 		{#if node.listType === 'descriptive'}
-			<dl>
+			<dl data-pos={startOf(node)}>
 				{#each node.children as item, j (j)}
 					{@const [tag, ...rest] = item.children as OrgNode[]}
 					<dt>
@@ -60,7 +62,11 @@
 				class:checklist={node.children.some((c) => c.checkbox)}
 			>
 				{#each node.children as item, j (j)}
-					<li class:checked={item.checkbox === 'on'} class:has-box={item.checkbox !== null}>
+					<li
+						data-pos={startOf(item)}
+						class:checked={item.checkbox === 'on'}
+						class:has-box={item.checkbox !== null}
+					>
 						{#if item.checkbox}
 							<input
 								type="checkbox"
@@ -81,28 +87,32 @@
 		{#if node.tableType === 'org'}
 			<OrgTable node={node as never} {ctx} />
 		{:else}
-			<pre class="block">{node.value}</pre>
+			<pre class="block" data-pos={startOf(node)}>{node.value}</pre>
 		{/if}
 	{:else if node.type === 'src-block'}
-		<figure class="code">
+		<figure class="code" data-pos={startOf(node)}>
 			{#if node.language}<figcaption>{node.language}</figcaption>{/if}
 			<pre><code
 					use:highlighted={{ code: node.value.replace(/\n$/, ''), lang: node.language ?? null }}
 				></code></pre>
 		</figure>
 	{:else if node.type === 'example-block' || node.type === 'fixed-width'}
-		<pre class="block">{node.value.replace(/\n$/, '')}</pre>
+		<pre class="block" data-pos={startOf(node)}>{node.value.replace(/\n$/, '')}</pre>
 	{:else if node.type === 'export-block'}
-		<figure class="code">
+		<figure class="code" data-pos={startOf(node)}>
 			<figcaption>export · {node.backend}</figcaption>
 			<pre><code>{node.value.replace(/\n$/, '')}</code></pre>
 		</figure>
 	{:else if node.type === 'latex-environment'}
-		<div class="math-block" use:math={{ tex: node.value, display: true, source: node.value }}></div>
+		<div
+			class="math-block"
+			data-pos={startOf(node)}
+			use:math={{ tex: node.value, display: true, source: node.value }}
+		></div>
 	{:else if node.type === 'quote-block'}
-		<blockquote><Self nodes={node.children} {ctx} /></blockquote>
+		<blockquote data-pos={startOf(node)}><Self nodes={node.children} {ctx} /></blockquote>
 	{:else if node.type === 'verse-block'}
-		<div class="verse"><Self nodes={node.children} {ctx} /></div>
+		<div class="verse" data-pos={startOf(node)}><Self nodes={node.children} {ctx} /></div>
 	{:else if node.type === 'center-block'}
 		<div class="center"><Self nodes={node.children} {ctx} /></div>
 	{:else if node.type === 'special-block'}

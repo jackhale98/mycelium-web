@@ -21,8 +21,9 @@ import {
 import {
 	Decoration,
 	EditorView,
+	showTooltip,
 	ViewPlugin,
-	WidgetType,
+	type Tooltip,
 	type DecorationSet,
 	type ViewUpdate,
 } from '@codemirror/view';
@@ -62,56 +63,42 @@ function mathmlOnly(tex: string, display: boolean): string {
 	});
 }
 
-class Preview extends WidgetType {
-	constructor(
-		readonly key: string,
-		readonly html: string | null,
-		readonly problem: string | null,
-	) {
-		super();
-	}
-	override eq(other: Preview) {
-		return other.key === this.key;
-	}
-	toDOM() {
-		const el = document.createElement('div');
-		el.className = this.problem ? 'cm-tex-preview cm-tex-problem' : 'cm-tex-preview';
-		el.setAttribute('aria-live', 'polite');
-		// KaTeX's own output (trust: false), or plain text.
-		if (this.html) el.innerHTML = this.html;
-		else el.textContent = this.problem ?? '';
-		return el;
-	}
-	override ignoreEvent() {
-		return true;
-	}
-}
-
-/** The preview widget for the formula at the cursor (block widgets need a state field). */
-function previewFor(state: EditorState): DecorationSet {
-	if (!katex) return Decoration.none;
+/**
+ * The preview of the formula at the cursor, as a tooltip under it: it floats
+ * over the text, so moving in and out of maths never pushes lines around.
+ */
+function previewFor(state: EditorState): Tooltip | null {
+	if (!katex) return null;
 	const sel = state.selection.main;
-	if (!sel.empty) return Decoration.none;
+	if (!sel.empty) return null;
 	const line = state.doc.lineAt(sel.head);
 	const frag = fragmentAt(line.text, sel.head - line.from);
-	if (!frag || !frag.tex.trim()) return Decoration.none;
+	if (!frag || !frag.tex.trim()) return null;
 	const r = check(frag.tex, frag.display);
-	if (!r) return Decoration.none;
-	const widget =
-		'html' in r
-			? new Preview(`${frag.display}${frag.tex}`, r.html, null)
-			: new Preview(`${frag.display}${frag.tex}!`, null, r.problem.message);
-	return Decoration.set([Decoration.widget({ widget, block: true, side: 1 }).range(line.to)]);
+	if (!r) return null;
+	return {
+		pos: line.from + frag.from,
+		above: false,
+		strictSide: false,
+		create() {
+			const dom = document.createElement('div');
+			dom.className = 'problem' in r ? 'cm-tex-preview cm-tex-problem' : 'cm-tex-preview';
+			// KaTeX's own output (trust: false), or plain text.
+			if ('html' in r) dom.innerHTML = r.html;
+			else dom.textContent = r.problem.message;
+			return { dom };
+		},
+	};
 }
 
-const previewField = StateField.define<DecorationSet>({
+const previewField = StateField.define<Tooltip | null>({
 	create: (state) => previewFor(state),
 	update(value, tr) {
 		if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(texReady)))
 			return previewFor(tr.state);
 		return value;
 	},
-	provide: (f) => EditorView.decorations.from(f),
+	provide: (f) => showTooltip.from(f),
 });
 
 /** Maths reads as code: the mono font, and no spell-checking of `\frac`. */
@@ -146,7 +133,7 @@ const errorMarks = ViewPlugin.fromClass(
 			);
 		}
 		build(view: EditorView): DecorationSet {
-			if (!katex) return Decoration.none;
+			// Maths gets its font straight away; error marks follow once KaTeX is in.
 			const b = new RangeSetBuilder<Decoration>();
 			for (const { from, to } of view.visibleRanges) {
 				for (let pos = from; pos <= to;) {
@@ -196,11 +183,17 @@ export function texCompletion(ctx: CompletionContext): CompletionResult | null {
 }
 
 export const texTheme = EditorView.theme({
+	'.cm-tooltip:has(> .cm-tex-preview)': {
+		border: '0',
+		background: 'transparent',
+		boxShadow: 'none',
+	},
 	'.cm-tex-preview': {
-		margin: '0.15rem 0 0.4rem',
+		maxWidth: 'min(32rem, calc(100vw - 2rem))',
+		boxShadow: 'var(--shadow-md)',
 		padding: '0.45rem 0.7rem',
-		border: '1px dashed var(--border)',
-		borderRadius: '8px',
+		border: '1px solid var(--border)',
+		borderRadius: '10px',
 		background: 'var(--surface)',
 		fontSize: '1.15em',
 		overflowX: 'auto',

@@ -50,6 +50,9 @@ export interface EditorHooks {
 /** Marks changes that came from outside the editor (so they aren't echoed back). */
 const external = Annotation.define<boolean>();
 
+/** An org bracket link, `[[target]]` or `[[target][description]]`. */
+const LINK_RE = /\[\[(?:[^\]\\]|\\.)+\](?:\[(?:[^\]]|\](?!\]))*\])?\]/g;
+
 const lineDeco = new Map<string, Decoration>();
 const markDeco = new Map<string, Decoration>();
 const hidden = Decoration.replace({});
@@ -93,12 +96,20 @@ function build(
 					? `cm-org-l-${info.kind}`
 					: null;
 		if (cls) builder.add(l.from, l.from, line(cls));
-		const active = selection.some((r) => r.from <= l.to && r.to >= l.from);
+		// A link shows its markup only while the cursor is in that link: the
+		// rest of the line keeps its folded links, so it doesn't rewrap.
+		const links = info.spans.some((sp) => sp.kind === 'link-markup')
+			? [...l.text.matchAll(LINK_RE)].map((m) => [l.from + m.index, l.from + m.index + m[0].length])
+			: [];
+		const open = (at: number) =>
+			links.some(
+				([a, b]) => a! <= at && at < b! && selection.some((r) => r.from <= b! && r.to >= a!),
+			);
 		for (const span of info.spans) {
 			if (span.from === span.to) continue;
 			const from = l.from + span.from;
 			const to = l.from + span.to;
-			if (span.kind === 'link-markup' && !active) {
+			if (span.kind === 'link-markup' && !open(from)) {
 				builder.add(from, to, hidden);
 				hiddenBuilder.add(from, to, hidden);
 			} else if (span.kind === 'link')

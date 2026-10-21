@@ -49,7 +49,13 @@
 
 <!-- Scrollable tables must be reachable by keyboard. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div class="table-wrap" role="region" aria-label={affiliated.caption ?? 'Table'} tabindex="0">
+<div
+	class="table-wrap"
+	data-pos={rows[0] ? startOf(rows[0] as unknown as OrgNode) : undefined}
+	role="region"
+	aria-label={affiliated.caption ?? 'Table'}
+	tabindex="0"
+>
 	<table id={affiliated.name ?? undefined}>
 		{#if affiliated.caption}<caption>{affiliated.caption}</caption>{/if}
 		{#if layout.colGroups.some(Boolean)}
