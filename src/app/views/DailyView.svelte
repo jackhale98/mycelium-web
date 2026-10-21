@@ -58,7 +58,7 @@
 <style>
 	.day-nav {
 		position: sticky;
-		top: 0;
+		top: var(--clock-h, 0px);
 		z-index: 5;
 		display: flex;
 		align-items: center;

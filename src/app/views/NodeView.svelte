@@ -367,8 +367,8 @@
 		.side-panel {
 			display: block;
 			position: sticky;
-			top: 0;
-			height: 100dvh;
+			top: var(--clock-h, 0px);
+			height: calc(100dvh - var(--clock-h, 0px));
 			overflow-y: auto;
 			padding: 3.25rem 1.5rem 2rem;
 			border-left: 1px solid var(--border);

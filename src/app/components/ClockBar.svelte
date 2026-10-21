@@ -17,6 +17,21 @@
 		return () => clearInterval(timer);
 	});
 
+	// Other sticky headers (the daily note's date bar) sit below the clock
+	// bar instead of sliding over it: they read its height from --clock-h.
+	let bar: HTMLDivElement | undefined = $state();
+	$effect(() => {
+		const el = bar;
+		if (!el) return;
+		const root = document.documentElement.style;
+		const ro = new ResizeObserver(() => root.setProperty('--clock-h', `${el.offsetHeight}px`));
+		ro.observe(el);
+		return () => {
+			ro.disconnect();
+			root.removeProperty('--clock-h');
+		};
+	});
+
 	const elapsed = $derived(
 		clock ? Math.max(0, Math.floor((now - clockMillis(clock.start)) / 60_000)) : 0,
 	);
@@ -31,7 +46,7 @@
 </script>
 
 {#if clock}
-	<div class="clockbar" role="status" aria-live="polite">
+	<div class="clockbar" role="status" aria-live="polite" bind:this={bar}>
 		<Icon name="clock" size={15} />
 		<a class="title" href={link}>{clock.title}</a>
 		<span class="time" title={`Since ${clock.start.date} ${clock.start.time}`}
@@ -56,7 +71,7 @@
 	.clockbar {
 		position: sticky;
 		top: 0;
-		z-index: 5;
+		z-index: 6;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;

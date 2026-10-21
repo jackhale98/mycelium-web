@@ -161,3 +161,48 @@ test('a SharePoint document library, signed in with Microsoft', async ({ page })
 		page.getByRole('heading', { name: 'SharePoint · Team notes › Documents' }),
 	).toBeVisible();
 });
+
+test('a running clock survives closing and reopening the app (WebDAV)', async ({ page }) => {
+	const server = new FakeDav('/dav', { user: 'ada', pass: 'pw' });
+	server.put('/Notes/garden.org', garden('* TODO Plant tulips\n'));
+	await vaults(page);
+	await page.route(`${RELAY}**`, async (route: Route) => {
+		const req = route.request();
+		const [, , , ...rest] = new URL(req.url()).pathname.split('/');
+		const r = server.handle(
+			req.method(),
+			`/${rest.join('/')}`,
+			req.headers(),
+			req.postData() ?? '',
+		);
+		await route.fulfill({ status: r.status, headers: { ...cors, ...r.headers }, body: r.body });
+	});
+	const button = page.getByRole('button', { name: 'Connect WebDAV / Nextcloud' });
+	test.skip((await button.count()) === 0, 'build has no relay');
+	await button.click();
+	await page.getByLabel('Server address').fill('https://cloud.test/dav');
+	await page.getByLabel('User name').fill('ada');
+	await page.getByLabel('App password').fill('pw');
+	await page.getByRole('button', { name: 'Connect', exact: true }).click();
+	await page.getByRole('button', { name: 'Notes' }).click();
+	await page.getByRole('button', { name: 'Use Notes' }).click();
+	await expect(page).toHaveURL(/#\/$/, { timeout: 15_000 });
+
+	await page.goto('app#/node/garden-1');
+	const section = page.locator('.org-section', { hasText: 'Plant tulips' }).first();
+	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await page.getByRole('button', { name: 'Clock in' }).click();
+	await expect(page.locator('.clockbar')).toContainText('Plant tulips');
+
+	// Closed straight away (before the upload), then reopened.
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.locator('.clockbar')).toContainText('Plant tulips');
+	await expect
+		.poll(() => server.text('/Notes/garden.org'), { timeout: 15_000 })
+		.toMatch(/CLOCK: \[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\]\n/);
+	// And again once uploaded.
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.locator('.clockbar')).toContainText('Plant tulips');
+});
