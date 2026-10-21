@@ -187,12 +187,18 @@
 	<div class="node-layout" class:with-panel={app.panelOpen}>
 		<article class="node" aria-labelledby="node-title" bind:this={article}>
 			<div class="float-wrap" bind:this={floatWrap}>
-				<div class="toolbar floating" class:shown={floating} inert={!floating}>
+				<div
+					class="toolbar floating"
+					class:shown={floating}
+					inert={!floating}
+					aria-hidden={!floating}
+				>
 					{@render tools(node)}
 				</div>
 			</div>
 			<header class="node-header" bind:this={header}>
-				<div class="toolbar">{@render tools(node)}</div>
+				<!-- While its floating copy is showing, this one (off screen) steps out of the way. -->
+				<div class="toolbar" inert={floating} aria-hidden={floating}>{@render tools(node)}</div>
 				<nav class="crumbs" aria-label="Location">
 					{#if eyebrow}
 						<span class="path">{eyebrow}</span>
