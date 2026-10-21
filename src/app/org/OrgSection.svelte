@@ -50,7 +50,7 @@
 	};
 </script>
 
-{#if headline && !headline.commented}
+{#if headline && !headline.commented && !(done && ctx.interactive && app.hideDone)}
 	<section class="org-section" data-level={headline.level} data-pos={offset}>
 		<div class="heading-row">
 			<button

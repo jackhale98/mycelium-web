@@ -102,6 +102,19 @@
 		if (press) clearTimeout(press);
 		press = null;
 	}
+
+	/**
+	 * Where the heading is in its file, as an org line-number search (`::42`),
+	 * so a note opens scrolled to the entry rather than at its top.
+	 */
+	function lineAt(item: { file: string; pos: number }): string | null {
+		const source = app.vault.file(item.file)?.source;
+		if (!source) return null;
+		let line = 1;
+		for (let i = source.indexOf('\n'); i !== -1 && i < item.pos; i = source.indexOf('\n', i + 1))
+			line += 1;
+		return String(line);
+	}
 </script>
 
 {#snippet itemRow(item: AgendaItem, time: string | null)}
@@ -136,9 +149,11 @@
 			{#if time}<span class="at">{time}</span>{/if}
 			<a
 				class="title"
-				href={item.id || item.node?.id
-					? href.node((item.id ?? item.node?.id)!)
-					: href.file(item.file)}
+				href={item.id
+					? href.node(item.id)
+					: item.node?.id
+						? href.node(item.node.id, lineAt(item))
+						: href.file(item.file, lineAt(item))}
 			>
 				{#if item.priority}<span class="prio">{item.priority}</span>{/if}{item.title}
 			</a>

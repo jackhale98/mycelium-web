@@ -80,6 +80,7 @@ export type ThemeChoice = 'system' | 'light' | 'dark';
 const THEME_KEY = 'mycelium:theme';
 const TEXT_SIZE_KEY = 'mycelium:text-size';
 const LINE_BREAKS_KEY = 'mycelium:line-breaks';
+const HIDE_DONE_KEY = 'mycelium:hide-done';
 /** Text-size steps, in percent of the browser's default size. */
 export const TEXT_SIZES = [
 	{ value: 90, label: 'Small' },
@@ -213,6 +214,8 @@ class AppState {
 	 * notes hard-wrapped with M-q.
 	 */
 	joinLines = $state(readLocal(LINE_BREAKS_KEY) === 'join');
+	/** Reading view leaves out headings marked with a done keyword (and what's under them). */
+	hideDone = $state(readLocal(HIDE_DONE_KEY) === '1');
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
@@ -402,6 +405,11 @@ class AppState {
 		writeLocal(TEXT_SIZE_KEY, size === 100 ? null : String(size));
 		if (size === 100) document.documentElement.style.removeProperty('--text-scale');
 		else document.documentElement.style.setProperty('--text-scale', `${size}%`);
+	}
+
+	setHideDone(hide: boolean) {
+		this.hideDone = hide;
+		writeLocal(HIDE_DONE_KEY, hide ? '1' : null);
 	}
 
 	setJoinLines(join: boolean) {

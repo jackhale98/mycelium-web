@@ -69,6 +69,23 @@
 	});
 
 	const refs = $derived(node?.refs ?? []);
+
+	/** Headings marked done in what this page shows (for the Hide done button). */
+	const doneCount = $derived.by(() => {
+		void app.rev;
+		if (!node) return 0;
+		const file = app.vault.file(node.file);
+		if (!file) return 0;
+		const done = new Set(file.index.keywords.doneKeywords);
+		const all = file.index.headlines;
+		const end =
+			node.level > 0
+				? (all.find((h) => h.pos > node.pos && h.level <= node.level)?.pos ?? Infinity)
+				: Infinity;
+		return all.filter(
+			(h) => h.pos > (node.level > 0 ? node.pos : -1) && h.pos < end && h.todo && done.has(h.todo),
+		).length;
+	});
 	const done = $derived(!!node?.todo && keywords.doneKeywords.includes(node.todo));
 
 	$effect(() => {
@@ -161,13 +178,25 @@
 		title="Graph around this note"
 		aria-label="Graph around this note"><Icon name="graph" size={15} /></a
 	>
+	{#if !app.editing && (doneCount > 0 || app.hideDone)}
+		<button
+			type="button"
+			class="btn small"
+			aria-pressed={app.hideDone}
+			title={app.hideDone ? 'Show items marked done' : 'Hide items marked done'}
+			onclick={() => app.setHideDone(!app.hideDone)}
+			><Icon name={app.hideDone ? 'eyeOff' : 'check'} size={14} /><span class="label"
+				>{app.hideDone ? `${doneCount} done hidden` : 'Hide done'}</span
+			></button
+		>
+	{/if}
 	{#if n.level > 0 && !app.editing}
 		<button
 			type="button"
 			class="btn small"
 			aria-haspopup="dialog"
 			onclick={() => (app.headingSheet = { path: n.file, pos: n.pos })}
-			><Icon name="settings" size={14} />Properties</button
+			><Icon name="settings" size={14} /><span class="label">Properties</span></button
 		>
 	{/if}
 	<button
@@ -312,9 +341,40 @@
 		margin: 0 auto;
 		padding: 3.25rem 3rem 6rem;
 	}
+	/* The breadcrumb and the toolbar share the first row: the breadcrumb gets
+	   whatever room the buttons leave (and wraps), so they never overlap. */
 	.node-header {
 		position: relative;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		column-gap: 0.75rem;
 		margin-bottom: 2rem;
+	}
+	.node-header > :global(*) {
+		grid-column: 1 / -1;
+	}
+	.node-header > .toolbar {
+		position: static;
+		grid-column: 2;
+		grid-row: 1;
+		align-self: start;
+		margin-top: -0.35rem;
+	}
+	.node-header > .crumbs {
+		grid-column: 1;
+		grid-row: 1;
+		padding-right: 0;
+	}
+	/* Narrow screens: secondary buttons show just their icon (the label stays for screen readers). */
+	@media (max-width: 720px) {
+		.toolbar .label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+		}
 	}
 	.toolbar {
 		position: absolute;

@@ -945,6 +945,38 @@ test('dragging a node in the graph moves it with the pointer, zoomed in or not',
 	await expect.poll(overNode).toBe(true);
 });
 
+test('opening a TODO from the agenda goes to its heading, not the top of the note', async ({
+	page,
+}) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('link', { name: 'Write the self-hosting guide' }).first().click();
+	await expect(page).toHaveURL(/at=\d+/);
+	const heading = page.locator('.org-section', { hasText: 'Write the self-hosting guide' }).first();
+	await expect(heading).toBeInViewport();
+	await expect(heading).toHaveClass(/flash/);
+});
+
+test('reading view can hide items marked done', async ({ page }) => {
+	await open(page, `app#/node/${READING}`);
+	const done = page.locator('.org-section', { hasText: 'The Hidden Life of Trees' }).first();
+	await expect(done).toBeVisible();
+	await page.getByRole('button', { name: 'Hide done' }).click();
+	await expect(done).toHaveCount(0);
+	// Remembered on this device.
+	await page.reload();
+	await expect(page.getByRole('button', { name: /1 done hidden/ })).toHaveAttribute(
+		'aria-pressed',
+		'true',
+	);
+	await expect(page.locator('.org-section', { hasText: 'The Hidden Life of Trees' })).toHaveCount(
+		0,
+	);
+	await page.getByRole('button', { name: /done hidden/ }).click();
+	await expect(
+		page.locator('.org-section', { hasText: 'The Hidden Life of Trees' }).first(),
+	).toBeVisible();
+});
+
 test('a page whose code vanished in a deploy reloads, then explains instead of going blank', async ({
 	page,
 }) => {
