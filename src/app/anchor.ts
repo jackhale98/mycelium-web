@@ -20,6 +20,12 @@ function topEdge(within: HTMLElement): number {
 	return Math.max(v, clock);
 }
 
+/**
+ * The part of a block to line up: for a heading's section, its heading row
+ * (the section's box starts with the spacing above the heading).
+ */
+const landmark = (el: Element) => el.querySelector(':scope > .heading-row') ?? el;
+
 /** The page's scroller: the main column on wide screens, the page itself on phones. */
 function scroller(): { by: (dy: number) => void } {
 	const main = document.getElementById('main-content');
@@ -38,7 +44,7 @@ export function readingAnchor(container: HTMLElement): Anchor | null {
 	let straddling: Anchor | null = null;
 	let below: Anchor | null = null;
 	for (const el of container.querySelectorAll('[data-pos]')) {
-		const r = el.getBoundingClientRect();
+		const r = landmark(el).getBoundingClientRect();
 		const pos = Number(el.getAttribute('data-pos'));
 		if (r.height === 0 || !Number.isFinite(pos) || r.bottom <= edge) continue;
 		if (r.top <= edge) {
@@ -63,7 +69,7 @@ export function restoreReading(container: HTMLElement, a: Anchor) {
 		}
 	}
 	if (!el) return;
-	scroller().by(el.getBoundingClientRect().top - a.y);
+	scroller().by(landmark(el).getBoundingClientRect().top - a.y);
 }
 
 /** In the editor: the line at the top of the screen. */
@@ -71,7 +77,15 @@ export function editorAnchor(view: EditorView, container: HTMLElement): Anchor |
 	const top = topEdge(container);
 	const into = Math.max(0, top - view.documentTop);
 	if (into > view.contentHeight) return null;
-	const block = view.lineBlockAtHeight(into);
+	// The first line fully on screen that has text: a blank line, or one cut
+	// off at the top, has no matching block in reading view.
+	let block = view.lineBlockAtHeight(into);
+	for (let i = 0; i < 12 && block.to < view.state.doc.length; i += 1) {
+		const partly = block.top + view.documentTop < top - 1;
+		const blank = !view.state.sliceDoc(block.from, block.to).trim();
+		if (!partly && !blank) break;
+		block = view.lineBlockAt(block.to + 1);
+	}
 	return { pos: block.from, y: block.top + view.documentTop };
 }
 

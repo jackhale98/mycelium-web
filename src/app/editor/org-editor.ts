@@ -305,9 +305,11 @@ const theme = EditorView.theme({
 		borderColor: 'var(--border)',
 	},
 	'.cm-org-h': { fontFamily: 'var(--font-read)', fontWeight: '650', color: 'var(--text)' },
-	'.cm-org-h1': { fontSize: '1.45em' },
-	'.cm-org-h2': { fontSize: '1.25em' },
-	'.cm-org-h3': { fontSize: '1.1em' },
+	// Close to body size while editing: weight and the stars show the outline;
+	// reading view keeps the big headings.
+	'.cm-org-h1': { fontSize: '1.15em' },
+	'.cm-org-h2': { fontSize: '1.08em' },
+	'.cm-org-h3': { fontSize: '1.03em' },
 	'.cm-org-stars': {
 		color: 'var(--text-faint)',
 		fontFamily: 'var(--font-mono)',
@@ -336,7 +338,7 @@ const theme = EditorView.theme({
 	},
 	'.cm-org-keyword, .cm-org-drawer, .cm-org-block-delim, .cm-org-property, .cm-org-planning, .cm-org-markup, .cm-org-table':
 		{ color: 'var(--text-faint)' },
-	'.cm-org-title': { fontFamily: 'var(--font-read)', fontSize: '1.35em', fontWeight: '600' },
+	'.cm-org-title': { fontFamily: 'var(--font-read)', fontSize: '1.15em', fontWeight: '600' },
 	'.cm-org-l-block': { background: 'var(--surface-2)' },
 	'.cm-org-l-drawer, .cm-org-l-planning': { fontSize: '0.85em' },
 	'.cm-org-comment': { color: 'var(--text-muted)', fontStyle: 'italic' },
