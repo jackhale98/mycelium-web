@@ -125,7 +125,7 @@ test('open an empty repository, write the first note and push it', async ({ page
 	await page.keyboard.type('First note');
 	await page.getByRole('option', { name: /Create note “First note”/ }).click();
 	await page.getByRole('button', { name: 'Create and edit' }).click();
-	await expect(page.locator('.cm-content')).toContainText('#+title: First note');
+	await expect(page.locator('.cm-content')).toContainText('First note');
 
 	await page.goto('app#/changes');
 	await page.getByLabel('Commit message').fill('Start my notes');

@@ -134,6 +134,28 @@
 				HTML export does; pick it if you wrap lines with M-q.
 			</p>
 		</div>
+		<div class="field">
+			<span class="label" id="ed-label">Editor</span>
+			<div class="segmented" role="radiogroup" aria-labelledby="ed-label">
+				<button
+					type="button"
+					role="radio"
+					aria-checked={app.livePreview}
+					onclick={() => app.setLivePreview(true)}>Live preview</button
+				>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={!app.livePreview}
+					onclick={() => app.setLivePreview(false)}>Source</button
+				>
+			</div>
+			<p class="hint">
+				Live preview hides markup (emphasis marks, leading stars, link brackets) except where the
+				cursor is, draws bullets and checkboxes, and typesets maths. Source shows the org text as it
+				is.
+			</p>
+		</div>
 	</section>
 
 	<section class="panel stack" aria-labelledby="workflow-h">

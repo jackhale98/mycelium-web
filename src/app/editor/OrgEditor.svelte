@@ -31,6 +31,7 @@
 	let host: HTMLDivElement | undefined = $state();
 	let view: EditorView | null = null;
 	let sync: ((view: EditorView, text: string) => void) | null = null;
+	let refresh: ((view: EditorView) => void) | null = null;
 	let pending: string | null = null;
 	let focused = $state(false);
 	let level = $state(0);
@@ -60,51 +61,55 @@
 	$effect(() => {
 		if (!host) return;
 		let cancelled = false;
-		void loadEditor().then(([{ createEditor, syncEditor }, format, cm, list, table, tex]) => {
-			if (cancelled || !host) return;
-			tables = table;
-			texTools = tex;
-			commands = format;
-			history = cm;
-			lists = list;
-			sync = syncEditor;
-			view = createEditor(
-				host.shadowRoot ?? host.attachShadow({ mode: 'open' }),
-				app.vault.file(path)?.source ?? '',
-				{
-					keywords: () => app.vault.file(path)?.index.keywords ?? app.vault.keywords,
-					nodes: () => app.vault.nodes.values(),
-					createNode: (title) => app.createNode(title),
-					follow,
-					onImage(file, pos) {
-						if (view) addImage(view, file, pos);
+		void loadEditor().then(
+			([{ createEditor, syncEditor, refreshPreview }, format, cm, list, table, tex]) => {
+				if (cancelled || !host) return;
+				tables = table;
+				texTools = tex;
+				commands = format;
+				history = cm;
+				lists = list;
+				sync = syncEditor;
+				refresh = refreshPreview;
+				view = createEditor(
+					host.shadowRoot ?? host.attachShadow({ mode: 'open' }),
+					app.vault.file(path)?.source ?? '',
+					{
+						keywords: () => app.vault.file(path)?.index.keywords ?? app.vault.keywords,
+						livePreview: () => app.livePreview,
+						nodes: () => app.vault.nodes.values(),
+						createNode: (title) => app.createNode(title),
+						follow,
+						onImage(file, pos) {
+							if (view) addImage(view, file, pos);
+						},
+						onCursor(v) {
+							focused = v.hasFocus;
+							level = format.headingLevelAt(v.state);
+						},
+						onChange(text) {
+							pending = text;
+							if (timer) clearTimeout(timer);
+							timer = setTimeout(save, 350);
+						},
 					},
-					onCursor(v) {
-						focused = v.hasFocus;
-						level = format.headingLevelAt(v.state);
-					},
-					onChange(text) {
-						pending = text;
-						if (timer) clearTimeout(timer);
-						timer = setTimeout(save, 350);
-					},
-				},
-				label,
-			);
-			ready = true;
-			const v = view;
-			if (anchor) {
-				// Same place on screen as in reading: no jump.
-				v.dispatch({ selection: { anchor: Math.min(anchor.pos, v.state.doc.length) } });
-				restoreEditor(v, anchor);
-				requestAnimationFrame(() => restoreEditor(v, anchor));
-			} else if (focusAt !== null) {
-				const at = Math.min(focusAt, v.state.doc.length);
-				const lineEnd = v.state.doc.lineAt(at).to;
-				v.dispatch({ selection: { anchor: lineEnd }, scrollIntoView: true });
-			}
-			v.focus();
-		});
+					label,
+				);
+				ready = true;
+				const v = view;
+				if (anchor) {
+					// Same place on screen as in reading: no jump.
+					v.dispatch({ selection: { anchor: Math.min(anchor.pos, v.state.doc.length) } });
+					restoreEditor(v, anchor);
+					requestAnimationFrame(() => restoreEditor(v, anchor));
+				} else if (focusAt !== null) {
+					const at = Math.min(focusAt, v.state.doc.length);
+					const lineEnd = v.state.doc.lineAt(at).to;
+					v.dispatch({ selection: { anchor: lineEnd }, scrollIntoView: true });
+				}
+				v.focus();
+			},
+		);
 		return () => {
 			cancelled = true;
 			save();
@@ -307,6 +312,12 @@
 			sel?.setBaseAndExtent(a.node, a.offset, h.node, h.offset);
 		});
 	}
+
+	// The live preview setting takes effect at once.
+	$effect(() => {
+		void app.livePreview;
+		if (view) refresh?.(view);
+	});
 
 	// Changes made elsewhere (a TODO toggled, a pull) flow into the editor.
 	$effect(() => {

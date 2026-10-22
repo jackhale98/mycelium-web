@@ -10,6 +10,10 @@ async function open(page: Page, path: string) {
 	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
 }
 
+/** The editor shows plain source (no live preview), for tests reading its lines. */
+const sourceMode = (page: Page) =>
+	page.addInitScript(() => localStorage.setItem('mycelium:editor-mode', 'source'));
+
 async function expectAccessible(page: Page) {
 	const results = await new AxeBuilder({ page })
 		.withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -456,7 +460,9 @@ test('new note dialog creates a note and opens the editor', async ({ page }) => 
 	await page.getByRole('option', { name: /Create note “Lichen symbiosis”/ }).click();
 	await page.getByRole('textbox', { name: /^Tags/ }).fill('biology');
 	await page.getByRole('button', { name: 'Create and edit' }).click();
-	await expect(page.locator('.cm-content')).toContainText('#+title: Lichen symbiosis');
+	// Live preview: the title shows without its `#+title:` (the line's text is unchanged).
+	await expect(page.locator('.cm-content')).toContainText('Lichen symbiosis');
+	await expect(page.locator('.cm-content')).not.toContainText('#+title:');
 	await expect(page.locator('.cm-content')).toContainText('#+filetags: :biology:');
 });
 
@@ -652,6 +658,7 @@ test('agenda views can be named, saved, renamed and opened from the palette', as
 });
 
 test('lists continue on Enter and indent with Tab in the editor', async ({ page }) => {
+	await sourceMode(page);
 	await open(page, `app#/node/${PROJECT}`);
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const editor = page.locator('.cm-content');
@@ -680,7 +687,42 @@ test('lists continue on Enter and indent with Tab in the editor', async ({ page 
 	await last(4).toEqual(['- [ ] milk', '  - [ ] oat', '- [ ] eggs', 'done']);
 });
 
+test('live preview hides markup away from the cursor; checkboxes tick; Source shows it all', async ({
+	page,
+}) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editor = page.locator('.cm-content');
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText('\n- [ ] eggs, *fresh* ones\n\\(x^2\\) here\nend');
+	const line = editor.locator('.cm-line', { hasText: 'eggs' });
+	// The cursor is on the last line: the item shows a dot, a box, and no stars.
+	await expect(line).toHaveText('•  eggs, fresh ones');
+	await expect(line.locator('.cm-org-dot')).toHaveCount(1);
+	await expect(editor.locator('.cm-tex-shown math')).toHaveCount(1, { timeout: 10_000 });
+	// Ticking the box writes [X] into the note.
+	await line.locator('input.cm-org-box').click();
+	await expect(line.locator('input.cm-org-box')).toBeChecked();
+	// Markup shows piece by piece, where the cursor is.
+	await line.getByText('fresh').click();
+	await expect(line).toHaveText('•  eggs, *fresh* ones');
+
+	await page.goto(page.url().replace(/#.*/, '#/settings'));
+	await page.getByRole('radio', { name: 'Source' }).click();
+	await page.goBack();
+	// (Still editing: the note reopens in the editor.)
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await expect(editor.locator('.cm-line', { hasText: 'eggs' })).toHaveText(
+		'- [X] eggs, *fresh* ones',
+	);
+	await expect(editor).toContainText('#+title:');
+	await expect(editor.locator('.cm-tex-shown')).toHaveCount(0);
+});
+
 test('the formatting bar shapes the line, and reading keeps line breaks', async ({ page }) => {
+	await sourceMode(page);
 	await open(page, `app#/node/${PROJECT}`);
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const editor = page.locator('.cm-content');

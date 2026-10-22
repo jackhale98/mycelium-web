@@ -81,6 +81,7 @@ const THEME_KEY = 'mycelium:theme';
 const TEXT_SIZE_KEY = 'mycelium:text-size';
 const LINE_BREAKS_KEY = 'mycelium:line-breaks';
 const HIDE_DONE_KEY = 'mycelium:hide-done';
+const EDITOR_MODE_KEY = 'mycelium:editor-mode';
 /** Text-size steps, in percent of the browser's default size. */
 export const TEXT_SIZES = [
 	{ value: 90, label: 'Small' },
@@ -216,6 +217,8 @@ class AppState {
 	joinLines = $state(readLocal(LINE_BREAKS_KEY) === 'join');
 	/** Reading view leaves out headings marked with a done keyword (and what's under them). */
 	hideDone = $state(readLocal(HIDE_DONE_KEY) === '1');
+	/** The editor hides markup away from the cursor (live preview), or shows plain source. */
+	livePreview = $state(readLocal(EDITOR_MODE_KEY) !== 'source');
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
@@ -405,6 +408,11 @@ class AppState {
 		writeLocal(TEXT_SIZE_KEY, size === 100 ? null : String(size));
 		if (size === 100) document.documentElement.style.removeProperty('--text-scale');
 		else document.documentElement.style.setProperty('--text-scale', `${size}%`);
+	}
+
+	setLivePreview(live: boolean) {
+		this.livePreview = live;
+		writeLocal(EDITOR_MODE_KEY, live ? null : 'source');
 	}
 
 	setHideDone(hide: boolean) {

@@ -1,7 +1,8 @@
 /// LaTeX help in the source editor: the formula under the cursor is
 /// previewed just below its line (or the problem with it explained),
 /// fragments KaTeX can't typeset get a wavy underline with the reason, and
-/// typing `\` inside maths offers commands and snippets. KaTeX loads only
+/// typing `\` inside maths offers commands and snippets. In live preview,
+/// inline maths away from the cursor shows typeset. KaTeX loads only
 /// once a note has maths in it; the preview uses MathML, which browsers
 /// draw themselves (the editor lives in a shadow root, beyond the page's CSS).
 
@@ -23,6 +24,7 @@ import {
 	EditorView,
 	showTooltip,
 	ViewPlugin,
+	WidgetType,
 	type Tooltip,
 	type DecorationSet,
 	type ViewUpdate,
@@ -104,62 +106,99 @@ const previewField = StateField.define<Tooltip | null>({
 /** Maths reads as code: the mono font, and no spell-checking of `\frac`. */
 const texMark = Decoration.mark({ class: 'cm-tex', attributes: { spellcheck: 'false' } });
 
-const errorMarks = ViewPlugin.fromClass(
-	class {
-		decorations: DecorationSet = Decoration.none;
-		constructor(view: EditorView) {
-			this.load(view);
-			this.decorations = this.build(view);
-		}
-		update(u: ViewUpdate) {
-			if (u.docChanged) this.load(u.view);
-			if (
-				u.docChanged ||
-				u.viewportChanged ||
-				u.transactions.some((t) => t.effects.some((e) => e.is(texReady)))
-			)
-				this.decorations = this.build(u.view);
-		}
-		/** Fetch KaTeX the first time the note shows signs of maths. */
-		load(view: EditorView) {
-			if (katex || loading) return;
-			const { from, to } = view.viewport;
-			if (!MAYBE_MATH.test(view.state.sliceDoc(from, to))) return;
-			loading = import('katex').then((m) => (katex = m.default));
-			// A failed download (offline, or a deploy in between) is retried next time.
-			loading.then(
-				() => view.dispatch({ effects: texReady.of(null) }),
-				() => (loading = null),
-			);
-		}
-		build(view: EditorView): DecorationSet {
-			// Maths gets its font straight away; error marks follow once KaTeX is in.
-			const b = new RangeSetBuilder<Decoration>();
-			for (const { from, to } of view.visibleRanges) {
-				for (let pos = from; pos <= to;) {
-					const line = view.state.doc.lineAt(pos);
-					if (MAYBE_MATH.test(line.text))
-						for (const f of fragmentsIn(line.text)) {
-							const r = check(f.tex, f.display);
-							b.add(
-								line.from + f.from,
-								line.from + f.to,
-								r && 'problem' in r
-									? Decoration.mark({
-											class: 'cm-tex cm-tex-error',
-											attributes: { title: r.problem.message, spellcheck: 'false' },
-										})
-									: texMark,
-							);
-						}
-					pos = line.to + 1;
-				}
+/** Redraw the marks (after the live preview setting changes). */
+export const texRedraw = StateEffect.define<null>();
+
+/** A typeset formula standing in for its source. */
+class MathWidget extends WidgetType {
+	constructor(readonly html: string) {
+		super();
+	}
+	override eq(other: MathWidget) {
+		return other.html === this.html;
+	}
+	toDOM() {
+		const el = document.createElement('span');
+		el.className = 'cm-tex-shown';
+		// KaTeX's own MathML output (trust: false).
+		el.innerHTML = this.html;
+		return el;
+	}
+}
+
+const errorMarks = (live: () => boolean) =>
+	ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet = Decoration.none;
+			constructor(view: EditorView) {
+				this.load(view);
+				this.decorations = this.build(view);
 			}
-			return b.finish();
-		}
-	},
-	{ decorations: (v) => v.decorations },
-);
+			update(u: ViewUpdate) {
+				if (u.docChanged) this.load(u.view);
+				if (
+					u.docChanged ||
+					u.viewportChanged ||
+					(u.selectionSet && live()) ||
+					u.transactions.some((t) => t.effects.some((e) => e.is(texReady) || e.is(texRedraw)))
+				)
+					this.decorations = this.build(u.view);
+			}
+			/** Fetch KaTeX the first time the note shows signs of maths. */
+			load(view: EditorView) {
+				if (katex || loading) return;
+				const { from, to } = view.viewport;
+				if (!MAYBE_MATH.test(view.state.sliceDoc(from, to))) return;
+				loading = import('katex').then((m) => (katex = m.default));
+				// A failed download (offline, or a deploy in between) is retried next time.
+				loading.then(
+					() => view.dispatch({ effects: texReady.of(null) }),
+					() => (loading = null),
+				);
+			}
+			build(view: EditorView): DecorationSet {
+				// Maths gets its font straight away; error marks follow once KaTeX is in.
+				const b = new RangeSetBuilder<Decoration>();
+				const preview = live();
+				const sel = view.state.selection.ranges;
+				for (const { from, to } of view.visibleRanges) {
+					for (let pos = from; pos <= to;) {
+						const line = view.state.doc.lineAt(pos);
+						if (MAYBE_MATH.test(line.text))
+							for (const f of fragmentsIn(line.text)) {
+								const r = check(f.tex, f.display);
+								const a = line.from + f.from;
+								const z = line.from + f.to;
+								if (
+									preview &&
+									!f.display &&
+									r &&
+									'html' in r &&
+									f.tex.trim() &&
+									!sel.some((s) => s.from <= z && s.to >= a)
+								) {
+									b.add(a, z, Decoration.replace({ widget: new MathWidget(r.html) }));
+									continue;
+								}
+								b.add(
+									line.from + f.from,
+									line.from + f.to,
+									r && 'problem' in r
+										? Decoration.mark({
+												class: 'cm-tex cm-tex-error',
+												attributes: { title: r.problem.message, spellcheck: 'false' },
+											})
+										: texMark,
+								);
+							}
+						pos = line.to + 1;
+					}
+				}
+				return b.finish();
+			}
+		},
+		{ decorations: (v) => v.decorations },
+	);
 
 /** `\` inside maths: LaTeX commands and the palette's snippets. */
 const OPTIONS: Completion[] = TEX_GROUPS.flatMap((g) =>
@@ -204,6 +243,7 @@ export const texTheme = EditorView.theme({
 		fontFamily: 'var(--font-ui)',
 		fontSize: '0.85em',
 	},
+	'.cm-tex-shown': { padding: '0 0.1em', cursor: 'text' },
 	'.cm-tex': { fontFamily: 'var(--font-mono)', fontSize: '0.88em' },
 	'.cm-tex-error': {
 		textDecoration: 'underline wavy var(--todo)',
@@ -212,4 +252,8 @@ export const texTheme = EditorView.theme({
 	},
 });
 
-export const texSupport: Extension = [previewField, errorMarks, texTheme];
+export const texSupport = (live: () => boolean): Extension => [
+	previewField,
+	errorMarks(live),
+	texTheme,
+];

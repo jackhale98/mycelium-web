@@ -12,18 +12,31 @@ import {
 	type CompletionContext,
 	type CompletionResult,
 } from '@codemirror/autocomplete';
-import { continueList, indentItem, outdentItem, toggleItemCheckbox } from './list-commands';
+import {
+	checkboxToggle,
+	continueList,
+	indentItem,
+	outdentItem,
+	toggleItemCheckbox,
+} from './list-commands';
 import * as table from './table-commands';
-import { texCompletion, texSupport } from './tex-editor';
+import { texCompletion, texRedraw, texSupport } from './tex-editor';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
-import { Annotation, EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
+import {
+	Annotation,
+	EditorState,
+	RangeSetBuilder,
+	StateEffect,
+	type Extension,
+} from '@codemirror/state';
 import {
 	Decoration,
 	drawSelection,
 	EditorView,
 	keymap,
 	ViewPlugin,
+	WidgetType,
 	type DecorationSet,
 	type ViewUpdate,
 } from '@codemirror/view';
@@ -43,6 +56,8 @@ export interface EditorHooks {
 	/** Follow a link target (`id:…`, `https:…`). */
 	follow: (target: string) => void;
 	onChange: (text: string) => void;
+	/** Live preview (markup hidden away from the cursor), or plain source. */
+	livePreview?: () => boolean;
 	/** A picture was pasted or dropped at `pos`. */
 	onImage?: (file: File, pos: number) => void;
 	/** Focus moved in or out, or the cursor moved (for the formatting bar). */
@@ -75,9 +90,64 @@ function spanClass(span: HighlightSpan): string {
 	return `cm-org-${span.kind}`;
 }
 
+/** Redraw decorations (after the live preview setting changes). */
+export const redecorate = StateEffect.define<null>();
+
+/** Switch between live preview and source after the setting changes. */
+export function refreshPreview(view: EditorView) {
+	view.dispatch({ effects: [redecorate.of(null), texRedraw.of(null)] });
+}
+
+/** A `-` or `+` bullet, drawn as a dot. */
+class BulletWidget extends WidgetType {
+	override eq() {
+		return true;
+	}
+	toDOM() {
+		const el = document.createElement('span');
+		el.className = 'cm-org-dot';
+		el.textContent = '•';
+		return el;
+	}
+}
+const bullet = Decoration.replace({ widget: new BulletWidget() });
+
+/** A checkbox you can tick, standing in for `[ ]` / `[X]` / `[-]`. */
+class CheckboxWidget extends WidgetType {
+	constructor(readonly state: string) {
+		super();
+	}
+	override eq(other: CheckboxWidget) {
+		return other.state === this.state;
+	}
+	toDOM(view: EditorView) {
+		const box = document.createElement('input');
+		box.type = 'checkbox';
+		box.className = 'cm-org-box';
+		box.checked = this.state !== ' ';
+		box.indeterminate = this.state === '-';
+		box.setAttribute('aria-label', 'Toggle item');
+		box.addEventListener('mousedown', (e) => e.preventDefault());
+		box.addEventListener('click', (e) => {
+			e.preventDefault();
+			const changes = checkboxToggle(view.state, view.posAtDOM(box));
+			if (changes) view.dispatch({ changes, userEvent: 'input' });
+		});
+		return box;
+	}
+	override ignoreEvent() {
+		return true;
+	}
+}
+const checkboxes = new Map<string, Decoration>();
+const checkbox = (state: string) =>
+	checkboxes.get(state) ??
+	checkboxes.set(state, Decoration.replace({ widget: new CheckboxWidget(state) })).get(state)!;
+
 function build(
 	view: EditorView,
 	keywords: KeywordConfig,
+	live: boolean,
 ): { all: DecorationSet; hidden: DecorationSet } {
 	const doc = view.state.doc;
 	const builder = new RangeSetBuilder<Decoration>();
@@ -107,13 +177,46 @@ function build(
 			links.some(
 				([a, b]) => a! <= at && at < b! && selection.some((r) => r.from <= b! && r.to >= a!),
 			);
-		for (const span of info.spans) {
+		// Live preview: other markup hides too, each piece only where the cursor isn't.
+		const touched = (a: number, b: number) => selection.some((r) => r.from <= b && r.to >= a);
+		const lineActive = touched(l.from, l.to);
+		const hide = (from: number, to: number, deco: Decoration = hidden) => {
+			builder.add(from, to, deco);
+			hiddenBuilder.add(from, to, deco);
+		};
+		const spans = info.spans;
+		for (let i = 0; i < spans.length; i++) {
+			const span = spans[i]!;
 			if (span.from === span.to) continue;
 			const from = l.from + span.from;
 			const to = l.from + span.to;
-			if (span.kind === 'link-markup' && !open(from)) {
-				builder.add(from, to, hidden);
-				hiddenBuilder.add(from, to, hidden);
+			if (live && span.kind === 'markup' && info.kind !== 'table') {
+				// (Not in tables: hiding marks there would knock the columns out of line.)
+				// Emphasis comes as marker, text, marker: hide both markers unless the
+				// cursor is in that span.
+				const pair = spans[i + 2]?.kind === 'markup' ? spans[i + 2]! : null;
+				const close = !pair && spans[i - 2]?.kind === 'markup' ? spans[i - 2]! : null;
+				const a = l.from + (pair ? span.from : (close?.from ?? span.from));
+				const b = l.from + (pair ? pair.to : span.to);
+				if (!touched(a, b)) hide(from, to);
+				else builder.add(from, to, mark(spanClass(span)));
+			} else if (live && span.kind === 'stars' && !lineActive && span.to > 1) {
+				// org-hide-leading-stars: only the last star shows; widths don't change.
+				builder.add(from, to - 1, mark('cm-org-stars cm-org-lead'));
+				builder.add(to - 1, to, mark('cm-org-stars'));
+			} else if (live && span.kind === 'keyword' && !lineActive && /^#\+title:/i.test(l.text)) {
+				hide(from, Math.min(l.to, to + (/^[ \t]*/.exec(l.text.slice(span.to))?.[0].length ?? 0)));
+			} else if (
+				live &&
+				span.kind === 'bullet' &&
+				/^[-+]$/.test(l.text.slice(span.from, span.to)) &&
+				!touched(from, to + 1)
+			) {
+				hide(from, to, bullet);
+			} else if (live && span.kind === 'checkbox' && !touched(from, to)) {
+				hide(from, to, checkbox(span.data ?? ' '));
+			} else if (span.kind === 'link-markup' && !open(from)) {
+				hide(from, to);
 			} else if (span.kind === 'link')
 				builder.add(
 					from,
@@ -135,11 +238,24 @@ function orgHighlight(hooks: EditorHooks): Extension {
 			decorations: DecorationSet;
 			hidden: DecorationSet;
 			constructor(view: EditorView) {
-				({ all: this.decorations, hidden: this.hidden } = build(view, hooks.keywords()));
+				({ all: this.decorations, hidden: this.hidden } = build(
+					view,
+					hooks.keywords(),
+					hooks.livePreview?.() ?? true,
+				));
 			}
 			update(u: ViewUpdate) {
-				if (u.docChanged || u.viewportChanged || u.selectionSet)
-					({ all: this.decorations, hidden: this.hidden } = build(u.view, hooks.keywords()));
+				if (
+					u.docChanged ||
+					u.viewportChanged ||
+					u.selectionSet ||
+					u.transactions.some((t) => t.effects.some((e) => e.is(redecorate)))
+				)
+					({ all: this.decorations, hidden: this.hidden } = build(
+						u.view,
+						hooks.keywords(),
+						hooks.livePreview?.() ?? true,
+					));
 			}
 		},
 		{
@@ -360,6 +476,16 @@ const theme = EditorView.theme({
 		borderRadius: '3px',
 	},
 	'.cm-org-bullet': { color: 'var(--accent)', fontWeight: '700' },
+	'.cm-org-lead': { color: 'transparent' },
+	'.cm-org-dot': { color: 'var(--accent)', fontWeight: '700', padding: '0 0.08em' },
+	'.cm-org-box': {
+		width: '0.95em',
+		height: '0.95em',
+		margin: '0 0.2em 0 0',
+		verticalAlign: '-0.12em',
+		accentColor: 'var(--accent)',
+		cursor: 'pointer',
+	},
 	'.cm-org-checkbox': { color: 'var(--todo)', fontWeight: '700' },
 	'.cm-org-checkbox.checked': { color: 'var(--done)' },
 	'.cm-org-cookie': { color: 'var(--text-muted)', fontSize: '0.85em' },
@@ -396,7 +522,7 @@ export function createEditor(
 					autocapitalize: 'sentences',
 				}),
 				autocompletion({ override: [linkCompletion(hooks), texCompletion], icons: false }),
-				texSupport,
+				texSupport(() => hooks.livePreview?.() ?? true),
 				keymap.of([
 					{ key: 'Alt-Enter', run: newHeading },
 					// Inside a table, org's table keys come first.

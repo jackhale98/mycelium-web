@@ -145,20 +145,27 @@ export const indentItem: StateCommand = ({ state, dispatch }) =>
 export const outdentItem: StateCommand = ({ state, dispatch }) =>
 	shiftItems(state, dispatch, -1) || shiftHeadings(state, dispatch, -1);
 
-/** C-c C-c on a checklist item: tick or untick it (updating [n/m] cookies). */
-export const toggleItemCheckbox: StateCommand = ({ state, dispatch }) => {
-	const line = state.doc.lineAt(state.selection.main.head);
-	if (!/^[ \t]*(?:[-+*]|\d+[.)])[ \t]+\[[ Xx-]\]/.test(line.text)) return false;
+/**
+ * The change that ticks or unticks the checklist item on the line at `pos`
+ * (updating [n/m] cookies), or null if that line has no checkbox.
+ */
+export function checkboxToggle(state: EditorState, pos: number): ChangeSpec | null {
+	const line = state.doc.lineAt(pos);
+	if (!/^[ \t]*(?:[-+*]|\d+[.)])[ \t]+\[[ Xx-]\]/.test(line.text)) return null;
 	const source = state.doc.toString();
 	const result = toggleCheckbox(source, line.from);
-	if (!result.steps.length) return false;
+	if (!result.steps.length) return null;
 	const next = result.text;
 	// Replace only the changed span so the cursor stays put.
 	let a = 0;
 	while (a < source.length && source[a] === next[a]) a++;
 	let b = 0;
 	while (b < source.length - a && source[source.length - 1 - b] === next[next.length - 1 - b]) b++;
-	return run(state, dispatch, {
-		changes: { from: a, to: source.length - b, insert: next.slice(a, next.length - b) },
-	});
+	return { from: a, to: source.length - b, insert: next.slice(a, next.length - b) };
+}
+
+/** C-c C-c on a checklist item: tick or untick it (updating [n/m] cookies). */
+export const toggleItemCheckbox: StateCommand = ({ state, dispatch }) => {
+	const changes = checkboxToggle(state, state.selection.main.head);
+	return changes ? run(state, dispatch, { changes }) : false;
 };

@@ -226,7 +226,8 @@ export function highlightLine(
 	if (/^[ \t]*\|/.test(text)) {
 		for (const m of text.matchAll(/\|/g))
 			spans.push({ from: m.index, to: m.index + 1, kind: 'table' });
-		spans.push(...inlineSpans(text));
+		// A rule (`|---+---|`) holds no markup: its `+-…-+` isn't strike-through.
+		if (!/^[ \t]*\|-/.test(text)) spans.push(...inlineSpans(text));
 		return { kind: 'table', level: 0, spans: spans.sort((a, b) => a.from - b.from) };
 	}
 
