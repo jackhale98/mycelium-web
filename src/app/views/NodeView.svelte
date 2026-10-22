@@ -9,6 +9,7 @@
 	import TodoChip from '../org/TodoChip.svelte';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
+	import { panes, usePane } from '../panes.svelte';
 	import { scrollToSearch } from '../org/scroll-to';
 	import { readingAnchor, restoreReading, type Anchor } from '../anchor';
 	import { preloadEditor } from '../editor/load';
@@ -27,13 +28,15 @@
 		at?: string | null;
 	} = $props();
 
+	const pane = usePane();
+
 	let article: HTMLElement | undefined = $state();
 	// Scroll to the link's target once the page has rendered.
 	$effect(() => {
 		const search = at;
 		const el = article;
 		const file = node ? app.vault.file(node.file) : undefined;
-		if (!search || !el || !file || app.editing) return;
+		if (!search || !el || !file || pane.editing) return;
 		void tick().then(() => scrollToSearch(el, file.source, search, file.index.keywords));
 	});
 
@@ -89,6 +92,7 @@
 	const done = $derived(!!node?.todo && keywords.doneKeywords.includes(node.todo));
 
 	$effect(() => {
+		if (pane !== panes.focused) return;
 		document.title = node ? `${node.title} · Mycelium` : 'Not found · Mycelium';
 	});
 
@@ -97,16 +101,16 @@
 	let editor: ReturnType<typeof OrgEditor> | undefined = $state();
 	let openAt = $state<Anchor | null>(null);
 	function setEditing(on: boolean) {
-		if (on === app.editing) return;
+		if (on === pane.editing) return;
 		const el = article;
 		if (on) {
 			openAt = el ? readingAnchor(el) : null;
-			app.editing = true;
+			pane.editing = true;
 			return;
 		}
 		const at = el && editor ? editor.topAnchor(el) : null;
 		openAt = null;
-		app.editing = false;
+		pane.editing = false;
 		if (at && el) void tick().then(() => restoreReading(el, at));
 	}
 
@@ -115,7 +119,7 @@
 
 	// The editor reads editAt once on open; clear it for next time.
 	$effect(() => {
-		if (!app.editing) app.editAt = null;
+		if (!pane.editing) app.editAt = null;
 	});
 
 	// On a long note the toolbar comes back, floating at the top, when you
@@ -158,13 +162,15 @@
 	});
 
 	function onkeydown(e: KeyboardEvent) {
+		// With split view, keys go to the pane you're working in.
+		if (pane !== panes.focused) return;
 		// The editor lives in a shadow root, so look at the real target.
 		const target = e.composedPath()[0];
 		if (
 			target instanceof HTMLElement &&
 			target.closest('input, textarea, select, [contenteditable="true"], dialog')
 		) {
-			if (e.key === 'Escape' && app.editing && target.closest('.cm-editor')) setEditing(false);
+			if (e.key === 'Escape' && pane.editing && target.closest('.cm-editor')) setEditing(false);
 			return;
 		}
 		if (e.key === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -181,7 +187,7 @@
 		title="Graph around this note"
 		aria-label="Graph around this note"><Icon name="graph" size={15} /></a
 	>
-	{#if !app.editing && (doneCount > 0 || app.hideDone)}
+	{#if !pane.editing && (doneCount > 0 || app.hideDone)}
 		<button
 			type="button"
 			class="btn small"
@@ -193,7 +199,7 @@
 			></button
 		>
 	{/if}
-	{#if n.level > 0 && !app.editing}
+	{#if n.level > 0 && !pane.editing}
 		<button
 			type="button"
 			class="btn small"
@@ -205,11 +211,11 @@
 	<button
 		type="button"
 		class="btn small"
-		class:primary={app.editing}
-		aria-pressed={app.editing}
-		title={app.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
-		onclick={() => setEditing(!app.editing)}
-		><Icon name={app.editing ? 'eye' : 'edit'} size={14} />{app.editing ? 'Read' : 'Edit'}</button
+		class:primary={pane.editing}
+		aria-pressed={pane.editing}
+		title={pane.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
+		onclick={() => setEditing(!pane.editing)}
+		><Icon name={pane.editing ? 'eye' : 'edit'} size={14} />{pane.editing ? 'Read' : 'Edit'}</button
 	>
 {/snippet}
 
@@ -242,7 +248,7 @@
 						<span class="path">{node.file}</span>
 					{/if}
 				</nav>
-				<h1 id="node-title" class:done class:sr-only={app.editing && node.level === 0}>
+				<h1 id="node-title" class:done class:sr-only={pane.editing && node.level === 0}>
 					{#if node.todo}
 						<TodoChip
 							keyword={node.todo}
@@ -252,7 +258,7 @@
 					{/if}
 					{displayTitle ?? node.title}
 				</h1>
-				{#if node.aliases.length && !app.editing}
+				{#if node.aliases.length && !pane.editing}
 					<p class="aliases">
 						Also known as {#each node.aliases as alias, i (alias)}<em>{alias}</em>{i <
 							node.aliases.length - 1
@@ -260,7 +266,7 @@
 								: ''}{/each}
 					</p>
 				{/if}
-				<div class="meta" hidden={app.editing}>
+				<div class="meta" hidden={pane.editing}>
 					{#each node.tags as tag (tag)}<a class="chip tag" href={href.tags(tag)}>#{tag}</a>{/each}
 					{#if node.deadline}<DateChip
 							path={node.file}
@@ -294,7 +300,7 @@
 				</div>
 			</header>
 
-			{#if app.editing}
+			{#if pane.editing}
 				{#key node.file}
 					<OrgEditor
 						bind:this={editor}
@@ -530,7 +536,8 @@
 	.side-panel {
 		display: none;
 	}
-	@media (min-width: 1240px) {
+	/* Wide enough (the pane, on wide screens, or the window) for backlinks beside the note. */
+	@container pane (min-width: 976px) {
 		.node-layout.with-panel {
 			grid-template-columns: minmax(0, 1fr) var(--panel-w);
 		}
@@ -540,8 +547,8 @@
 		.side-panel {
 			display: block;
 			position: sticky;
-			top: var(--clock-h, 0px);
-			height: calc(100dvh - var(--clock-h, 0px));
+			top: 0;
+			height: var(--pane-h, 100dvh);
 			overflow-y: auto;
 			padding: 3.25rem 1.5rem 2rem;
 			border-left: 1px solid var(--border);

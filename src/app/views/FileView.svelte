@@ -7,17 +7,20 @@
 	import Blocks from '../org/OrgBlocks.svelte';
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
+	import { panes, usePane } from '../panes.svelte';
 	import { scrollToSearch } from '../org/scroll-to';
 	import { tick } from 'svelte';
 
 	let { path, at = null }: { path: string; at?: string | null } = $props();
+
+	const pane = usePane();
 
 	let article: HTMLElement | undefined = $state();
 	$effect(() => {
 		const search = at;
 		const el = article;
 		const f = app.vault.file(path);
-		if (!search || !el || !f || app.editing) return;
+		if (!search || !el || !f || pane.editing) return;
 		void tick().then(() => scrollToSearch(el, f.source, search, f.index.keywords));
 	});
 
@@ -49,7 +52,7 @@
 		document.title = file ? `${title} · Mycelium` : 'Not found · Mycelium';
 	});
 	$effect(() => {
-		if (!app.editing) app.editAt = null;
+		if (!pane.editing) app.editAt = null;
 	});
 
 	function makeNote() {
@@ -58,17 +61,19 @@
 	}
 
 	function onkeydown(e: KeyboardEvent) {
+		// With split view, keys go to the pane you're working in.
+		if (pane !== panes.focused) return;
 		const target = e.composedPath()[0];
 		if (
 			target instanceof HTMLElement &&
 			target.closest('input, textarea, select, [contenteditable="true"], dialog')
 		) {
-			if (e.key === 'Escape' && app.editing && target.closest('.cm-editor')) app.editing = false;
+			if (e.key === 'Escape' && pane.editing && target.closest('.cm-editor')) pane.editing = false;
 			return;
 		}
 		if (e.key === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
 			e.preventDefault();
-			app.editing = true;
+			pane.editing = true;
 		}
 	}
 </script>
@@ -88,11 +93,11 @@
 				<button
 					type="button"
 					class="btn small"
-					class:primary={app.editing}
-					aria-pressed={app.editing}
-					title={app.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
-					onclick={() => (app.editing = !app.editing)}
-					><Icon name={app.editing ? 'eye' : 'edit'} size={14} />{app.editing
+					class:primary={pane.editing}
+					aria-pressed={pane.editing}
+					title={pane.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
+					onclick={() => (pane.editing = !pane.editing)}
+					><Icon name={pane.editing ? 'eye' : 'edit'} size={14} />{pane.editing
 						? 'Read'
 						: 'Edit'}</button
 				>
@@ -104,7 +109,7 @@
 				backlinks. Its tasks still show on the agenda.
 			</p>
 		</header>
-		{#if app.editing}
+		{#if pane.editing}
 			{#key path}<OrgEditor {path} focusAt={app.editAt} label={`Org source of ${title}`} />{/key}
 		{:else}
 			<div class="prose">

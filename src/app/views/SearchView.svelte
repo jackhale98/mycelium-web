@@ -3,8 +3,10 @@
 	import Icon from '../components/Icon.svelte';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
+	import { usePane } from '../panes.svelte';
 
 	let { q = '' }: { q?: string } = $props();
+	const pane = usePane();
 
 	let query = $state(q);
 	let debounced = $state(q);
@@ -15,7 +17,7 @@
 		const t = setTimeout(() => {
 			debounced = value;
 			const hash = href.search(value.trim());
-			if (location.hash !== hash) history.replaceState(null, '', hash);
+			pane.replace(hash);
 		}, 150);
 		return () => clearTimeout(t);
 	});

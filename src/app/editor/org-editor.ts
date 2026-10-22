@@ -54,7 +54,8 @@ export interface EditorHooks {
 	/** Create a node with this title; returns its id. */
 	createNode: (title: string) => string | null;
 	/** Follow a link target (`id:…`, `https:…`). */
-	follow: (target: string) => void;
+	/** Open a link's target; `beside`: in the other pane (⌘/Ctrl-Alt-click). */
+	follow: (target: string, beside?: boolean) => void;
 	onChange: (text: string) => void;
 	/** Live preview (markup hidden away from the cursor), or plain source. */
 	livePreview?: () => boolean;
@@ -572,7 +573,7 @@ export function createEditor(
 						const el = (e.target as HTMLElement).closest<HTMLElement>('.cm-org-link');
 						if (el && (e.metaKey || e.ctrlKey)) {
 							e.preventDefault();
-							hooks.follow(el.dataset.target ?? '');
+							hooks.follow(el.dataset.target ?? '', e.altKey);
 							return true;
 						}
 						return false;

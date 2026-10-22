@@ -6,6 +6,7 @@
 /// changes, writes a commit message, and pulls/pushes when they choose. The
 /// git code loads on demand so the first paint stays light.
 
+import { panes } from './panes.svelte';
 import {
 	applyChanges,
 	applyTemplate,
@@ -222,8 +223,13 @@ class AppState {
 	paletteOpen = $state(false);
 	panelOpen = $state(true);
 	navOpen = $state(false);
-	/** Notes open in the source editor instead of the reading view. */
-	editing = $state(false);
+	/** Notes open in the source editor instead of the reading view (in the focused pane's tab). */
+	get editing() {
+		return panes.focused.editing;
+	}
+	set editing(on: boolean) {
+		panes.focused.editing = on;
+	}
 	/** Where the editor should put the cursor when it next opens (a heading's offset). */
 	editAt = $state<number | null>(null);
 	/** The heading open in the heading sheet, if any. */

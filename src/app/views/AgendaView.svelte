@@ -15,10 +15,12 @@
 	} from '../agenda';
 	import { href } from '../router.svelte';
 	import { app, localNow } from '../state.svelte';
+	import { usePane } from '../panes.svelte';
 	import { longDate } from '../util';
 	import { untrack } from 'svelte';
 
 	let { query = '' }: { query?: string } = $props();
+	const pane = usePane();
 
 	const today = localNow().date;
 	const storeKey = `mycelium:agenda-filter:${app.activeId}`;
@@ -48,7 +50,7 @@
 	$effect(() => {
 		const q = encoded;
 		const hash = href.agenda(q);
-		if (location.hash !== hash) history.replaceState(null, '', hash);
+		pane.replace(hash);
 		try {
 			if (q) localStorage.setItem(storeKey, q);
 			else localStorage.removeItem(storeKey);

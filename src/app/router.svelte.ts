@@ -77,20 +77,35 @@ export const href = {
 
 class Router {
 	// Start on the requested page, so nothing renders the home page first.
-	route = $state<Route>(
+	/** The address bar's page (the main pane's). */
+	url = $state<Route>(
 		typeof location === 'undefined' ? { name: 'home' } : parseHash(location.hash),
 	);
+	/** With split view, the pane you're working in: what `route` and `go` mean. */
+	focus = $state<{ route: Route; go(hash: string): void } | null>(null);
+
+	/** The page you're on (in split view, the focused pane's). */
+	get route(): Route {
+		return this.focus?.route ?? this.url;
+	}
 
 	start() {
 		const sync = () => {
-			this.route = parseHash(location.hash);
+			this.url = parseHash(location.hash);
 		};
 		sync();
 		addEventListener('hashchange', sync);
 		return () => removeEventListener('hashchange', sync);
 	}
 
+	/** Go to `hash` in the pane you're working in. */
 	go(hash: string) {
+		if (this.focus) this.focus.go(hash);
+		else this.navigate(hash);
+	}
+
+	/** Change the address bar (the main pane's page). */
+	navigate(hash: string) {
 		location.hash = hash;
 	}
 }

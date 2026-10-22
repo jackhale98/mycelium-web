@@ -16,7 +16,12 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
 ## What it does
 
 - **Read and edit** notes, rendered from org, with a live-preview source
-  editor (press <kbd>E</kbd>). Typing `[[` links to any note — or creates one.
+  editor (press <kbd>E</kbd>): markup hides away from the cursor, bullets
+  and checkboxes draw as such, and inline maths shows typeset (or switch to
+  plain source in Settings). Typing `[[` links to any note — or creates one.
+- **Tabs and split view** on wide screens: ⌘/Ctrl-click a link for a new
+  tab, Alt-click to open it beside; each pane reads or edits on its own, and
+  each vault remembers its layout.
   A formatting bar (above the keyboard on phones) makes headings, TODOs,
   emphasis, lists and checkboxes without typing org markup.
 - **Tables, the org way:** Tab, Enter and M-arrows realign and reshape tables

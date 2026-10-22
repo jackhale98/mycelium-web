@@ -565,7 +565,7 @@
 <style>
 	.graph {
 		position: relative;
-		height: 100dvh;
+		height: var(--pane-h, 100dvh);
 		overflow: hidden;
 		background:
 			radial-gradient(circle at 50% 45%, var(--accent-softer) 0, transparent 60%), var(--bg);

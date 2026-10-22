@@ -14,9 +14,10 @@ export interface Anchor {
 
 /** Where content starts below the sticky bars at the top (clock, daily nav). */
 function topEdge(within: HTMLElement): number {
-	const v = parseFloat(getComputedStyle(within).getPropertyValue('--sticky-top')) || 0;
-	const clock =
-		parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--clock-h')) || 0;
+	const style = getComputedStyle(within);
+	const v = parseFloat(style.getPropertyValue('--sticky-top')) || 0;
+	// (Inside a pane, the clock bar doesn't cover the content: there it reads 0.)
+	const clock = parseFloat(style.getPropertyValue('--clock-h')) || 0;
 	return Math.max(v, clock);
 }
 
@@ -26,11 +27,11 @@ function topEdge(within: HTMLElement): number {
  */
 const landmark = (el: Element) => el.querySelector(':scope > .heading-row') ?? el;
 
-/** The page's scroller: the main column on wide screens, the page itself on phones. */
-function scroller(): { by: (dy: number) => void } {
-	const main = document.getElementById('main-content');
-	if (main && getComputedStyle(main).overflowY === 'auto' && main.scrollHeight > main.clientHeight)
-		return { by: (dy) => main.scrollBy({ top: dy, behavior: 'instant' }) };
+/** What scrolls `within`: its pane on wide screens, the page itself on phones. */
+function scroller(within: Element): { by: (dy: number) => void } {
+	const pane = within.closest('.pane-scroll');
+	if (pane && pane.scrollHeight > pane.clientHeight)
+		return { by: (dy) => pane.scrollBy({ top: dy, behavior: 'instant' }) };
 	return { by: (dy) => window.scrollBy({ top: dy, behavior: 'instant' }) };
 }
 
@@ -69,7 +70,7 @@ export function restoreReading(container: HTMLElement, a: Anchor) {
 		}
 	}
 	if (!el) return;
-	scroller().by(landmark(el).getBoundingClientRect().top - a.y);
+	scroller(container).by(landmark(el).getBoundingClientRect().top - a.y);
 }
 
 /** In the editor: the line at the top of the screen. */
@@ -93,5 +94,7 @@ export function editorAnchor(view: EditorView, container: HTMLElement): Anchor |
 export function restoreEditor(view: EditorView, a: Anchor) {
 	const pos = Math.min(a.pos, view.state.doc.length);
 	const line = view.lineBlockAt(pos);
-	scroller().by(line.top + view.documentTop - a.y);
+	// (The editor lives in a shadow root: look up from its host.)
+	const host = view.root instanceof ShadowRoot ? view.root.host : view.dom;
+	scroller(host).by(line.top + view.documentTop - a.y);
 }

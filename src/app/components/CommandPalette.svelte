@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { href, router } from '../router.svelte';
+	import { panes } from '../panes.svelte';
 	import { app, localNow } from '../state.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
 
@@ -60,6 +61,29 @@
 				app.setTheme(dark ? 'light' : 'dark');
 			},
 		},
+		// Tabs and split view (wide screens).
+		...(panes.wide
+			? [
+					{
+						key: 'cmd:tab',
+						label: 'New tab',
+						icon: 'plus',
+						run: () => panes.focused.open('#/'),
+					} satisfies Item,
+					{
+						key: 'cmd:close-tab',
+						label: 'Close tab',
+						icon: 'close',
+						run: () => panes.close(panes.focused, panes.focused.active),
+					} satisfies Item,
+					{
+						key: 'cmd:split',
+						label: 'Toggle split view',
+						icon: 'columns',
+						run: () => (panes.right ? panes.unsplit() : panes.split()),
+					} satisfies Item,
+				]
+			: []),
 	];
 
 	const captureCommands = $derived([

@@ -2,9 +2,10 @@
 	import type { EditorView } from '@codemirror/view';
 	import { nextTodoKeyword } from '$lib/org';
 	import { editorAnchor, restoreEditor, type Anchor } from '../anchor';
-	import { href, router } from '../router.svelte';
+	import { href } from '../router.svelte';
 	import { loadEditor } from './load';
 	import { app } from '../state.svelte';
+	import { panes, usePane } from '../panes.svelte';
 	import FormatBar, { type FormatAction } from './FormatBar.svelte';
 
 	let {
@@ -19,6 +20,7 @@
 		anchor?: Anchor | null;
 		label?: string;
 	} = $props();
+	const pane = usePane();
 
 	/** Until the editor is up, the source shows as plain text in the same place. */
 	let ready = $state(false);
@@ -49,13 +51,17 @@
 		pending = null;
 	}
 
-	function follow(target: string) {
-		if (target.startsWith('id:')) router.go(href.node(target.slice(3)));
-		else if (/^https?:/.test(target)) window.open(target, '_blank', 'noopener,noreferrer');
-		else {
-			const id = app.vault.titles.get(target.replace(/^roam:/, '').toLowerCase());
-			if (id) router.go(href.node(id));
+	function follow(target: string, beside = false) {
+		if (/^https?:/.test(target)) {
+			window.open(target, '_blank', 'noopener,noreferrer');
+			return;
 		}
+		const id = target.startsWith('id:')
+			? target.slice(3)
+			: app.vault.titles.get(target.replace(/^roam:/, '').toLowerCase());
+		if (!id) return;
+		if (beside && panes.wide) panes.openBeside(pane, href.node(id));
+		else pane.go(href.node(id));
 	}
 
 	$effect(() => {

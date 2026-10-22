@@ -927,8 +927,9 @@ test('switching between reading and editing keeps your place', async ({ page }) 
 	await open(page, `app#/node/${PROJECT}`);
 	const scrollTo = (y: number) =>
 		page.evaluate((y) => {
-			const main = document.getElementById('main-content')!;
-			if (getComputedStyle(main).overflowY === 'auto') main.scrollTop = y;
+			// Wide screens scroll the pane; phones the page.
+			const pane = document.querySelector('.pane-scroll');
+			if (pane) pane.scrollTop = y;
 			else window.scrollTo(0, y);
 		}, y);
 	// Click the toolbar button in place (a normal click would scroll it into view first).
@@ -1158,4 +1159,62 @@ test('heading fold buttons stay on screen and work', async ({ page, isMobile }) 
 	else await fold.hover();
 	await fold.click();
 	await expect(page.getByRole('button', { name: 'Expand section' }).first()).toBeVisible();
+});
+
+test('tabs and split view: modifier clicks, own pages per pane, remembered', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(isMobile, 'wide screens only');
+	await open(page, `app#/node/${PROJECT}`);
+	const main = page.getByRole('region', { name: 'Main pane' });
+	const mainTabs = main.getByRole('list', { name: 'Main pane tabs' }).getByRole('listitem');
+	await expect(mainTabs).toHaveCount(1);
+	const link = main.locator('.node-body a[href^="#/node/"]').first();
+	const target = (await link.getAttribute('href'))!;
+
+	// ⌘/Ctrl-click: a new tab, which becomes the current one.
+	await link.click({ modifiers: ['ControlOrMeta'] });
+	await expect(mainTabs).toHaveCount(2);
+	await expect(page).toHaveURL(new RegExp(`${target.replace(/[/#]/g, '\\$&')}$`));
+	await expect(mainTabs.nth(1).getByRole('button').first()).toHaveAttribute('aria-current', 'page');
+	await mainTabs.first().getByRole('button').first().click();
+	await expect(page).toHaveURL(new RegExp(`node/${PROJECT}$`));
+
+	// Alt-click: beside, in a second pane; the address bar stays.
+	await main
+		.locator('.node-body a[href^="#/node/"]')
+		.first()
+		.click({ modifiers: ['Alt'] });
+	const side = page.getByRole('region', { name: 'Side pane' });
+	await expect(side).toBeVisible();
+	await expect(side.getByRole('heading', { level: 1 })).toBeVisible();
+	await expect(page).toHaveURL(new RegExp(`node/${PROJECT}$`));
+	// Each pane reads or edits on its own.
+	await side.getByRole('button', { name: 'Edit', exact: true }).click();
+	await expect(side.locator('.cm-content')).toBeVisible();
+	await expect(main.locator('.cm-content')).toHaveCount(0);
+	await expect(main.locator('.node-body')).toBeVisible();
+	// The sidebar opens pages in the pane you're working in.
+	await page.getByRole('link', { name: 'Agenda' }).first().click();
+	await expect(side.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
+	await expect(page).toHaveURL(new RegExp(`node/${PROJECT}$`));
+	await expectAccessible(page);
+
+	// Remembered for this vault.
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(mainTabs).toHaveCount(2);
+	await expect(side.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
+
+	await side.getByRole('button', { name: 'Close split view' }).click();
+	await expect(side).toHaveCount(0);
+});
+
+test('phones show one page, without tabs', async ({ page, isMobile }) => {
+	test.skip(!isMobile, 'phones only');
+	await open(page, `app#/node/${PROJECT}`);
+	await expect(page.getByRole('list', { name: /pane tabs/ })).toHaveCount(0);
+	await page.locator('.node-body a[href^="#/node/"]').first().click();
+	await expect(page).not.toHaveURL(new RegExp(`node/${PROJECT}$`));
 });

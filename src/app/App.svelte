@@ -12,42 +12,25 @@
 	import SyncDialog from './components/SyncDialog.svelte';
 	import { href, router } from './router.svelte';
 	import { app } from './state.svelte';
-	import AgendaView from './views/AgendaView.svelte';
-	import DailyView from './views/DailyView.svelte';
-	import FileView from './views/FileView.svelte';
 	import ClockBar from './components/ClockBar.svelte';
 	import RefileDialog from './components/RefileDialog.svelte';
 	import TableSheet from './components/TableSheet.svelte';
 	import MathSheet from './components/MathSheet.svelte';
 	import ImageSheet from './components/ImageSheet.svelte';
-	import HomeView from './views/HomeView.svelte';
-	import NodeView from './views/NodeView.svelte';
-	import TagsView from './views/TagsView.svelte';
-	import LoadError from './components/LoadError.svelte';
 	import { reloadForUpdate } from './util';
-
-	let main: HTMLElement | undefined = $state();
-
-	// Heavier pages load on first visit, keeping the startup bundle small.
-	// A deploy while the app is open removes the old build's files, so a
-	// failed load reloads once to pick up the new version.
-	const lazy =
-		<T,>(load: () => Promise<T>) =>
-		() =>
-			load().catch((e: unknown) => {
-				reloadForUpdate();
-				throw e;
-			});
-	const views = {
-		changes: lazy(() => import('./views/ChangesView.svelte')),
-		dailies: lazy(() => import('./views/DailiesView.svelte')),
-		graph: lazy(() => import('./views/GraphView.svelte')),
-		search: lazy(() => import('./views/SearchView.svelte')),
-		settings: lazy(() => import('./views/SettingsView.svelte')),
-		vaults: lazy(() => import('./views/VaultsView.svelte')),
-	};
+	import PaneView from './components/PaneView.svelte';
+	import RouteView from './components/RouteView.svelte';
+	import { panes } from './panes.svelte';
+	import { untrack } from 'svelte';
 
 	$effect(() => router.start());
+	$effect(() => panes.start());
+	// Each vault remembers its tabs and split.
+	$effect(() => {
+		const vault = app.activeId;
+		untrack(() => panes.load(vault));
+	});
+	$effect(() => panes.save(app.activeId));
 	// The capture notice goes away on its own.
 	$effect(() => {
 		if (!app.captureNotice) return;
@@ -93,13 +76,43 @@
 		return () => clearTimeout(t);
 	});
 
-	// New page: close the mobile menu, reset scroll and move focus to the content.
+	// New page: close the mobile menu.
 	$effect(() => {
 		void router.route;
 		app.navOpen = false;
-		main?.scrollTo({ top: 0 });
-		window.scrollTo({ top: 0 });
 	});
+
+	/**
+	 * Links on wide screens: a plain click opens the page in the pane it's in
+	 * (from the sidebar, the focused pane); ⌘/Ctrl-click or a middle click in
+	 * a new tab; Alt-click in the other pane, splitting the view if need be.
+	 */
+	function onLink(e: MouseEvent) {
+		if (!panes.wide || e.defaultPrevented || (e.type === 'auxclick' && e.button !== 1)) return;
+		if (e.type === 'click' && e.button !== 0) return;
+		const a = e.composedPath().find((t): t is HTMLAnchorElement => t instanceof HTMLAnchorElement);
+		const to = a?.getAttribute('href');
+		if (!a || !to?.startsWith('#/') || a.target || a.hasAttribute('download')) return;
+		const inPane = a.closest<HTMLElement>('[data-pane]')?.dataset.pane;
+		const pane =
+			inPane === 'side' && panes.right
+				? panes.right
+				: inPane === 'main'
+					? panes.left
+					: panes.focused;
+		if (e.altKey) {
+			e.preventDefault();
+			panes.openBeside(pane, to);
+		} else if (e.metaKey || e.ctrlKey || e.type === 'auxclick') {
+			e.preventDefault();
+			pane.open(to);
+			panes.focus(pane);
+		} else if (!e.shiftKey) {
+			e.preventDefault();
+			panes.focus(pane);
+			pane.go(to);
+		}
+	}
 
 	function onkeydown(e: KeyboardEvent) {
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -132,7 +145,7 @@
 	}
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} onclick={onLink} onauxclick={onLink} />
 
 <a class="skip-link" href="#main-content">Skip to content</a>
 
@@ -148,7 +161,7 @@
 		onclick={() => (app.navOpen = false)}
 	></button>
 
-	<main id="main-content" bind:this={main} tabindex="-1">
+	<main id="main-content" class:panes-on={panes.wide} tabindex="-1">
 		<ClockBar />
 		{#if (app.loadError || app.folderAccess) && router.route.name !== 'vaults'}
 			<div class="vault-notice" role="alert">
@@ -191,47 +204,13 @@
 					</div>
 				</div>
 			</div>
-		{:else if router.route.name === 'home'}
-			<HomeView />
-		{:else if router.route.name === 'node'}
-			{#key router.route.id}<NodeView id={router.route.id} at={router.route.at} />{/key}
-		{:else if router.route.name === 'file'}
-			{#key router.route.path}<FileView path={router.route.path} at={router.route.at} />{/key}
-		{:else if router.route.name === 'daily'}
-			<DailyView date={router.route.date} />
-		{:else if router.route.name === 'agenda'}
-			{#key router.route.name}<AgendaView query={router.route.query} />{/key}
-		{:else if router.route.name === 'tags'}
-			<TagsView tag={router.route.tag} />
-		{:else if router.route.name === 'vaults'}
-			{#await views.vaults() then { default: VaultsView }}<VaultsView />{:catch error}<LoadError
-					{error}
-				/>{/await}
-		{:else if router.route.name === 'graph'}
-			{#await views.graph() then { default: GraphView }}{#key router.route.id}<GraphView
-						focus={router.route.id}
-					/>{/key}{:catch error}<LoadError {error} />{/await}
-		{:else if router.route.name === 'search'}
-			{#await views.search() then { default: SearchView }}<SearchView
-					q={router.route.q}
-				/>{:catch error}<LoadError {error} />{/await}
-		{:else if router.route.name === 'dailies'}
-			{#await views.dailies() then { default: DailiesView }}<DailiesView />{:catch error}<LoadError
-					{error}
-				/>{/await}
-		{:else if router.route.name === 'changes'}
-			{#await views.changes() then { default: ChangesView }}<ChangesView />{:catch error}<LoadError
-					{error}
-				/>{/await}
-		{:else if router.route.name === 'settings'}
-			<!-- Settings copies the vault's settings into its forms: build it once they've loaded. -->
-			{#await views.settings() then { default: SettingsView }}{#key `${app.activeId}:${app.ready}`}<SettingsView
-					/>{/key}{:catch error}<LoadError {error} />{/await}
-		{:else}
-			<div class="nf">
-				<h1>Page not found</h1>
-				<a href="#/">Go home</a>
+		{:else if panes.wide}
+			<div class="panes" class:split={panes.right}>
+				<PaneView pane={panes.left} />
+				{#if panes.right}{#key panes.right}<PaneView pane={panes.right} />{/key}{/if}
 			</div>
+		{:else}
+			<RouteView pane={panes.left} />
 		{/if}
 	</main>
 </div>
@@ -461,9 +440,20 @@
 			bottom: calc(5rem + env(safe-area-inset-bottom));
 		}
 	}
-	.nf {
-		padding: 6rem 1rem;
-		text-align: center;
+	/* Wide screens: the panes scroll, each on its own, below the clock and banners. */
+	main.panes-on {
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	.panes {
+		display: grid;
+		flex: 1;
+		grid-template-columns: minmax(0, 1fr);
+		min-height: 0;
+	}
+	.panes.split {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	}
 	@media (max-width: 960px) {
 		.shell {
