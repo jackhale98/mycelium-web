@@ -1,8 +1,10 @@
-# Mycelium Web — Implementation Plan
+# Mycelium Web — Plan and status
 
-A static, installable web app (PWA) for reading, editing, linking, capturing and
-exploring [org-roam](https://www.orgroam.com/) knowledge bases stored in a git
-repository on GitHub, GitLab or Bitbucket. Deployed to GitHub Pages.
+A static web app for reading, editing, linking, capturing and exploring
+[org-roam](https://www.orgroam.com/) knowledge bases kept in a git repository
+(GitHub, GitLab, Bitbucket or any HTTPS host), in cloud storage (Dropbox,
+OneDrive, SharePoint, WebDAV such as Nextcloud) or in a local folder. Served
+from Cloudflare at my-celium.org, with a copy on GitHub Pages.
 
 Successor to the Tauri app at [jackhale98/mycelium](https://github.com/jackhale98/mycelium).
 We reuse its _ideas_ (round-trip safety, conflict detection, org-roam schema,
@@ -11,236 +13,234 @@ agenda semantics) but not its UI.
 ## Progress
 
 - [x] **Phase 1 — Foundation:** Astro + Svelte scaffold, design system with light/dark
-      themes, CI and Pages deploy, org layer with text-patch edits and a fidelity suite,
+      themes, CI and deploys, org layer with text-patch edits and a fidelity suite,
       demo vault with home, note, daily, agenda, tags and ⌘K search.
-- [x] **Phase 2a — Git & index:** isomorphic-git clone/commit/sync with an org-aware merge and
-      conflict resolver, token auth for GitHub/GitLab/Bitbucket/any HTTPS host, layout and
-      keyword detection, IndexedDB parse cache, fast line scanner (5,000 files index in 0.3 s),
-      stateless worker (git proxy + OAuth exchange) ready to deploy.
-- [ ] Phase 2b — OAuth sign-in (needs the GitHub App / GitLab / Bitbucket registrations)
-- [ ] Phase 3 — Read & navigate (graph, unlinked mentions, file browser)
-- [ ] Phase 4 — Edit & sync
-- [ ] Phase 5 — Capture templates, dailies calendar, graph
-- [ ] Phase 6 — Polish
+- [x] **Phase 2a — Git & index:** isomorphic-git clone/commit/pull/push with an org-aware
+      merge and conflict resolver, token auth for GitHub/GitLab/Bitbucket/any HTTPS host,
+      layout and keyword detection, IndexedDB parse cache, fast line scanner (5,000 files
+      index in 0.3 s), stateless worker (git proxy + OAuth exchange).
+- [x] **Phase 2b — OAuth sign-in:** GitHub App, GitLab (PKCE) and Bitbucket, token
+      exchange and refresh through the worker.
+- [x] **Phase 3 — Read & navigate:** graph (whole vault or local, tag colours, orphans,
+      fit), backlinks with context, unlinked references, tags, full-text search page.
+- [x] **Phase 4 — Edit & sync:** CodeMirror live-preview editor, `[[` completion and
+      create-and-link, structured heading edits, review → commit → pull/push with a
+      conflict resolver.
+- [x] **Phase 5 — Capture, dailies, agenda, graph:** org-capture-style templates,
+      dailies calendar, agenda with org's filters and match strings, saved views.
+- [~] **Phase 6 — Polish:** done: mobile formatting toolbar, accessibility checks
+  (axe in e2e), setup docs. Not yet: service worker / offline app cache.
+
+**Since the original plan:** cloud vaults (Dropbox, OneDrive, SharePoint,
+WebDAV) with automatic three-way-merging sync; local folders (File System
+Access); tabs and split view on wide screens; org table editing (with a phone
+table sheet); LaTeX tools (formula sheet, preview, error marks, completion);
+pictures with an offer to compress; clocking with a clock report; refile and
+archive; habits and the agenda time grid; TODO keyword editor; text size; hide
+done items; org-transclusion and link search options.
+
+**Not done:** a file-browser page; renaming a node with link descriptions
+updated across files; an offline app cache; `.org.gpg` handling.
 
 ## Decisions
 
-| Area      | Decision                                                                                                                                                                |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Framework | Astro (static output) + Svelte 5 islands; the app is a single `client:only` Svelte SPA mounted on one Astro page                                                        |
-| Git       | `isomorphic-git` with a browser filesystem (OPFS, falling back to `@isomorphic-git/lightning-fs` / IndexedDB)                                                           |
-| Transport | Git smart-HTTP through a stateless, locked-down Cloudflare Worker proxy (self-hostable)                                                                                 |
-| Auth      | OAuth sign-in: GitHub App (user-to-server tokens), GitLab OAuth (PKCE), Bitbucket OAuth. Token exchange/refresh via the same Worker. PAT fallback for self-hosted hosts |
-| Sync      | Manual **Sync** button: local commits on save, pull + merge + push on demand. Unsynced-changes badge and reminders                                                      |
-| Parsing   | `uniorg-parse` with `trackPosition: true` for reading/indexing/rendering                                                                                                |
-| Writing   | **Text patches only**: never re-serialise a file from an AST                                                                                                            |
-| Index     | IndexedDB via Dexie, keyed by git blob OID for incremental re-indexing                                                                                                  |
-| Search    | MiniSearch (fuzzy + prefix), persisted and rebuilt incrementally                                                                                                        |
-| Editor    | CodeMirror 6, org language + live-preview decorations; separate reading view                                                                                            |
-| Graph     | d3-force simulation in a Web Worker, rendered on `<canvas>`                                                                                                             |
-| Offline   | Service worker + web app manifest; installable on iOS/Android/desktop                                                                                                   |
-| License   | GPL-3.0-or-later (uniorg, the org parser, is GPL; the worker stays Apache-2.0)                                                                                          |
+| Area      | Decision                                                                                                                                                               |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework | Astro (static output) + Svelte 5; the app is a single `client:only` Svelte SPA mounted on one Astro page                                                               |
+| Git       | `isomorphic-git` on `@isomorphic-git/lightning-fs` (IndexedDB)                                                                                                         |
+| Transport | Git smart-HTTP through a stateless, locked-down Cloudflare Worker proxy (self-hostable); the same worker relays WebDAV                                                 |
+| Auth      | OAuth sign-in: GitHub App (user-to-server tokens), GitLab OAuth (PKCE), Bitbucket OAuth; Dropbox and Microsoft with PKCE from the browser. Access tokens as a fallback |
+| Sync      | Git: edits autosave to the working tree; commit (or opt-in auto-commit), pull and push are explicit. Cloud: automatic, three-way merge per file                        |
+| Parsing   | `uniorg-parse` with `trackPosition: true` for rendering; a line scanner for indexing                                                                                   |
+| Writing   | **Text patches only**: never re-serialise a file from an AST                                                                                                           |
+| Index     | Per-file parsed index cached in IndexedDB (Dexie); the vault model (nodes, links, tags, agenda) is built in memory from it                                             |
+| Search    | MiniSearch in memory for quick search; full-text search scans files on demand                                                                                          |
+| Editor    | CodeMirror 6, org highlighting + live-preview decorations; separate reading view                                                                                       |
+| Graph     | d3-force on the main thread, drawn on `<canvas>`                                                                                                                       |
+| Install   | Web app manifest (add to home screen); no service worker yet                                                                                                           |
+| License   | GPL-3.0-or-later (uniorg, the org parser, is GPL; the worker stays Apache-2.0)                                                                                         |
 
 ## Architecture
 
 ```
-┌────────────────────────── Browser (GitHub Pages origin) ──────────────────────────┐
-│                                                                                    │
-│  Svelte UI ──► stores ──► services                                                 │
-│   │                        ├─ vault/    open, read, save (optimistic hash check)   │
-│   │                        ├─ org/      parse (uniorg), patch ops, roam metadata   │
-│   │                        ├─ index/    Dexie tables + MiniSearch, blob-OID diff   │
-│   │                        ├─ git/      isomorphic-git: clone, commit, pull, push  │
-│   │                        └─ auth/     OAuth flows, token store, refresh          │
-│   │                                                                                │
-│   └─ Web Workers: indexer (parse + extract), graph layout                          │
-│                                                                                    │
-│  Storage: OPFS (git working tree + .git), IndexedDB (index, tokens, prefs)         │
-└───────────────┬──────────────────────────────────────────────┬─────────────────────┘
-                │ git smart-HTTP (+ token)                     │ REST (repo list, user)
-                ▼                                              ▼  direct, CORS-enabled
-   ┌──────────────────────────┐                    github.com / gitlab.com / bitbucket.org APIs
-   │ Cloudflare Worker        │
-   │  /git/<host>/<path>      │──► github.com / gitlab.com / bitbucket.org (git endpoints)
-   │  /auth/<provider>/token  │──► provider OAuth token endpoints (adds client secret)
-   │  /auth/<provider>/refresh│
-   │  stateless · no logs     │
-   └──────────────────────────┘
+┌──────────────────── Browser (my-celium.org or the GitHub Pages copy) ─────────────────────┐
+│                                                                                            │
+│  Svelte UI (src/app) ──► AppState ──► src/lib                                              │
+│                                        ├─ org/      parse (uniorg), scanner, patch ops     │
+│                                        ├─ vault/    nodes, links, agenda, search, layout   │
+│                                        ├─ git/      isomorphic-git workspace, merge        │
+│                                        ├─ sync/     cloud sync engine (three-way merge)    │
+│                                        ├─ dropbox/ onedrive/ webdav/   service clients     │
+│                                        ├─ auth/     OAuth flows (PKCE), refresh            │
+│                                        └─ store/    Dexie: vaults, files, handles, …       │
+│                                                                                            │
+│  Storage: IndexedDB (git repo via LightningFS, parsed files, sync bases, cached pictures,  │
+│           vault records with their tokens)                                                 │
+└───────────────┬──────────────────────────────────────────┬─────────────────────────────────┘
+                │ git smart-HTTP, WebDAV                   │ REST, direct (CORS-enabled)
+                ▼                                          ▼
+   ┌───────────────────────────┐              git host APIs (repo list, user),
+   │ Cloudflare Worker         │              Dropbox and Microsoft Graph
+   │  /<host>/<path>           │──► github.com / gitlab.com / bitbucket.org (+ EXTRA_GIT_HOSTS)
+   │  /dav/<host>/<path>       │──► the user's WebDAV server
+   │  /oauth/<provider>/token  │──► provider OAuth token endpoints (adds client secret)
+   │  /oauth/<provider>/refresh│
+   │  stateless · no logs      │
+   └───────────────────────────┘
 ```
 
 ## File-accuracy model (the most important invariant)
 
 1. **Read**: `uniorg-parse` with positions gives exact offsets for every element.
-   We also keep a thin line-level scanner (ported from the old app's
-   `src/lib/org/*.ts`) for the hot paths: headline, keyword, priority, tags,
-   planning lines, property drawers.
+   A line-level scanner handles the hot paths: headlines, keywords, priority,
+   tags, planning lines, property drawers.
 2. **Write**: every mutation is a list of `{from, to, insert}` text changes
    against the exact source string that was loaded:
    - Editor typing: CodeMirror transactions are already minimal changes.
    - Structured ops (cycle TODO, set priority, toggle checkbox, set
-     SCHEDULED/DEADLINE, add tag, add `:ID:` drawer, rename link descriptions
-     across files) are pure functions `(source, target) → Change[]` that touch
-     only the bytes they must.
+     SCHEDULED/DEADLINE, add tag, add `:ID:` drawer, clock, refile, tables)
+     are pure functions `(source, target) → Change[]` that touch only the
+     bytes they must.
 3. **Preserve**: line endings (LF/CRLF), trailing newline presence, indentation,
    keyword order and unknown syntax are never normalised.
-4. **Guard**: saving compares the hash of the file as loaded with the working
-   tree; mismatch → conflict UI, never a silent overwrite.
-5. **Test**: property/round-trip tests assert that bytes outside each change's
-   range are identical, run over the old repo's sample vault plus a corpus of
-   edge cases (CRLF, no final newline, src blocks containing `*`, drawers with
-   odd casing, Unicode tags, per-file `#+TODO:`).
+4. **Guard**: changes from elsewhere (a pull, a cloud sync) merge with local
+   edits line by line; overlaps open the conflict resolver, never a silent
+   overwrite.
+5. **Test**: round-trip tests assert that bytes outside each change's range
+   are identical, over fixtures and a corpus of real org files (CRLF, no final
+   newline, src blocks containing `*`, drawers with odd casing, Unicode tags,
+   per-file `#+TODO:`).
 
 ## org-roam detection
 
-On first open we scan the repo and infer, with overrides in Settings:
+On first open we scan the files and infer, with overrides in Settings:
 
-- **Roam root**: the directory containing the most files with `:ID:` drawers
-  (supports vaults in a subfolder of the repo).
+- **Roam root**: the deepest folder containing every file with an `:ID:`
+  (supports vaults in a subfolder of the repository).
 - **Nodes**: file-level nodes (top `:PROPERTIES:` with `:ID:` + `#+title`) and
   headline nodes (headline drawer with `:ID:`). `ROAM_ALIASES`, `ROAM_REFS`,
   `ROAM_EXCLUDE` (file and node level), `#+filetags` and inherited tags.
 - **Links**: `id:` links (and `roam:` / `file:` links resolved to nodes), skipping
-  src/example blocks, comments and verbatim, as the old indexer did.
-- **Dailies**: directory (default `daily/`) and filename format inferred from
-  existing files (`%Y-%m-%d.org` default).
-- **New-node filenames**: inferred pattern, defaulting to org-roam's
-  `%Y%m%d%H%M%S-${slug}.org`.
-- **TODO keywords**: per-file `#+TODO:` / `#+SEQ_TODO:` plus a global setting.
+  src/example blocks, comments and verbatim.
+- **Dailies**: directory (default `daily/`) and filename format, `YYYY-MM-DD`
+  or `YYYYMMDD`, detected from existing files.
+- **New-node filenames**: org-roam's default `%Y%m%d%H%M%S-${slug}.org`.
+- **TODO keywords**: per-file `#+TODO:` / `#+SEQ_TODO:` plus a per-vault setting.
 - Capture templates are defined in-app (we cannot evaluate Emacs Lisp).
 
-## Index (IndexedDB / Dexie)
+## Storage (IndexedDB / Dexie)
 
-Mirrors org-roam v2's schema so concepts map 1:1:
+| Table      | Key              | Holds                                                                |
+| ---------- | ---------------- | -------------------------------------------------------------------- |
+| `vaults`   | `id`             | Vault record: kind (git, cloud, folder, demo), settings, credentials |
+| `files`    | `vaultId + path` | Source and its scanned index (headlines, links, keywords) per file   |
+| `handles`  | `id`             | File System Access handles for local folders                         |
+| `syncbase` | `vaultId + path` | Last synced version of each cloud file (the merge base)              |
+| `blobs`    | `vaultId + path` | Pictures downloaded from cloud vaults                                |
 
-| Table       | Key              | Fields                                                                                                       |
-| ----------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
-| `files`     | `path`           | `oid` (git blob id), `title`, `mtime`, `excluded`, `todoKeywords`                                            |
-| `nodes`     | `id`             | `file`, `level`, `pos`, `title`, `olp`, `todo`, `priority`, `scheduled`, `deadline`, `properties`            |
-| `aliases`   | `[nodeId+alias]` |                                                                                                              |
-| `tags`      | `[nodeId+tag]`   | indexed by `tag`                                                                                             |
-| `refs`      | `[nodeId+ref]`   | `type`                                                                                                       |
-| `links`     | auto             | `source`, `dest`, `type`, `pos`, `context` (snippet for backlinks) — indexed by `source` and `dest`          |
-| `headlines` | `[file+pos]`     | all headlines incl. non-nodes, for agenda: `todo`, `priority`, `scheduled`, `deadline`, `closed`, `repeater` |
-| `meta`      | key              | schema version, last indexed commit, detected config                                                         |
-
-Incremental update: diff the working tree's blob OIDs against `files.oid`;
-re-parse only changed files in the indexer worker; write in one transaction.
-MiniSearch holds titles, aliases, tags and body text with snippet extraction.
+The git repository itself lives in LightningFS's own IndexedDB database. Only
+changed files are re-scanned; the vault model is rebuilt in memory.
 
 ## Auth & Worker
 
 **Sign-in (GitHub App example)**
 
-1. App redirects to the provider's authorize URL with `state` + PKCE challenge.
+1. App redirects to the provider's authorize URL with `state` + PKCE challenge
+   (Bitbucket has no PKCE and uses its consumer secret instead).
 2. First time: the user installs the GitHub App on chosen repositories
    (Contents: read/write, Metadata: read).
-3. Provider redirects to `/<base>/auth/callback?code&state`.
-4. Browser POSTs `code` + `code_verifier` to the Worker `/auth/github/token`;
-   the Worker adds the client secret, calls the provider, returns the token
-   JSON. Nothing is stored or logged.
-5. Tokens are kept in IndexedDB on the device; refresh via `/auth/<p>/refresh`.
+3. Provider redirects to `/<base>/auth/callback/?code&state`.
+4. Browser POSTs `code` + `code_verifier` to the worker
+   `/oauth/github/token`; the worker adds the client secret, calls the
+   provider and returns the token JSON. Nothing is stored or logged.
+5. Tokens are kept in IndexedDB on the device; refresh via
+   `/oauth/<provider>/refresh`.
 
-| Provider   | Access token | Refresh                                             |
-| ---------- | ------------ | --------------------------------------------------- |
-| GitHub App | 8 h          | refresh token ~6 months, rotated on use             |
-| GitLab     | 2 h          | PKCE public client; refresh may not need the Worker |
-| Bitbucket  | 2 h          | via Worker (needs client secret)                    |
+| Provider   | Access token | Refresh                                 |
+| ---------- | ------------ | --------------------------------------- |
+| GitHub App | 8 h          | refresh token ~6 months, rotated on use |
+| GitLab     | 2 h          | via the worker (no secret needed)       |
+| Bitbucket  | 2 h          | via the worker (needs client secret)    |
 
-**Worker hardening**: `Origin` allowlist (our Pages origin + configured
-extras); host allowlist (github.com, gitlab.com, bitbucket.org); path allowlist
+**Worker hardening**: `Origin` allowlist; git host allowlist (github.com,
+gitlab.com, bitbucket.org, plus `EXTRA_GIT_HOSTS`); git path allowlist
 (`/info/refs?service=git-upload-pack|git-receive-pack`, `/git-upload-pack`,
-`/git-receive-pack`); streaming pass-through; observability/logging disabled; no
-KV/D1/R2 bindings; Cloudflare rate-limit rule. Users can deploy their own Worker
-and set its URL in Settings. Free tier (100k requests/day) covers ~20k syncs/day.
+`/git-receive-pack`); WebDAV relay limited to public HTTPS hosts (optionally
+`DAV_HOSTS`), WebDAV methods and credentialed requests; streaming
+pass-through; logging off; no KV/D1/R2 bindings; Cloudflare rate-limit rule.
+Users can deploy their own worker and set its URL in Settings.
 
 ## Sync
 
-- Save → write working tree → `git add` + local commit (message like
-  `Update projects.org` or `Capture to 2026-10-20.org`). Batched edits to the
-  same file within a session are amended into one local commit until synced.
-- **Sync** button → fetch → if fast-forward, update; else three-way merge per
-  file (`isomorphic-git` merge with custom `mergeDriver` for clean text merges)
-  → conflicts open a side-by-side resolver → push → re-index changed files.
-- Status indicator: `Synced` / `N unsynced changes` / `Behind` / `Conflict`.
-  Prompt on `visibilitychange`/`beforeunload` when unsynced.
-- Storage persistence: request `navigator.storage.persist()`; on iOS prompt to
-  install to Home Screen (exempt from Safari's 7-day storage eviction).
+- **Git**: saving writes the working tree; the Changes page shows diffs, and
+  the person writes a message and commits (auto-commit is opt-in). Pull merges
+  per file (org-aware three-way merge) and never overwrites uncommitted work;
+  conflicts open a side-by-side resolver. Push is separate. The status shows
+  how far ahead/behind the branch is.
+- **Cloud**: edits upload a few seconds after typing stops; checks run on
+  opening, returning to and reconnecting the app, and periodically while it's
+  open (slowing down while nothing changes). Uploads name the version they're
+  based on; a newer one is merged line by line first.
+- Storage persistence: `navigator.storage.persist()` is requested.
 
 ## UI & features
 
-Layout: command-centric, keyboard-first on desktop, thumb-friendly on mobile.
+- **Home**: quick capture, what's up next, recent daily notes, recently added notes, tags.
+- **Note view**: reading view (links, tables, src blocks with highlighting,
+  images, maths, transclusion, folding) ⇄ live-preview editor. Backlinks with
+  context and unlinked references beside the note (or below it when narrow).
+- **Editor**: org highlighting, live preview of markup, links, bullets,
+  checkboxes and inline maths; `[[` completion with create-and-link; a
+  formatting bar (above the keyboard on phones); org table keys; pictures by
+  paste, drop or picker.
+- **Tabs and split view** on wide screens, remembered per vault.
+- **Capture**: shortcut and templates (daily item, task, journal, new note).
+- **Dailies**: calendar, previous/next, create on open.
+- **Agenda & tasks**: overdue, today, upcoming; filters by tag, state,
+  priority, category, text and org match strings; habits; a time grid;
+  clocking; refile and archive; repeaters (`+`, `++`, `.+`) and `CLOSED:`.
+- **Search**: `⌘K` quick switcher and commands, full-text search page.
+- **Graph**: whole vault or local, tag colouring, orphans, zoom to fit.
+- **Settings**: vault, sync proxy, roam root, dailies, TODO keywords, capture
+  templates, pictures folder, theme, text size, editor mode, line breaks.
 
-- **Home**: today's daily, recent nodes, agenda summary, quick capture.
-- **Node view**: reading view (sanitised render: links, tables, src blocks with
-  highlighting, images from the repo via blob URLs, folding) ⇄ live-preview
-  editor. Right rail / bottom sheet: backlinks with context, forward links,
-  unlinked mentions, outline, local graph.
-- **Editor**: CodeMirror 6 with org highlighting, live-preview of
-  markup/links/checkboxes, `[[` node autocomplete, create-node-and-link, TODO /
-  priority / tag / date pickers, mobile formatting toolbar above the keyboard.
-- **Capture**: global shortcut / floating button; templates (daily entry, new
-  node, TODO into inbox).
-- **Dailies**: calendar, prev/next, create-on-open.
-- **Agenda & tasks**: week view, overdue, filtering by keyword/tag/priority;
-  repeater semantics (`+`, `++`, `.+`) and `CLOSED:` stamping.
-- **Search & quick switcher**: `⌘K`, fuzzy, snippets, tag filters.
-- **Graph**: global + local, tag colouring, orphan highlighting, zoom-to-fit.
-- **Refactor**: rename node and update link descriptions across files.
-- **Settings**: providers/accounts, proxy URL, roam root, dailies, filename
-  patterns, TODO keywords, theme, capture templates.
-
-Design: light/dark/system themes via CSS custom properties, system font stack
-plus a refined serif for reading, 4.5:1 contrast minimum, visible focus rings,
+Design: light/dark/system themes via CSS custom properties, self-hosted Inter,
+Newsreader and JetBrains Mono, 4.5:1 contrast minimum, visible focus rings,
 `prefers-reduced-motion`, full keyboard navigation, ARIA landmarks/live regions,
 44px touch targets.
 
-Security: strict CSP (`script-src 'self'`, `connect-src` limited to provider
-APIs + proxy), DOMPurify on all rendered HTML (incl. `#+BEGIN_EXPORT html`),
-`file:`/`javascript:` link schemes neutralised, tokens never placed in URLs.
+Security: strict CSP (hashed scripts; `connect-src` allows HTTPS for the hosts
+people connect), link schemes limited to an allowlist (no `javascript:`),
+export blocks shown as code rather than rendered, the only injected HTML is
+KaTeX's own output (`trust: false`), tokens never placed in URLs.
 
 ## Repository layout
 
 ```
-/                       Astro project
-├─ src/pages/           index.astro (landing), app.astro (SPA mount), auth/callback.astro
-├─ src/app/             Svelte SPA: components/, routes/, stores/
-├─ src/lib/org/         parse, patch ops, roam extraction, agenda, timestamps
-├─ src/lib/index/       Dexie schema, indexer worker, search
-├─ src/lib/git/         isomorphic-git wrapper, fs adapter, merge
-├─ src/lib/auth/        providers, PKCE, token store
-├─ src/lib/editor/      CodeMirror language + extensions
-├─ src/lib/graph/       layout worker + canvas renderer
-├─ worker/              Cloudflare Worker (auth exchange + git proxy) + wrangler.toml
-├─ tests/fixtures/      sample vaults (incl. the original Mycelium sample vault)
-└─ .github/workflows/   ci.yml (lint, typecheck, test), deploy.yml (Pages), worker.yml
+/                        Astro project
+├─ src/pages/            index.astro (landing), app.astro (SPA mount), auth/callback
+├─ src/app/              Svelte SPA: components/, views/, editor/, org/ (renderer), actions/
+├─ src/lib/org/          parse, scanner, patch ops, roam extraction, agenda, tables, clock
+├─ src/lib/vault/        vault model, layout detection, search, graph layout, pictures
+├─ src/lib/git/          isomorphic-git workspace, providers, merge, diff
+├─ src/lib/sync/         cloud sync engine and workspace
+├─ src/lib/dropbox/ onedrive/ webdav/   cloud clients
+├─ src/lib/auth/         OAuth (PKCE) for git hosts and cloud storage
+├─ src/lib/store/        Dexie schema
+├─ worker/               Cloudflare Worker (git proxy, WebDAV relay, OAuth) + wrangler.jsonc
+├─ tests/                fixtures, e2e (Playwright), benchmarks
+└─ .github/workflows/    ci.yml (format, check, unit, build, e2e), deploy.yml (Pages), worker.yml
 ```
 
-Tooling: TypeScript strict, Vitest (unit + round-trip), Playwright (e2e against a
-local git server fixture), ESLint + Prettier, axe-core accessibility checks in
-e2e, Lighthouse CI budget.
+Tooling: TypeScript strict, Vitest (unit + round-trip), Playwright (e2e against
+a local git server fixture, desktop and phone), Prettier, axe-core
+accessibility checks in e2e. Lighthouse runs by hand.
 
-## Phases
+## Open items
 
-1. **Foundation**: Astro + Svelte scaffold, design tokens/themes, Pages deploy
-   workflow, CI. Org layer: parsing with positions, roam metadata extraction,
-   patch ops, round-trip test suite. _Exit: patch ops proven byte-safe on the
-   fixture corpus._
-2. **Git, auth & index**: Worker (proxy + OAuth), provider adapters, clone into
-   OPFS, Dexie index, indexer worker, MiniSearch, PAT fallback. _Exit: sign in,
-   pick repo, clone, browse an indexed vault offline._
-3. **Read & navigate**: reading view, backlinks/forward links/unlinked mentions,
-   file & tag browser, quick switcher, search page.
-4. **Edit & sync**: CodeMirror live-preview editor, autocomplete, structured
-   edits, save + local commit, Sync with merge and conflict resolver.
-5. **Capture, dailies, agenda, graph.**
-6. **Polish**: PWA/offline, mobile keyboard toolbar, accessibility audit,
-   performance at 5k+ notes, docs (user guide + self-hosting the Worker).
-
-## Open items (defaults chosen; can be revisited)
-
-- Encrypted `.org.gpg` files: shown as locked/unsupported in v1.
-- Attachments (`org-attach`, images): render and insert images; upload stores
-  files under `images/` (configurable).
-- Self-hosted GitLab / Bitbucket Server / Gitea: PAT + custom host with a
-  user-supplied proxy.
+- Encrypted `.org.gpg` files: not handled yet.
+- Offline app cache (service worker), so the app opens with no connection.
+- A file browser, and renaming a node across files.
+- Self-hosted GitLab / Bitbucket Server / Gitea: access token + the host in
+  the worker's `EXTRA_GIT_HOSTS`.
 - Commit author identity: from the provider profile; editable in Settings.

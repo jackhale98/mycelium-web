@@ -96,8 +96,8 @@ Nothing changes on the `mycelium-sync` worker.
 
 ### Step 5 — Check it
 
-1. Open `https://my-celium.org/app#/vaults`. A **Dropbox** panel with
-   **Connect Dropbox** should appear. If it doesn't, the build didn't get
+1. Open `https://my-celium.org/app#/vaults`. In the **Cloud storage** panel,
+   a **Connect Dropbox** button should appear. If it doesn't, the build didn't get
    `PUBLIC_DROPBOX_APP_KEY`.
 2. Connect, open your notes folder, and select **Use \<folder\>**. Mycelium
    downloads the `.org` files and works out the layout, such as a `daily/`
@@ -197,16 +197,18 @@ for:
 
 ### The relay
 
-The relay is part of the `mycelium-sync` worker, at `/dav/<host>/<path>`. It
-redeploys with the worker, so after merging this change, make sure the worker
-has rebuilt (**Workers & Pages** → `mycelium-sync` → **Deployments**). It is
-deliberately narrow:
+The relay is part of the `mycelium-sync` worker, at `/dav/<host>/<path>`, and
+deploys with it: after updating, check the worker has redeployed (**Workers &
+Pages** → `mycelium-sync` → **Deployments**, or run the **Deploy worker**
+workflow). It is deliberately narrow:
 
 - only WebDAV file requests (`PROPFIND`, `GET`, `PUT`, `DELETE`, `MKCOL`), and
   only from this site's origins (`ALLOWED_ORIGINS`);
-- only HTTPS servers named by host name: no IP addresses, `localhost`, or
-  `.local`/`.internal` names, so it can't reach private networks;
-- only requests that carry a user name and password, and at most 20 MB;
+- only HTTPS servers named by host name: no IP addresses, single-label names,
+  `localhost`, or `.local`/`.internal`/`.lan`/`.home.arpa` names, so it can't
+  reach private networks;
+- only requests that carry a user name and password, and none declaring more
+  than 20 MB;
 - redirects aren't followed, so a password can't be forwarded elsewhere;
 - nothing is stored or logged.
 
@@ -221,9 +223,10 @@ network with the relay off and CORS allowed.
 
 ## How sync behaves
 
-- **Offline first.** Notes are kept in the browser, so a cloud vault opens
-  and edits without a connection. Edits made offline upload when the
-  connection comes back.
+- **Keeps going offline.** Notes are kept in the browser, so if the connection
+  drops you keep reading and editing, and those edits upload when it comes
+  back. Adding a picture needs a connection. (Loading the app itself needs a
+  connection for now: there's no offline app cache yet.)
 - **When it syncs:**
   - a few seconds after you stop editing;
   - when you open or return to the app, and when you reconnect;
@@ -233,8 +236,9 @@ network with the relay off and CORS allowed.
   - when you select **Sync now** in the sidebar or on Changes.
 
   Browsers don't let web apps sync in the background, so changes from other
-  devices arrive the next time Mycelium is open. Nothing runs while the app
-  is closed or in the background, so it doesn't drain the battery.
+  devices arrive the next time Mycelium is open. Apart from uploading waiting
+  edits as you leave, nothing runs while the app is closed or in the
+  background, so it doesn't drain the battery.
 
 - **Data use.** A check that finds nothing new is about 1–2 KB for Dropbox and
   OneDrive. Edits upload the whole file, usually a few KB. Connecting
@@ -261,8 +265,9 @@ network with the relay off and CORS allowed.
   based on (a Dropbox revision, or the file's ETag for OneDrive and WebDAV).
   If the service has a newer one, the upload is refused, Mycelium merges the
   newer version and then uploads.
-- **Only `.org` files** are synced; other files and hidden folders are left
-  alone. Removing a cloud vault from Mycelium deletes only the browser's
+- **Only `.org` and `.org_archive` files** are synced; hidden folders are
+  skipped. Pictures you add are uploaded straight away, and pictures in notes
+  are downloaded when shown, then kept in the browser. Removing a cloud vault from Mycelium deletes only the browser's
   copy, never anything in the service.
 
 ## Troubleshooting

@@ -22,6 +22,22 @@ const LICENSES_TMP = fileURLToPath(
 	new URL('./node_modules/.cache/third-party-licenses.txt', import.meta.url),
 );
 
+const LUCIDE_LICENSE = `ISC License
+
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.`;
+
 /**
  * Third-party licences of exactly what the browser downloads (the client
  * bundle, not build tools), written to /third-party-licenses.txt with each
@@ -57,6 +73,16 @@ const thirdPartyLicenses = {
 									.filter((line, i) => line !== '' || i > 3)
 									.join('\n'),
 							),
+						// Icons adapted from Lucide live inline in Icon.svelte, not as a package.
+						[
+							'='.repeat(78),
+							'Lucide (icons, adapted)',
+							'License: ISC',
+							'Source: https://github.com/lucide-icons/lucide',
+							'',
+							LUCIDE_LICENSE,
+							'',
+						].join('\n'),
 						// Fonts are CSS assets, which the bundle analysis doesn't see.
 						...FONTS.map((name) =>
 							[
