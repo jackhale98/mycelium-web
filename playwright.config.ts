@@ -17,6 +17,9 @@ export default defineConfig({
 	use: {
 		baseURL: `http://localhost:4321${BASE}`,
 		trace: 'retain-on-failure',
+		// Requests a service worker answers bypass page.route; tests that need
+		// it (offline.spec.ts) turn it back on.
+		serviceWorkers: 'block',
 		launchOptions,
 	},
 	projects: [

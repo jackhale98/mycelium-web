@@ -24,6 +24,19 @@
 	import { untrack } from 'svelte';
 
 	$effect(() => router.start());
+	// Offline: a service worker keeps the app's files, so it opens without a
+	// connection (production builds only; dev serves files that change).
+	$effect(() => {
+		if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+		const register = () =>
+			navigator.serviceWorker
+				.register(`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}sw.js`)
+				.catch(() => {
+					// Not available (a private window, say): the app works online as before.
+				});
+		if (document.readyState === 'complete') register();
+		else addEventListener('load', register, { once: true });
+	});
 	$effect(() => panes.start());
 	// Each vault remembers its tabs and split.
 	$effect(() => {

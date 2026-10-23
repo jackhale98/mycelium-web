@@ -1,6 +1,7 @@
 // @ts-check
 import { readFileSync } from 'node:fs';
-import { copyFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { copyFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import svelte from '@astrojs/svelte';
@@ -108,6 +109,45 @@ const thirdPartyLicenses = {
 		environment.name === 'client',
 };
 
+/**
+ * The service worker (scripts/sw.js), written to /sw.js with this build's
+ * files: the pages, every script and font, icons and the manifest, so the
+ * app opens offline. Its version is a hash of their contents.
+ */
+const offlineApp = {
+	name: 'offline-app',
+	hooks: {
+		'astro:build:done': async (/** @type {{ dir: URL }} */ { dir }) => {
+			const root = fileURLToPath(dir);
+			const all = /** @type {string[]} */ (await readdir(root, { recursive: true }));
+			const files = all
+				.map((f) => f.split('\\').join('/'))
+				.filter(
+					(f) =>
+						/^_astro\/.*\.(js|css|woff2)$/.test(f) ||
+						/^icons\/.*\.png$/.test(f) ||
+						['index.html', 'app/index.html', 'manifest.webmanifest', 'favicon.svg'].includes(f) ||
+						/^mycelium-.*\.svg$/.test(f),
+				)
+				.sort();
+			const hash = createHash('sha256');
+			for (const f of files) hash.update(f).update(await readFile(new URL(f, dir)));
+			// Pages are stored under their address (`./`, `app/`), not their file name.
+			const paths = files.map((f) => f.replace(/(^|\/)index\.html$/, '$1') || './');
+			const template = await readFile(new URL('./scripts/sw.js', import.meta.url), 'utf8');
+			await writeFile(
+				new URL('sw.js', dir),
+				template
+					.replace(
+						"const VERSION = '__VERSION__';",
+						`const VERSION = '${hash.digest('hex').slice(0, 16)}';`,
+					)
+					.replace('const FILES = __FILES__;', `const FILES = ${JSON.stringify(paths)};`),
+			);
+		},
+	},
+};
+
 export default defineConfig({
 	site,
 	base,
@@ -118,6 +158,7 @@ export default defineConfig({
 	trailingSlash: 'ignore',
 	integrations: [
 		svelte(),
+		offlineApp,
 		{
 			name: 'third-party-licenses',
 			hooks: {
@@ -135,6 +176,8 @@ export default defineConfig({
 				"default-src 'self'",
 				"img-src 'self' data: blob:",
 				"font-src 'self'",
+				// The service worker that keeps the app working offline.
+				"worker-src 'self'",
 				// Git hosts, the user's sync proxy and provider APIs are all HTTPS; plain
 				// HTTP is only allowed to a local git server during development.
 				"connect-src 'self' https: http://localhost:* http://127.0.0.1:*",

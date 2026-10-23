@@ -16,8 +16,8 @@ WebDAV servers.
   `https://<worker>/dav/<host>/<path>`. Only `PROPFIND`, `GET`, `PUT`,
   `DELETE` and `MKCOL`; only HTTPS host names (no IP addresses, single-label
   names, or `localhost`, `.local`, `.internal`, `.lan` and `.home.arpa`
-  names); only requests with credentials; requests declaring more than 20 MB
-  (`Content-Length`) are refused; redirects aren't followed. Set `DAV_HOSTS` (comma-separated host names) to allow only
+  names); only requests with credentials; bodies over 20 MB are refused (declared or
+  not); redirects aren't followed. Set `DAV_HOSTS` (comma-separated host names) to allow only
   your own servers. See [docs/setup-cloud-storage.md](../docs/setup-cloud-storage.md#webdav-and-nextcloud).
 
 It has no storage bindings and logging is disabled. Tokens pass through in

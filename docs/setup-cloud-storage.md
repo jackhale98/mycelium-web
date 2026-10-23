@@ -207,8 +207,8 @@ workflow). It is deliberately narrow:
 - only HTTPS servers named by host name: no IP addresses, single-label names,
   `localhost`, or `.local`/`.internal`/`.lan`/`.home.arpa` names, so it can't
   reach private networks;
-- only requests that carry a user name and password, and none declaring more
-  than 20 MB;
+- only requests that carry a user name and password, and bodies of at most
+  20 MB;
 - redirects aren't followed, so a password can't be forwarded elsewhere;
 - nothing is stored or logged.
 
@@ -225,8 +225,8 @@ network with the relay off and CORS allowed.
 
 - **Keeps going offline.** Notes are kept in the browser, so if the connection
   drops you keep reading and editing, and those edits upload when it comes
-  back. Adding a picture needs a connection. (Loading the app itself needs a
-  connection for now: there's no offline app cache yet.)
+  back. After your first visit the app itself opens with no connection too.
+  Adding a picture needs a connection.
 - **When it syncs:**
   - a few seconds after you stop editing;
   - when you open or return to the app, and when you reconnect;

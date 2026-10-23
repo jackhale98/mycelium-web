@@ -65,6 +65,8 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   merged line by line
   (overlaps get the same resolver as git). Dropbox and Microsoft are called
   directly from the browser; WebDAV goes through a relay that stores nothing.
+- **Works offline:** after your first visit the app opens with no connection;
+  git commits wait for you to push, and cloud edits upload when you're back.
 - **Local folders** (Chrome, Edge and friends on desktop): edit an org-roam
   directory in place and commit with your own tools.
 

@@ -187,6 +187,7 @@ describe('WebDAV relay', () => {
 		expect(sent.get('authorization')).toBe(auth.Authorization);
 		expect(sent.get('cookie')).toBeNull();
 		expect(init.redirect).toBe('manual');
+		expect(new TextDecoder().decode(init.body as Uint8Array)).toBe('<propfind/>');
 	});
 
 	it('refuses other methods, anonymous requests, private hosts and hosts not allowed', async () => {
@@ -202,6 +203,38 @@ describe('WebDAV relay', () => {
 			headers: { ...auth, Origin: ORIGIN },
 		});
 		expect((await worker.fetch(req, pinned)).status).toBe(403);
+	});
+
+	it('holds WebDAV bodies to 20 MB, whether or not they declare a length', async () => {
+		const upstream = vi.fn();
+		vi.stubGlobal('fetch', upstream);
+		const big = 20 * 1024 * 1024 + 1;
+		// Declared too large: refused before reading.
+		const declared = await call('/dav/cloud.example.com/x', {
+			method: 'PUT',
+			headers: { ...auth, 'Content-Length': String(big) },
+			body: 'x',
+		});
+		expect(declared.status).toBe(413);
+		// Streamed with no length: refused once the bytes pass the limit.
+		const chunk = new Uint8Array(1024 * 1024);
+		let sent = 0;
+		const stream = new ReadableStream<Uint8Array>({
+			pull(c) {
+				if (sent >= big) return c.close();
+				sent += chunk.byteLength;
+				c.enqueue(chunk);
+			},
+		});
+		const req = new Request('https://proxy.example/dav/cloud.example.com/x', {
+			method: 'PUT',
+			headers: { ...auth, Origin: ORIGIN },
+			body: stream,
+			duplex: 'half',
+		} as RequestInit);
+		expect((await worker.fetch(req, env)).status).toBe(413);
+		expect(sent).toBeLessThan(big + 2 * chunk.byteLength);
+		expect(upstream).not.toHaveBeenCalled();
 	});
 
 	it('answers preflights for WebDAV methods and headers', async () => {

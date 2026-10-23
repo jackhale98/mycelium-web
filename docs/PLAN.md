@@ -28,8 +28,8 @@ agenda semantics) but not its UI.
       conflict resolver.
 - [x] **Phase 5 — Capture, dailies, agenda, graph:** org-capture-style templates,
       dailies calendar, agenda with org's filters and match strings, saved views.
-- [~] **Phase 6 — Polish:** done: mobile formatting toolbar, accessibility checks
-  (axe in e2e), setup docs. Not yet: service worker / offline app cache.
+- [x] **Phase 6 — Polish:** mobile formatting toolbar, accessibility checks (axe in e2e),
+      setup docs, and a service worker so the app opens offline.
 
 **Since the original plan:** cloud vaults (Dropbox, OneDrive, SharePoint,
 WebDAV) with automatic three-way-merging sync; local folders (File System
@@ -40,7 +40,7 @@ archive; habits and the agenda time grid; TODO keyword editor; text size; hide
 done items; org-transclusion and link search options.
 
 **Not done:** a file-browser page; renaming a node with link descriptions
-updated across files; an offline app cache; `.org.gpg` handling.
+updated across files; `.org.gpg` handling.
 
 ## Decisions
 
@@ -57,7 +57,7 @@ updated across files; an offline app cache; `.org.gpg` handling.
 | Search    | MiniSearch in memory for quick search; full-text search scans files on demand                                                                                          |
 | Editor    | CodeMirror 6, org highlighting + live-preview decorations; separate reading view                                                                                       |
 | Graph     | d3-force on the main thread, drawn on `<canvas>`                                                                                                                       |
-| Install   | Web app manifest (add to home screen); no service worker yet                                                                                                           |
+| Offline   | Web app manifest + a service worker that stores the build's files (pages network-first, hashed files cache-first)                                                      |
 | License   | GPL-3.0-or-later (uniorg, the org parser, is GPL; the worker stays Apache-2.0)                                                                                         |
 
 ## Architecture
@@ -239,7 +239,6 @@ accessibility checks in e2e. Lighthouse runs by hand.
 ## Open items
 
 - Encrypted `.org.gpg` files: not handled yet.
-- Offline app cache (service worker), so the app opens with no connection.
 - A file browser, and renaming a node across files.
 - Self-hosted GitLab / Bitbucket Server / Gitea: access token + the host in
   the worker's `EXTRA_GIT_HOSTS`.

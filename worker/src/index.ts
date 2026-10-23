@@ -214,6 +214,36 @@ export function isPublicHost(host: string): boolean {
 	return !/(^|\.)(localhost|local|internal|lan|home\.arpa)$/.test(name);
 }
 
+const TOO_LARGE = Symbol('too large');
+
+/** Read a body into memory, stopping as soon as it passes `max` bytes. */
+export async function readCapped(
+	stream: ReadableStream<Uint8Array> | null,
+	max: number,
+): Promise<Uint8Array<ArrayBuffer> | null | typeof TOO_LARGE> {
+	if (!stream) return null;
+	const reader = stream.getReader();
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > max) {
+			await reader.cancel();
+			return TOO_LARGE;
+		}
+		chunks.push(value);
+	}
+	const out = new Uint8Array(size);
+	let at = 0;
+	for (const c of chunks) {
+		out.set(c, at);
+		at += c.byteLength;
+	}
+	return out;
+}
+
 /** /dav/<host>/<path> → https://<host>/<path>, WebDAV methods only. */
 async function dav(request: Request, env: Env, url: URL, origin: string): Promise<Response> {
 	const [, , host, ...rest] = url.pathname.split('/');
@@ -234,11 +264,15 @@ async function dav(request: Request, env: Env, url: URL, origin: string): Promis
 		const value = request.headers.get(name);
 		if (value) headers.set(name, value);
 	}
+	// Count what actually arrives: a body sent without Content-Length (chunked)
+	// is held to the same limit.
 	const hasBody = request.method === 'PUT' || request.method === 'PROPFIND';
+	const body = hasBody ? await readCapped(request.body, DAV_MAX_BODY) : null;
+	if (body === TOO_LARGE) return deny(413, 'File too large', origin);
 	const upstream = await fetch(`https://${host}${path}`, {
 		method: request.method,
 		headers,
-		body: hasBody ? request.body : null,
+		body,
 		// Never carry the password to wherever a redirect points.
 		redirect: 'manual',
 	});
