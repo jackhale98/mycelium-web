@@ -31,7 +31,7 @@ jobs:
           # Project sites are served from /<repo>/; a custom domain serves from /.
           SITE_URL: ${{ steps.pages.outputs.origin }}
           SITE_BASE: ${{ steps.pages.outputs.base_path || '/' }}
-          # Your deployed worker (see worker/README.md); falls back to the public test proxy.
+          # Your deployed worker (see worker/README.md); falls back to this project's own worker.
           PUBLIC_GIT_PROXY: ${{ vars.PUBLIC_GIT_PROXY }}
           # Sign-in buttons appear for each provider with a client id (docs/setup-git-providers.md).
           PUBLIC_GITHUB_CLIENT_ID: ${{ vars.PUBLIC_GITHUB_CLIENT_ID }}

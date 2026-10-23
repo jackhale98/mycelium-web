@@ -19,11 +19,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   editor (press <kbd>E</kbd>): markup hides away from the cursor, bullets
   and checkboxes draw as such, and inline maths shows typeset (or switch to
   plain source in Settings). Typing `[[` links to any note — or creates one.
+  A formatting bar (above the keyboard on phones) makes headings, TODOs,
+  emphasis, lists and checkboxes without typing org markup.
 - **Tabs and split view** on wide screens: ⌘/Ctrl-click a link for a new
   tab, Alt-click to open it beside; each pane reads or edits on its own, and
   each vault remembers its layout.
-  A formatting bar (above the keyboard on phones) makes headings, TODOs,
-  emphasis, lists and checkboxes without typing org markup.
 - **Tables, the org way:** Tab, Enter and M-arrows realign and reshape tables
   exactly as `org-table-align` does; on phones, a table sheet edits cells in a
   grid (or one row at a time) and writes the table back aligned.
@@ -46,8 +46,12 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   without linking it, one tap from becoming a link.
 - **Headings at a click:** TODO state, priority, tags, and SCHEDULED/DEADLINE
   dates through the native date picker. Click any date to change it.
+- **Capture** (<kbd>⌘/Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>) with
+  org-capture-style templates: a note or task into today's daily, a journal
+  entry, or a new note.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
-  phrases and snippets, tags, backlinks, dailies and an agenda.
+  phrases and snippets, tags, backlinks, dailies and an agenda with org's
+  filters and tag/property match strings.
 - **Graph** of the whole vault or the neighbourhood of a note.
 - **Git, not a sync service.** Edits autosave to the working tree; you review
   diffs, write commit messages, and pull/push/branch when you choose
@@ -55,8 +59,10 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   get a side-by-side resolver.
 - **Dropbox, OneDrive, SharePoint or WebDAV (Nextcloud…), synced
   automatically:** pick your org-roam folder and edits upload a few seconds
-  later; changes from Emacs or another device come in when you open the app.
-  It works offline, and edits on two devices are merged line by line
+  later; changes from Emacs or another device come in when you open or return
+  to the app, and every few minutes while it's open. Edits made while the
+  connection is down upload once it's back, and edits on two devices are
+  merged line by line
   (overlaps get the same resolver as git). Dropbox and Microsoft are called
   directly from the browser; WebDAV goes through a relay that stores nothing.
 - **Local folders** (Chrome, Edge and friends on desktop): edit an org-roam
@@ -74,8 +80,9 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   `ROAM_ALIASES`, `ROAM_REFS` and `ROAM_EXCLUDE` behave as they do in Emacs.
 - **Private by design.** No backend holds your data. Tokens stay on your
   device; the sync worker is stateless, logs nothing and is self-hostable.
-- **Fast and accessible.** Strict CSP, no third-party requests, self-hosted
-  fonts, keyboard-first navigation and WCAG 2.1 AA checks in CI.
+- **Fast and accessible.** Strict CSP, no analytics and no requests beyond the
+  git host or storage you connect, self-hosted fonts, keyboard-first
+  navigation and WCAG 2.1 AA checks in CI.
 
 ## Development
 
@@ -91,16 +98,20 @@ npm run build && npm run test:e2e   # Playwright end-to-end + axe accessibility
 
 Set `SITE_BASE=/` when building for a custom domain.
 
-| Path             | What lives there                                                   |
-| ---------------- | ------------------------------------------------------------------ |
-| `src/lib/org`    | Pure org logic: parsing, text-patch edits, org-roam extraction     |
-| `src/lib/vault`  | Vault model (backlinks, tags, agenda), layout detection and search |
-| `src/lib/git`    | isomorphic-git repository, org-aware merge, browser workspace      |
-| `worker`         | Stateless Cloudflare Worker: git CORS proxy and OAuth exchange     |
-| `src/app`        | The Svelte app: views, components and the org renderer             |
-| `src/pages`      | Astro pages: landing page and the app shell                        |
-| `src/demo/vault` | The demo org-roam vault                                            |
-| `tests/fixtures` | Org files used by the fidelity suite                               |
+| Path                                    | What lives there                                                   |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| `src/lib/org`                           | Pure org logic: parsing, text-patch edits, org-roam extraction     |
+| `src/lib/vault`                         | Vault model (backlinks, tags, agenda), layout detection and search |
+| `src/lib/git`                           | isomorphic-git repository, org-aware merge, browser workspace      |
+| `src/lib/sync`                          | Sync engine for cloud storage (three-way merge, pending uploads)   |
+| `src/lib/dropbox`, `onedrive`, `webdav` | Cloud storage clients                                              |
+| `src/lib/auth`                          | OAuth sign-in (PKCE) for git hosts and cloud storage               |
+| `src/lib/store`                         | Browser storage of vaults, settings and files (IndexedDB)          |
+| `worker`                                | Stateless Cloudflare Worker: git CORS proxy, WebDAV relay, OAuth   |
+| `src/app`                               | The Svelte app: views, components and the org renderer             |
+| `src/pages`                             | Astro pages: landing page and the app shell                        |
+| `src/demo/vault`                        | The demo org-roam vault                                            |
+| `tests/fixtures`                        | Org files used by the fidelity suite                               |
 
 ## Licence
 

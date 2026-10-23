@@ -23,9 +23,9 @@ sequenceDiagram
     participant B as Browser (Mycelium)
     participant P as Git provider
     participant W as Worker
-    B->>P: 1. Sign in (authorize, PKCE challenge)
+    B->>P: 1. Sign in (authorize, PKCE challenge; Bitbucket has no PKCE)
     P-->>B: 2. Redirect to /auth/callback/ with a one-time code
-    B->>W: 3. Code + verifier
+    B->>W: 3. Code (+ verifier)
     W->>P: 4. Code + client secret
     P-->>W: 5. Access and refresh tokens
     W-->>B: 6. Tokens, passed straight through (nothing stored)
@@ -37,7 +37,8 @@ except to reach the git host.
 
 Every provider gets the same callback URL:
 `https://my-celium.org/auth/callback/`. If the site moves to another domain,
-update it in all three providers and in the worker's `ALLOWED_ORIGINS`. (A
+update it in all three providers and in the worker's `ALLOWED_ORIGINS` (which
+also lists the site's workers.dev address). (A
 copy also builds to `https://jackhale98.github.io/mycelium-web/`; sign-in is
 set up for my-celium.org only, while pasted access tokens work on both.)
 
@@ -121,10 +122,11 @@ repository and redeploys it whenever that folder changes on `main`.
 
 **Allowed origins live in the repository, not the dashboard.**
 `ALLOWED_ORIGINS` is set in `worker/wrangler.jsonc`, and every build applies the
-file's value, so a variable edited in the dashboard would be overwritten on the
-next deploy. It lists `https://my-celium.org`, `https://www.my-celium.org`,
-`https://jackhale98.github.io` (origins, no path) and `http://localhost:4321`
-for local development. To change it, edit
+file's value, so editing it in the dashboard would be undone on the next deploy
+(other dashboard variables are kept: the file sets `keep_vars`). It lists
+`https://my-celium.org`, `https://www.my-celium.org`, the site's workers.dev
+address `https://my-celium.fonur.workers.dev`, `https://jackhale98.github.io`
+(origins, no path) and `http://localhost:4321` for local development. To change it, edit
 the file on GitHub (open it, select the pencil icon, commit to `main`) and
 Cloudflare redeploys by itself.
 
@@ -204,7 +206,8 @@ GitHub → Settings → Applications.
 ## Step 3 — Register the GitLab application
 
 GitLab supports sign-in without a client secret (PKCE), so its application is
-created as non-confidential and no secret goes into the worker.
+created as non-confidential and no secret goes into the worker. (If you make it
+confidential instead, also set the worker secret `GITLAB_CLIENT_SECRET`.)
 
 1. Go to [GitLab → Edit profile → Applications → Add new application](https://gitlab.com/-/user_settings/applications).
    (A group or self-managed instance has the same form under its settings.)
@@ -325,6 +328,9 @@ Step 0 item 6. For the GitHub Pages copy, in `jackhale98/mycelium-web` on GitHub
 Use **Variables**, not Secrets: these values end up in the published
 JavaScript anyway, and the build reads them as variables.
 
+If `PUBLIC_GIT_PROXY` isn't set, the build uses this project's own worker,
+`https://mycelium-sync.fonur.workers.dev`; a fork should point it at its own.
+
 **Redeploy.** On Cloudflare, retry the latest build of `my-celium` (its
 **Deployments** tab); for the GitHub Pages copy, open **Actions → Deploy to
 GitHub Pages → Run workflow** on `main`. Vaults you've already added keep their old proxy; change it under
@@ -341,16 +347,16 @@ Settings → Sync proxy in the app.
 
 **Troubleshooting**
 
-| Symptom                                    | Likely cause                                                 | Fix                                                                                                                |
-| ------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5 and re-run the Pages deploy                                                     |
-| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://my-celium.org/auth/callback/`                                                                 |
-| "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.jsonc` on `main` (Option A rebuilds by itself; with Option B run `npx wrangler deploy`) |
-| "sign-in is not configured on this worker" | A worker secret is missing                                   | Add it under the worker's **Settings → Variables and Secrets**, or `npx wrangler secret put …`                     |
-| Dashboard build fails: name mismatch       | Project name isn't `mycelium-sync`                           | Rename the worker to match `name` in `worker/wrangler.jsonc`, or change the file                                   |
-| Dashboard build fails: no Wrangler config  | Root directory isn't `worker`                                | Worker → **Settings → Build** → set the root directory to `worker` and retry                                       |
-| GitHub repository picker is empty          | The app isn't installed on any repository yet                | Use "Install on repositories" on the Vaults page                                                                   |
-| Push rejected after a while                | Token expired and couldn't refresh                           | Sign out and back in on the Vaults page                                                                            |
+| Symptom                                    | Likely cause                                                 | Fix                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| No sign-in buttons                         | Build variables missing, or the site wasn't redeployed       | Check the variable names in Step 5, then retry the Cloudflare build (or re-run **Deploy to GitHub Pages**)                                     |
+| Provider says the redirect URI is invalid  | Callback URL differs by a character (trailing slash, `http`) | Use exactly `https://my-celium.org/auth/callback/`                                                                                             |
+| "Origin not allowed"                       | `ALLOWED_ORIGINS` doesn't list the site's origin             | Add it in `worker/wrangler.jsonc` on `main` (Option A rebuilds by itself; with Option B run `npx wrangler deploy`)                             |
+| "sign-in is not configured on this worker" | A worker secret is missing                                   | Add it under the worker's **Settings → Variables and Secrets**, or `npx wrangler secret put …`                                                 |
+| Dashboard build fails: name mismatch       | Project name isn't `mycelium-sync`                           | Rename the worker to match `name` in `worker/wrangler.jsonc`, or change the file                                                               |
+| Dashboard build fails: no Wrangler config  | Root directory isn't `worker`                                | Worker → **Settings → Build** → set the root directory to `worker` and retry                                                                   |
+| GitHub repository picker is empty          | The app isn't installed on any repository yet                | Use "Install on repositories" on the Vaults page (shown when the app slug is known), or install the app from its GitHub page and sign in again |
+| "Your sign-in has expired"                 | Token expired and couldn't refresh                           | Sign in again from the Vaults page                                                                                                             |
 
 **Security notes**
 
@@ -368,4 +374,6 @@ can paste a personal access token instead: a fine-grained GitHub token with
 Bitbucket with `read:repository:bitbucket` and `write:repository:bitbucket`
 (created at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens);
 leave the username blank), or a Bitbucket repository access token for access to
-one repository only. This is also the way to use self-hosted GitLab or Gitea.
+one repository only. This is also the way to use self-hosted GitLab or Gitea;
+add its host to `EXTRA_GIT_HOSTS` in `worker/wrangler.jsonc` first, as the
+worker only proxies github.com, gitlab.com and bitbucket.org otherwise.

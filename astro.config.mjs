@@ -102,7 +102,7 @@ export default defineConfig({
 		},
 	],
 	// Strict CSP: Astro hashes its own inline scripts and styles. connect-src
-	// gains the git providers and the sync worker once those land.
+	// allows HTTPS for the git hosts, cloud storage and sync worker people connect.
 	security: {
 		csp: {
 			directives: [

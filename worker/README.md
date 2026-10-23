@@ -14,9 +14,10 @@ WebDAV servers.
 - **WebDAV relay** (for Nextcloud and other WebDAV vaults): most servers don't
   allow cross-origin requests, so the app sends them to
   `https://<worker>/dav/<host>/<path>`. Only `PROPFIND`, `GET`, `PUT`,
-  `DELETE` and `MKCOL`; only HTTPS host names (no IP addresses, `localhost` or
-  `.local` names); only requests with credentials; at most 20 MB; redirects
-  aren't followed. Set `DAV_HOSTS` (comma-separated host names) to allow only
+  `DELETE` and `MKCOL`; only HTTPS host names (no IP addresses, single-label
+  names, or `localhost`, `.local`, `.internal`, `.lan` and `.home.arpa`
+  names); only requests with credentials; requests declaring more than 20 MB
+  (`Content-Length`) are refused; redirects aren't followed. Set `DAV_HOSTS` (comma-separated host names) to allow only
   your own servers. See [docs/setup-cloud-storage.md](../docs/setup-cloud-storage.md#webdav-and-nextcloud).
 
 It has no storage bindings and logging is disabled. Tokens pass through in
@@ -39,12 +40,16 @@ Or with Wrangler:
    npx wrangler deploy
    ```
    Wrangler prints the URL, e.g. `https://mycelium-sync.<you>.workers.dev`.
-2. Edit `ALLOWED_ORIGINS` in `wrangler.jsonc` if your site isn't
-   `https://jackhale98.github.io`, and deploy again.
-3. Point the app at it: in the GitHub repository, add an Actions **variable**
-   `PUBLIC_GIT_PROXY` = your worker URL (Settings → Secrets and variables →
-   Actions → Variables), then re-run the Pages deploy. Existing vaults can be
-   switched in the app under Settings → Sync proxy.
+2. Edit `ALLOWED_ORIGINS` in `wrangler.jsonc` so it lists your site's
+   origins (it ships with my-celium.org, www.my-celium.org,
+   my-celium.fonur.workers.dev, jackhale98.github.io and localhost:4321), and
+   deploy again.
+3. Point the app at it with the build variable `PUBLIC_GIT_PROXY` = your
+   worker URL: for a site built on Cloudflare, under the site's **Settings →
+   Build → Variables and secrets**; for GitHub Pages, as an Actions
+   **variable** (Settings → Secrets and variables → Actions → Variables), then
+   re-run the deploy. Unset, the app uses `https://mycelium-sync.fonur.workers.dev`.
+   Existing vaults can be switched in the app under Settings → Sync proxy.
 
 To deploy from GitHub Actions instead, add a `CLOUDFLARE_API_TOKEN` secret
 (token template “Edit Cloudflare Workers”) and run the **Deploy worker**
@@ -55,12 +60,14 @@ workflow.
 ```sh
 npx wrangler secret put GITHUB_CLIENT_ID
 npx wrangler secret put GITHUB_CLIENT_SECRET
-# likewise GITLAB_* and BITBUCKET_*
+# likewise BITBUCKET_*; GitLab needs only GITLAB_CLIENT_ID (plus
+# GITLAB_CLIENT_SECRET if its application is confidential)
 ```
 
 Endpoints: `POST /oauth/<github|gitlab|bitbucket>/token` with
-`{ code, code_verifier, redirect_uri }`, and `POST /oauth/<provider>/refresh`
-with `{ refresh_token }`.
+`{ code, code_verifier?, redirect_uri? }` (Bitbucket sends neither), and
+`POST /oauth/<provider>/refresh` with `{ refresh_token, redirect_uri? }`. A
+missing secret gives a 501 naming it.
 
 ## Hardening
 

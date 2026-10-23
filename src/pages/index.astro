@@ -27,8 +27,8 @@ const features = [
 		icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11"/><circle cx="5" cy="18" r="1.2"/>',
 	},
 	{
-		title: 'Your git, your rules',
-		body: 'Sign in with GitHub, GitLab or Bitbucket and pick a repository. Notes are cloned into your browser; you choose when to sync.',
+		title: 'Your git, or your cloud',
+		body: 'Sign in with GitHub, GitLab or Bitbucket and you commit, pull and push when you choose. Or keep notes in Dropbox, OneDrive, SharePoint or Nextcloud and they sync on their own.',
 		icon: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 3-3 4-7.5 4.5"/>',
 	},
 	{
@@ -81,9 +81,10 @@ const features = [
 					Your second brain, <em>wherever you are.</em>
 				</h1>
 				<p class="lede">
-					Mycelium is a fast, beautiful web app for reading, linking and capturing your org-roam
-					notes straight from your git repository — on your phone, tablet or any computer. No Emacs
-					required, and nothing about your files changes that you didn’t change.
+					Mycelium is a fast, beautiful web app for reading, editing, linking and capturing your
+					org-roam notes straight from your git repository or cloud storage — on your phone, tablet
+					or any computer. No Emacs required, and nothing about your files changes that you didn’t
+					change.
 				</p>
 				<div class="ctas">
 					<a class="btn" href={appUrl}>
@@ -93,7 +94,10 @@ const features = [
 						How sync works
 					</a>
 				</div>
-				<p class="fine">Works with GitHub, GitLab and Bitbucket · Installable on iOS and Android</p>
+				<p class="fine">
+					Works with GitHub, GitLab, Bitbucket, Dropbox, OneDrive and Nextcloud · Add it to your
+					home screen on iOS and Android
+				</p>
 			</div>
 
 			<div class="preview" aria-hidden="true">
@@ -185,25 +189,26 @@ const features = [
 			<ol>
 				<li>
 					<span class="n">1</span>
-					<h3>Sign in with your git host</h3>
+					<h3>Connect your notes</h3>
 					<p>
-						Authorise Mycelium on GitHub, GitLab or Bitbucket and choose exactly which repositories
-						it may read and write.
+						Sign in with GitHub (choosing exactly which repositories it may use), GitLab or
+						Bitbucket, or with Dropbox, OneDrive or a WebDAV server such as Nextcloud.
 					</p>
 				</li>
 				<li>
 					<span class="n">2</span>
-					<h3>Your vault is cloned locally</h3>
+					<h3>Your vault is kept in your browser</h3>
 					<p>
-						The repository is cloned into your browser’s private storage and indexed: nodes, links,
-						tags and tasks. It keeps working offline.
+						Your notes are copied into the browser’s private storage and indexed: nodes, links, tags
+						and tasks. If the connection drops, you keep reading and editing.
 					</p>
 				</li>
 				<li>
 					<span class="n">3</span>
-					<h3>Edit, then sync when ready</h3>
+					<h3>Edit, then sync</h3>
 					<p>
-						Every save is a local commit. Press Sync to pull, merge and push. Conflicts are shown
+						With git, edits save to your working copy; you review the changes, commit, pull and push
+						when you’re ready. Cloud folders sync a few seconds after each edit. Conflicts are shown
 						side by side, never silently overwritten.
 					</p>
 				</li>
