@@ -15,6 +15,9 @@ const VERSION = '__VERSION__';
 const FILES = __FILES__;
 const CACHE = `mycelium-${VERSION}`;
 const NETWORK_WAIT = 4000;
+// Stored copies were fetched without the headers a page sends (Origin, for
+// module scripts), so look them up regardless of the server's Vary.
+const MATCH = { ignoreVary: true, ignoreSearch: true };
 
 const scope = new URL(self.registration.scope);
 const url = (path) => new URL(path, scope).href;
@@ -57,7 +60,7 @@ async function page(request) {
 		return response;
 	});
 	if (!key) return network;
-	const match = await caches.match(key);
+	const match = await caches.match(key, MATCH);
 	if (!match) return network;
 	// A page reached through a redirect can't answer a navigation as it is.
 	const stored = match.redirected ? new Response(match.body, match) : match;
@@ -67,7 +70,7 @@ async function page(request) {
 }
 
 async function file(request) {
-	const stored = await caches.match(request, { ignoreSearch: true });
+	const stored = await caches.match(request, MATCH);
 	if (stored) return stored;
 	const response = await fetch(request);
 	// Keep build files that weren't stored up front (fallback font formats).

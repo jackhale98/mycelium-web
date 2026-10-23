@@ -21,6 +21,9 @@ test('the app opens and works with no connection', async ({ page, context }) => 
 	});
 
 	await context.setOffline(true);
+	// Also fail anything that still reaches the network (some browser builds don't
+	// apply offline mode to the service worker's own requests).
+	await context.route('**/*', (route) => route.abort('internetdisconnected'));
 	await page.reload();
 	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
 	await expect(page.getByRole('heading', { level: 1, name: 'Mycelium Web' })).toBeVisible();
