@@ -135,6 +135,56 @@ export function weekAgenda(
 	}));
 }
 
+// ---------------------------------------------------------------- stuck projects
+
+export interface StuckSettings {
+	/** Which headings are projects: an org match string. */
+	match: string;
+	/** A project with an entry under it in one of these states isn't stuck. */
+	keywords: string[];
+}
+
+/** org's default `org-stuck-projects`. */
+export const DEFAULT_STUCK: StuckSettings = {
+	match: '+LEVEL=2/-DONE',
+	keywords: ['TODO', 'NEXT', 'NEXTACTION'],
+};
+
+/**
+ * org's stuck projects (`C-c a #`): headings matching the project match
+ * string with nothing under them in a next-action state. Throws when the
+ * match string doesn't parse.
+ */
+export function stuckProjects(
+	vault: Vault,
+	settings: StuckSettings,
+	now: { date: string; time: string },
+): AgendaItem[] {
+	const matcher = parseMatch(settings.match);
+	const next = new Set(settings.keywords);
+	const out: AgendaItem[] = [];
+	for (const file of vault.files.values()) {
+		if (file.index.excluded) continue;
+		const hs = file.index.headlines;
+		hs.forEach((h, i) => {
+			const ok = matches(
+				matcher,
+				{ ...h, file: file.path },
+				{
+					now,
+					isDone: (k) => vault.isDone(k, file.path),
+					properties: () => getProperties(file.source, h.pos, file.index.keywords),
+				},
+			);
+			if (!ok) return;
+			for (let j = i + 1; j < hs.length && hs[j]!.level > h.level; j += 1)
+				if (hs[j]!.todo && next.has(hs[j]!.todo!)) return;
+			out.push({ ...h, file: file.path, node: (h.ownerId && vault.nodes.get(h.ownerId)) || null });
+		});
+	}
+	return out;
+}
+
 // ---------------------------------------------------------------- filters
 
 /** Agenda filters, following org-agenda's tag, category, regexp and top-headline filters. */

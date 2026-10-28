@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_KEYWORD_CONFIG } from '$lib/org';
 import { Vault } from '$lib/vault/vault';
-import { weekAgenda, weekStart } from './agenda';
+import { DEFAULT_STUCK, stuckProjects, weekAgenda, weekStart } from './agenda';
 
 const vault = Vault.fromSources(
 	{
@@ -61,5 +61,43 @@ describe('weekAgenda', () => {
 			'2026-10-31': ['Standup'],
 			'2026-11-01': ['Standup'],
 		});
+	});
+});
+
+describe('stuckProjects', () => {
+	const projects = Vault.fromSources(
+		{
+			'work.org': [
+				'* Projects',
+				'** Website redesign',
+				'*** NEXT Draft the sitemap',
+				'** Garden shed',
+				'*** WAITING Quote from builder',
+				'*** Some notes',
+				'** DONE Old launch',
+				'** Tax prep :project:',
+				'',
+			].join('\n'),
+		},
+		{ ...DEFAULT_KEYWORD_CONFIG, todoKeywords: ['TODO', 'NEXT', 'WAITING'] },
+	);
+	const now = { date: '2026-10-28', time: '09:00' };
+
+	it("finds org's default projects with no next action under them", () => {
+		expect(stuckProjects(projects, DEFAULT_STUCK, now).map((p) => p.title)).toEqual([
+			'Garden shed',
+			'Tax prep',
+		]);
+	});
+
+	it('follows a different project definition and next-action keywords', () => {
+		expect(
+			stuckProjects(projects, { match: '+project', keywords: ['NEXT'] }, now).map((p) => p.title),
+		).toEqual(['Tax prep']);
+		expect(
+			stuckProjects(projects, { match: '+LEVEL=2/-DONE', keywords: ['NEXT', 'WAITING'] }, now).map(
+				(p) => p.title,
+			),
+		).toEqual(['Tax prep']);
 	});
 });

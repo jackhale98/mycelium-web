@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Pick where to refile a heading (org-refile): any heading in the vault
 	// (it becomes the last child) or a file (a top-level tree at its end).
+	import { fitKeyboard } from '../actions/fit-keyboard';
 	import { tick } from 'svelte';
 	import { app } from '../state.svelte';
 	import Icon from './Icon.svelte';
@@ -77,6 +78,7 @@
 <dialog
 	bind:this={dialog}
 	class="sheet"
+	use:fitKeyboard
 	aria-labelledby="refile-title"
 	onclose={() => (app.refileSheet = null)}
 	onclick={(e) => e.target === dialog && (app.refileSheet = null)}
@@ -122,9 +124,11 @@
 </dialog>
 
 <style>
+	/* A fixed height, the list scrolling inside: the search box stays put as
+	   the results narrow (rather than the sheet shrinking around them). */
 	.sheet {
 		width: min(36rem, calc(100vw - 2rem));
-		max-height: min(80dvh, 40rem);
+		height: min(80dvh, 40rem);
 		padding: 0;
 		border: 1px solid var(--border);
 		border-radius: 18px;
@@ -135,10 +139,16 @@
 	.sheet::backdrop {
 		background: rgb(20 18 12 / 0.4);
 	}
-	.body {
+	.sheet[open] {
 		display: flex;
 		flex-direction: column;
+	}
+	.body {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
 		gap: 0.6rem;
+		min-height: 0;
 		padding: 1rem 1.25rem 1.25rem;
 	}
 	header {
@@ -165,7 +175,9 @@
 		color: var(--text-muted);
 	}
 	.list {
-		max-height: 50dvh;
+		flex: 1;
+		min-height: 0;
+		align-content: start;
 		margin: 0;
 		padding: 0;
 		overflow-y: auto;
@@ -211,8 +223,14 @@
 		.sheet {
 			width: 100%;
 			max-width: 100%;
-			margin: auto 0 0;
+			/* --kb and --vvh come from fitKeyboard: stay above the on-screen keyboard. */
+			height: min(88dvh, calc(var(--vvh, 100dvh) - 0.75rem));
+			max-height: none;
+			margin: auto 0 var(--kb, 0px);
 			border-radius: 20px 20px 0 0;
+		}
+		.body {
+			padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 		}
 	}
 </style>

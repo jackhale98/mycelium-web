@@ -19,9 +19,9 @@ test('aliases and refs are added and removed from the note details', async ({ pa
 	await page.getByRole('button', { name: 'Details' }).click();
 	const sheet = details(page);
 	await sheet.getByLabel('New alias').fill('Hyphal web');
-	await sheet.getByRole('button', { name: 'Add' }).first().click();
+	await sheet.getByRole('region', { name: 'Aliases' }).getByRole('button', { name: 'Add' }).click();
 	await sheet.getByLabel('New ref').fill('https://en.wikipedia.org/wiki/Mycelium');
-	await sheet.getByRole('button', { name: 'Add' }).last().click();
+	await sheet.getByRole('region', { name: 'Refs' }).getByRole('button', { name: 'Add' }).click();
 	await expect(
 		sheet.getByRole('link', { name: 'https://en.wikipedia.org/wiki/Mycelium' }),
 	).toBeVisible();
@@ -113,4 +113,77 @@ test('the agenda week view shows each day, and remembers it', async ({ page }) =
 	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
 	await expect(page.getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-checked', 'true');
 	await expect(days).toHaveCount(7);
+});
+
+test('refiling: the search box stays put as the results narrow', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	const section = page.locator('.org-section', { hasText: 'Write the self-hosting guide' }).first();
+	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await page.getByRole('button', { name: 'Refile…' }).click();
+	const search = page.getByRole('searchbox', { name: 'Find a heading or file' });
+	await expect(search).toBeVisible();
+	const before = (await search.boundingBox())!.y;
+	await search.fill('2026-10-1');
+	await expect(
+		page.getByRole('list', { name: 'Refile targets' }).getByRole('listitem'),
+	).not.toHaveCount(0);
+	expect(Math.abs((await search.boundingBox())!.y - before)).toBeLessThan(2);
+	await search.fill('no such heading anywhere');
+	await expect(page.getByText('No headings match.')).toBeVisible();
+	expect(Math.abs((await search.boundingBox())!.y - before)).toBeLessThan(2);
+});
+
+test('properties are added, changed and removed; the ID stays read-only', async ({ page }) => {
+	await open(page, `app#/node/${MYCELIAL}`);
+	await page.getByRole('button', { name: 'Details' }).click();
+	const sheet = details(page);
+	await expect(sheet.locator('code', { hasText: MYCELIAL })).toBeVisible();
+	await expect(sheet.getByRole('button', { name: 'Remove ID' })).toHaveCount(0);
+	await sheet.getByLabel('New property name').fill('CATEGORY');
+	await sheet.getByLabel('New property value').fill('biology');
+	await sheet
+		.getByRole('region', { name: 'Properties' })
+		.getByRole('button', { name: 'Add', exact: true })
+		.click();
+	const value = sheet.getByRole('textbox', { name: 'CATEGORY' });
+	await expect(value).toHaveValue('biology');
+	await value.fill('fungi');
+	await value.press('Enter');
+	await value.blur();
+	await expect(value).toHaveValue('fungi');
+	await sheet.getByLabel('New property name').fill('Effort');
+	await sheet.getByLabel('New property value').fill('1:30');
+	await sheet
+		.getByRole('region', { name: 'Properties' })
+		.getByRole('button', { name: 'Add', exact: true })
+		.click();
+	await sheet.getByRole('button', { name: 'Remove Effort' }).click();
+	await expect(sheet.getByRole('textbox', { name: 'Effort' })).toHaveCount(0);
+	await sheet.getByRole('button', { name: 'Close' }).click();
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	await expect(page.locator('main')).toContainText(/:CATEGORY: +fungi/);
+	await expect(page.locator('main')).not.toContainText(':Effort:');
+});
+
+test('stuck projects list projects without a next action', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Stuck' }).click();
+	const section = page.getByRole('region', { name: /Stuck projects/ });
+	await expect(section.getByRole('heading', { name: /Stuck projects/ })).toBeVisible();
+	// org's default (second-level headings) finds none in the demo, whose projects are level 1.
+	await expect(section).toContainText('No stuck projects');
+	await page.getByText('What counts as a project').click();
+	const match = page.getByLabel('Projects (an org match string)');
+	// Tagged :project: (the demo note's file tag, inherited as in org).
+	await match.fill('+project');
+	await page.getByRole('button', { name: 'Save for this vault' }).click();
+	await expect(section.getByText('Inspiration', { exact: true })).toBeVisible();
+	await match.fill('+design');
+	await page.getByRole('button', { name: 'Save for this vault' }).click();
+	await expect(section.getByText('Ship the design system', { exact: true })).toBeVisible();
+	await expect(section.getByText('Inspiration', { exact: true })).toHaveCount(0);
+	// A match string that doesn't parse says so.
+	await match.fill('+{unclosed');
+	await page.getByRole('button', { name: 'Save for this vault' }).click();
+	await expect(page.getByRole('alert')).toContainText('doesn’t parse');
 });

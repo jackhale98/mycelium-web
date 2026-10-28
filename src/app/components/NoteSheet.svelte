@@ -6,6 +6,7 @@
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import Icon from './Icon.svelte';
+	import PropertiesEditor from './PropertiesEditor.svelte';
 
 	let dialog: HTMLDialogElement | undefined = $state();
 	let returnFocus: HTMLElement | null = null;
@@ -190,6 +191,11 @@
 					/>
 					<button class="btn small" disabled={!newRef.trim()}>Add</button>
 				</form>
+			</section>
+
+			<section class="group" aria-labelledby="ns-props">
+				<h3 class="label" id="ns-props">Properties</h3>
+				<PropertiesEditor path={node.file} owner={node.level === 0 ? null : node.pos} />
 			</section>
 
 			{#if node.level > 0}

@@ -8,6 +8,8 @@
 		activeFilters,
 		weekAgenda,
 		weekStart,
+		stuckProjects,
+		DEFAULT_STUCK,
 		compileFilter,
 		decodeFilter,
 		emptyFilter,
@@ -145,16 +147,18 @@
 
 	// List (overdue, today, next 7 days…) or org's week view; remembered here.
 	const MODE_KEY = 'mycelium:agenda-mode';
-	let mode = $state<'list' | 'week'>(
+	type Mode = 'list' | 'week' | 'stuck';
+	let mode = $state<Mode>(
 		(() => {
 			try {
-				return localStorage.getItem(MODE_KEY) === 'week' ? 'week' : 'list';
+				const m = localStorage.getItem(MODE_KEY);
+				return m === 'week' || m === 'stuck' ? m : 'list';
 			} catch {
 				return 'list';
 			}
 		})(),
 	);
-	function setMode(m: 'list' | 'week') {
+	function setMode(m: Mode) {
 		mode = m;
 		try {
 			localStorage.setItem(MODE_KEY, m);
@@ -163,6 +167,36 @@
 		}
 	}
 	let start = $state(weekStart(localNow().date));
+
+	// Stuck projects (org's C-c a #): this vault's definition, or org's default.
+	const stuckSettings = $derived(app.activeVault?.stuckProjects ?? DEFAULT_STUCK);
+	const stuck = $derived.by(() => {
+		void app.rev;
+		if (mode !== 'stuck') return { items: [], error: null };
+		try {
+			return {
+				items: stuckProjects(app.vault, stuckSettings, localNow()).filter(compiled.keep),
+				error: null,
+			};
+		} catch (e) {
+			return { items: [], error: e instanceof Error ? e.message : String(e) };
+		}
+	});
+	let projectMatch = $state('');
+	let projectKeywords = $state('');
+	$effect(() => {
+		projectMatch = stuckSettings.match;
+		projectKeywords = stuckSettings.keywords.join(' ');
+	});
+	async function saveStuck(e: SubmitEvent) {
+		e.preventDefault();
+		await app.updateVault({
+			stuckProjects: {
+				match: projectMatch.trim() || DEFAULT_STUCK.match,
+				keywords: projectKeywords.split(/\s+/).filter(Boolean),
+			},
+		});
+	}
 	const days = $derived.by(() => {
 		void app.rev;
 		return mode === 'week' ? weekAgenda(app.vault, start, today, compiled.keep) : [];
@@ -195,6 +229,12 @@
 				aria-checked={mode === 'week'}
 				onclick={() => setMode('week')}>Week</button
 			>
+			<button
+				type="button"
+				role="radio"
+				aria-checked={mode === 'stuck'}
+				onclick={() => setMode('stuck')}>Stuck</button
+			>
 		</div>
 	</header>
 	<SavedViews query={encoded} onpick={(v) => (filter = decodeFilter(v.query, app.vault))} />
@@ -206,7 +246,44 @@
 		{categoryLabels}
 		error={compiled.error}
 	/>
-	{#if mode === 'week'}
+	{#if mode === 'stuck'}
+		<section class="group" aria-labelledby="ag-stuck">
+			<h2 id="ag-stuck">Stuck projects<span class="count">{stuck.items.length}</span></h2>
+			<p class="stuck-hint">
+				Projects with nothing under them marked {stuckSettings.keywords.join(', ') ||
+					'(no keywords)'}: each needs a next action.
+			</p>
+			{#if stuck.error}
+				<p class="notice warn" role="alert">The project match doesn’t parse: {stuck.error}</p>
+			{:else}
+				<AgendaList
+					items={stuck.items}
+					{today}
+					empty="No stuck projects: every one has a next action."
+					{onTop}
+				/>
+			{/if}
+			<details class="stuck-settings">
+				<summary>What counts as a project</summary>
+				<form onsubmit={saveStuck}>
+					<label class="field">
+						<span class="label">Projects (an org match string)</span>
+						<input class="input" bind:value={projectMatch} spellcheck="false" />
+						<span class="hint"
+							>org’s default is <code>+LEVEL=2/-DONE</code>: every second-level heading not done.
+							<code>+project</code> means headings tagged :project:.</span
+						>
+					</label>
+					<label class="field">
+						<span class="label">Not stuck when something under it is</span>
+						<input class="input" bind:value={projectKeywords} spellcheck="false" />
+						<span class="hint">TODO keywords, separated by spaces.</span>
+					</label>
+					<button class="btn small">Save for this vault</button>
+				</form>
+			</details>
+		</section>
+	{:else if mode === 'week'}
 		<nav class="week-nav" aria-label="Week">
 			<button
 				type="button"
@@ -279,6 +356,33 @@
 	}
 	.mode {
 		margin-left: auto;
+	}
+	.stuck-hint {
+		margin: 0 0 0.5rem;
+		color: var(--text-muted);
+		font-size: 0.86rem;
+	}
+	.stuck-settings {
+		margin-top: 1rem;
+		font-size: 0.88rem;
+	}
+	.stuck-settings summary {
+		min-height: 2.25rem;
+		display: flex;
+		align-items: center;
+		color: var(--text-2);
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.stuck-settings form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		max-width: 32rem;
+		padding-top: 0.5rem;
+	}
+	.stuck-settings .btn {
+		align-self: flex-start;
 	}
 	.week-nav {
 		display: flex;

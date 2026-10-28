@@ -732,6 +732,9 @@ class AppState {
 	}
 
 	async updateVault(patch: Partial<VaultRecord>) {
+		// The demo's repository may still be being built (first visit): wait for it
+		// rather than dropping the change.
+		if (!this.#ws && this.#demoReady) await this.#demoReady;
 		const ws = this.#ws;
 		if (!ws) return;
 		await ws.updateRecord(patch);
@@ -1519,6 +1522,16 @@ class AppState {
 					file.index.keywords,
 				),
 			`${key === 'ROAM_ALIASES' ? 'Aliases' : 'Refs'} for ${node.title}`,
+		);
+	}
+
+	/** Set (or with `null` remove) a property of a heading, or of the file (`owner` null). */
+	setPropertyValue(path: string, owner: number | null, key: string, value: string | null) {
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#edit(
+			path,
+			(s) => setProperty(s, owner, key, value, kw),
+			`${value === null ? 'Remove' : 'Set'} ${key} in ${this.#title(path)}`,
 		);
 	}
 

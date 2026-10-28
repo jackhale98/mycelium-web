@@ -4,6 +4,7 @@
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import HeadingActions from './HeadingActions.svelte';
+	import PropertiesEditor from '../components/PropertiesEditor.svelte';
 
 	let dialog: HTMLDialogElement | undefined = $state();
 	let returnFocus: HTMLElement | null = null;
@@ -110,6 +111,10 @@
 				variant="sheet"
 				onclose={close}
 			/>
+			<details class="props-group">
+				<summary>Properties</summary>
+				<PropertiesEditor path={target.path} owner={target.pos} />
+			</details>
 			<footer>
 				{#if h.ownerId}
 					<button type="button" class="btn" onclick={openEditor}
@@ -126,6 +131,21 @@
 </dialog>
 
 <style>
+	.props-group {
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--border);
+	}
+	.props-group summary {
+		min-height: 2.25rem;
+		display: flex;
+		align-items: center;
+		font-size: 0.85rem;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.props-group[open] summary {
+		margin-bottom: 0.4rem;
+	}
 	.sheet {
 		width: min(34rem, calc(100vw - 2rem));
 		max-height: min(85dvh, 44rem);
