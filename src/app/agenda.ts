@@ -1,4 +1,12 @@
-import { addDays, getProperties, isHabit, matches, parseMatch } from '$lib/org';
+import {
+	addDays,
+	dayNameFor,
+	getProperties,
+	isHabit,
+	matches,
+	parseMatch,
+	timestampDates,
+} from '$lib/org';
 import type { AgendaItem, Vault } from '$lib/vault/vault';
 
 export interface AgendaGroups {
@@ -61,6 +69,70 @@ export function groupAgenda(
 	groups.unscheduled.sort((a, b) => PRIORITY_ORDER(a.priority) - PRIORITY_ORDER(b.priority));
 	groups.done.sort((a, b) => (b.closed?.date ?? '').localeCompare(a.closed?.date ?? ''));
 	return groups;
+}
+
+// ---------------------------------------------------------------- week
+
+export interface AgendaDay {
+	date: string;
+	items: AgendaItem[];
+}
+
+/** The Monday on or before `date` (org-agenda-start-on-weekday 1). */
+export function weekStart(date: string): string {
+	const back =
+		(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(dayNameFor(date)) + 7) % 7;
+	return addDays(date, -back);
+}
+
+/**
+ * org's week agenda: each day of the week from `start` with the open items
+ * scheduled or due that day (repeating ones on every day they recur), timed
+ * ones first in time order; today also lists what is overdue.
+ */
+export function weekAgenda(
+	vault: Vault,
+	start: string,
+	today: string,
+	keep: (item: AgendaItem) => boolean = () => true,
+): AgendaDay[] {
+	const end = addDays(start, 6);
+	const days = Array.from({ length: 7 }, (_, i) => ({
+		date: addDays(start, i),
+		items: [] as { item: AgendaItem; time: string }[],
+	}));
+	const byDate = new Map(days.map((d) => [d.date, d]));
+	for (const item of vault.agenda()) {
+		if (!keep(item) || vault.isDone(item.todo, item.file)) continue;
+		const placed = new Set<string>();
+		// Habits show on today only (org-habit-show-habits-only-for-today).
+		const source = item.scheduled ? vault.file(item.file)?.source : undefined;
+		const habit = !!source && isHabit(source, item.pos, vault.file(item.file)!.index.keywords);
+		for (const ts of [item.scheduled, item.deadline]) {
+			if (!ts?.active) continue;
+			for (const date of timestampDates(ts, start, end)) {
+				if (placed.has(date) || (habit && date !== today)) continue;
+				// Before today, a repeat is only where it's written: missed repeats aren't entries.
+				if (date < today && date !== ts.date) continue;
+				placed.add(date);
+				byDate.get(date)!.items.push({ item, time: ts.time ?? '99:99' });
+			}
+		}
+		const due = item.deadline ?? item.scheduled;
+		const todayRow = byDate.get(today);
+		if (todayRow && due && due.date < today && !placed.has(today) && !habit)
+			todayRow.items.push({ item, time: '99:99' });
+	}
+	return days.map((d) => ({
+		date: d.date,
+		items: d.items
+			.sort(
+				(a, b) =>
+					a.time.localeCompare(b.time) ||
+					PRIORITY_ORDER(a.item.priority) - PRIORITY_ORDER(b.item.priority),
+			)
+			.map((x) => x.item),
+	}));
 }
 
 // ---------------------------------------------------------------- filters

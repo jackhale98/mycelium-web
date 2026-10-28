@@ -78,3 +78,39 @@ test('a heading is extracted into a note of its own, keeping its ID', async ({ p
 		page.locator('.node-body').getByRole('link', { name: 'Markup cheat sheet' }),
 	).toBeVisible();
 });
+
+const PROJECT = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c12';
+
+test('a long note has contents to jump to its headings', async ({ page, isMobile }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	if (isMobile) await page.getByText('Contents').first().click();
+	const contents = isMobile
+		? page.locator('details.toc')
+		: page.getByRole('navigation', { name: 'Contents' });
+	await contents.getByRole('link', { name: 'Inspiration' }).click();
+	await expect(
+		page.locator('.org-section', { hasText: 'Inspiration' }).getByRole('heading').first(),
+	).toBeInViewport();
+});
+
+test('the agenda week view shows each day, and remembers it', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Week' }).click();
+	const days = page.locator('section.day');
+	await expect(days).toHaveCount(7);
+	await expect(page.locator('section.day.today')).toContainText('Today');
+	const label = page.locator('.week-label');
+	const thisWeek = await label.textContent();
+	await page.getByRole('button', { name: 'Next week' }).click();
+	await expect(label).not.toHaveText(thisWeek!);
+	await expect(page.locator('section.day.today')).toHaveCount(0);
+	await page
+		.getByRole('navigation', { name: 'Week' })
+		.getByRole('button', { name: 'This week' })
+		.click();
+	await expect(label).toHaveText(thisWeek!);
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-checked', 'true');
+	await expect(days).toHaveCount(7);
+});

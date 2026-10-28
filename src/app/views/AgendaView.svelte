@@ -6,6 +6,8 @@
 	import SavedViews from '../components/SavedViews.svelte';
 	import {
 		activeFilters,
+		weekAgenda,
+		weekStart,
 		compileFilter,
 		decodeFilter,
 		emptyFilter,
@@ -17,6 +19,8 @@
 	import { app, localNow } from '../state.svelte';
 	import { usePane } from '../panes.svelte';
 	import { longDate } from '../util';
+	import { addDays } from '$lib/org';
+	import Icon from '../components/Icon.svelte';
 	import { untrack } from 'svelte';
 
 	let { query = '' }: { query?: string } = $props();
@@ -138,12 +142,60 @@
 	$effect(() => {
 		document.title = 'Agenda · Mycelium';
 	});
+
+	// List (overdue, today, next 7 days…) or org's week view; remembered here.
+	const MODE_KEY = 'mycelium:agenda-mode';
+	let mode = $state<'list' | 'week'>(
+		(() => {
+			try {
+				return localStorage.getItem(MODE_KEY) === 'week' ? 'week' : 'list';
+			} catch {
+				return 'list';
+			}
+		})(),
+	);
+	function setMode(m: 'list' | 'week') {
+		mode = m;
+		try {
+			localStorage.setItem(MODE_KEY, m);
+		} catch {
+			// Not remembered: fine.
+		}
+	}
+	let start = $state(weekStart(localNow().date));
+	const days = $derived.by(() => {
+		void app.rev;
+		return mode === 'week' ? weekAgenda(app.vault, start, today, compiled.keep) : [];
+	});
+	const dayLabel = (date: string) =>
+		new Date(`${date}T12:00`).toLocaleDateString(undefined, {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'short',
+		});
+	const weekLabel = $derived(
+		`${new Date(`${start}T12:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} – ${new Date(`${addDays(start, 6)}T12:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`,
+	);
 </script>
 
 <div class="agenda-page">
 	<header>
 		<p class="eyebrow">{longDate(today)}</p>
 		<h1>Agenda</h1>
+		<div class="segmented mode" role="radiogroup" aria-label="Agenda view">
+			<button
+				type="button"
+				role="radio"
+				aria-checked={mode === 'list'}
+				onclick={() => setMode('list')}>List</button
+			>
+			<button
+				type="button"
+				role="radio"
+				aria-checked={mode === 'week'}
+				onclick={() => setMode('week')}>Week</button
+			>
+		</div>
 	</header>
 	<SavedViews query={encoded} onpick={(v) => (filter = decodeFilter(v.query, app.vault))} />
 	<AgendaFilters
@@ -154,27 +206,102 @@
 		{categoryLabels}
 		error={compiled.error}
 	/>
-	{#each sections as section (section.id)}
-		<section class="group" aria-labelledby={`ag-${section.id}`}>
-			<h2
-				id={`ag-${section.id}`}
-				class:alert={section.id === 'overdue' && section.items.length > 0}
+	{#if mode === 'week'}
+		<nav class="week-nav" aria-label="Week">
+			<button
+				type="button"
+				class="btn small icon-only"
+				aria-label="Previous week"
+				onclick={() => (start = addDays(start, -7))}><Icon name="chevronLeft" size={16} /></button
 			>
-				{section.title}<span class="count">{section.items.length}</span>
-			</h2>
-			<AgendaList
-				items={section.items}
-				{today}
-				empty={section.empty}
-				{onTop}
-				grid={section.id === 'today'}
-			/>
-		</section>
-	{/each}
+			<span class="week-label" aria-live="polite">{weekLabel}</span>
+			<button
+				type="button"
+				class="btn small icon-only"
+				aria-label="Next week"
+				onclick={() => (start = addDays(start, 7))}><Icon name="chevronRight" size={16} /></button
+			>
+			{#if start !== weekStart(today)}
+				<button type="button" class="btn small" onclick={() => (start = weekStart(today))}
+					>This week</button
+				>
+			{/if}
+		</nav>
+		{#each days as day (day.date)}
+			<section
+				class="group day"
+				class:today={day.date === today}
+				class:past={day.date < today}
+				aria-labelledby={`wk-${day.date}`}
+			>
+				<h2 id={`wk-${day.date}`}>
+					{dayLabel(day.date)}{#if day.date === today}<span class="now">Today</span>{/if}<span
+						class="count">{day.items.length}</span
+					>
+				</h2>
+				{#if day.items.length}
+					<AgendaList items={day.items} {today} {onTop} grid={day.date === today} />
+				{/if}
+			</section>
+		{/each}
+	{:else}
+		{#each sections as section (section.id)}
+			<section class="group" aria-labelledby={`ag-${section.id}`}>
+				<h2
+					id={`ag-${section.id}`}
+					class:alert={section.id === 'overdue' && section.items.length > 0}
+				>
+					{section.title}<span class="count">{section.items.length}</span>
+				</h2>
+				<AgendaList
+					items={section.items}
+					{today}
+					empty={section.empty}
+					{onTop}
+					grid={section.id === 'today'}
+				/>
+			</section>
+		{/each}
+	{/if}
 	<ClockReport {today} />
 </div>
 
 <style>
+	header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: 0.5rem 1rem;
+	}
+	header > :first-child {
+		flex-basis: 100%;
+		margin-bottom: 0;
+	}
+	.mode {
+		margin-left: auto;
+	}
+	.week-nav {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.5rem 0 0.25rem;
+	}
+	.week-label {
+		min-width: 11rem;
+		font-weight: 650;
+		text-align: center;
+	}
+	.day h2 .now {
+		margin-left: 0.5rem;
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		background: var(--accent-soft);
+		color: var(--accent-strong);
+		font-size: 0.72rem;
+	}
+	.day.past h2 {
+		color: var(--text-muted);
+	}
 	.agenda-page {
 		max-width: 52rem;
 		margin: 0 auto;

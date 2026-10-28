@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { localTime, parseTimestamp, upcomingReminders, type ReminderSource } from '..';
+import {
+	localTime,
+	parseTimestamp,
+	timestampDates,
+	upcomingReminders,
+	type ReminderSource,
+} from '..';
 
 const item = (over: Partial<ReminderSource> & { s?: string; d?: string }): ReminderSource => ({
 	title: 'Call the bank',
@@ -68,5 +74,23 @@ describe('upcomingReminders', () => {
 		const b = upcomingReminders([item({ s: '<2026-10-28 Wed 12:00 +1d>' })], opts);
 		expect(a.map((x) => x.id)).toEqual(b.map((x) => x.id));
 		expect(new Set(a.map((x) => x.id)).size).toBe(a.length);
+	});
+});
+
+describe('timestampDates', () => {
+	const ts = (s: string) => parseTimestamp(s)!;
+	it('lists the days in a range a timestamp falls on, repeats included', () => {
+		expect(timestampDates(ts('<2026-10-28 Wed>'), '2026-10-26', '2026-11-01')).toEqual([
+			'2026-10-28',
+		]);
+		expect(timestampDates(ts('<2026-10-28 Wed>'), '2026-11-02', '2026-11-08')).toEqual([]);
+		expect(timestampDates(ts('<2026-09-02 Wed +1w>'), '2026-10-26', '2026-11-01')).toEqual([
+			'2026-10-28',
+		]);
+		expect(timestampDates(ts('<2026-10-27 Tue .+2d>'), '2026-10-26', '2026-11-01')).toEqual([
+			'2026-10-27',
+			'2026-10-29',
+			'2026-10-31',
+		]);
 	});
 });

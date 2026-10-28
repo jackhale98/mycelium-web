@@ -14,6 +14,7 @@
 	import { readingAnchor, restoreReading, type Anchor } from '../anchor';
 	import { preloadEditor } from '../editor/load';
 	import { tick } from 'svelte';
+	import Toc, { type TocEntry } from '../components/Toc.svelte';
 
 	let {
 		id,
@@ -72,6 +73,21 @@
 	});
 
 	const refs = $derived(node?.refs ?? []);
+
+	/** The note's headings, for its table of contents (three or more). */
+	const contents = $derived.by((): TocEntry[] => {
+		void app.rev;
+		if (!node) return [];
+		const all = app.vault.file(node.file)?.index.headlines ?? [];
+		const end =
+			node.level > 0
+				? (all.find((h) => h.pos > node.pos && h.level <= node.level)?.pos ?? Infinity)
+				: Infinity;
+		const list = all
+			.filter((h) => h.pos > (node.level > 0 ? node.pos : -1) && h.pos < end)
+			.map((h) => ({ pos: h.pos, level: h.level, title: h.title, todo: h.todo }));
+		return list.length >= 3 ? list : [];
+	});
 
 	/** Headings marked done in what this page shows (for the Hide done button). */
 	const doneCount = $derived.by(() => {
@@ -321,6 +337,16 @@
 					/>
 				{/key}
 			{:else}
+				{#if contents.length}
+					<div class="toc-inline">
+						<Toc
+							entries={contents}
+							baseLevel={node.level}
+							container={() => article}
+							variant="inline"
+						/>
+					</div>
+				{/if}
 				<div class="prose node-body">
 					<Blocks
 						nodes={body}
@@ -336,6 +362,14 @@
 
 		{#if app.panelOpen}
 			<aside class="side-panel" aria-label="Connections">
+				{#if contents.length && !pane.editing}
+					<Toc
+						entries={contents}
+						baseLevel={node.level}
+						container={() => article}
+						variant="panel"
+					/>
+				{/if}
 				<Backlinks {id} />
 			</aside>
 		{/if}
@@ -551,7 +585,8 @@
 		.node-layout.with-panel {
 			grid-template-columns: minmax(0, 1fr) var(--panel-w);
 		}
-		.with-panel .inline-links {
+		.with-panel .inline-links,
+		.with-panel .toc-inline {
 			display: none;
 		}
 		.side-panel {

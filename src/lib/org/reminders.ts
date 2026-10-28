@@ -76,6 +76,24 @@ function occurrences(ts: OrgTimestamp, time: string, from: number, to: number): 
 	return out;
 }
 
+/**
+ * The days (`YYYY-MM-DD`, from `start` to `end` inclusive) a timestamp falls
+ * on, its repeats included: what org's agenda shows a repeating entry on.
+ */
+export function timestampDates(ts: OrgTimestamp, start: string, end: string): string[] {
+	const rep = ts.repeater ? REPEATER.exec(ts.repeater) : null;
+	const step = rep ? Number(rep[1]) : 0;
+	const unit = rep?.[2] as TimeUnit | undefined;
+	if (!rep || step <= 0 || unit === 'h') return ts.date >= start && ts.date <= end ? [ts.date] : [];
+	const out: string[] = [];
+	let date = ts.date;
+	for (let k = 0; k < 5000 && date <= end; k += 1) {
+		if (date >= start) out.push(date);
+		date = shiftDate(ts.date, step * (k + 1), unit!);
+	}
+	return out;
+}
+
 function hash(text: string): string {
 	// FNV-1a: short, stable tags (not security-sensitive).
 	let h = 0x811c9dc5;

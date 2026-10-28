@@ -38,10 +38,12 @@ table sheet); LaTeX tools (formula sheet, preview, error marks, completion);
 pictures with an offer to compress; clocking with a clock report; refile and
 archive; habits and the agenda time grid; TODO keyword editor; text size; hide
 done items; org-transclusion and link search options; reminders (in the app,
-and by Web Push through the worker while it's closed) with an app-icon badge.
+and by Web Push through the worker while it's closed) with an app-icon badge;
+note details (rename with link updates, aliases, refs, extract to note); the
+agenda week view; contents for long notes; a share target; Settings in
+sections.
 
-**Not done:** a file-browser page; renaming a node with link descriptions
-updated across files; `.org.gpg` handling.
+**Not done:** a file-browser page; `.org.gpg` handling.
 
 ## Decisions
 
@@ -241,7 +243,7 @@ accessibility checks in e2e. Lighthouse runs by hand.
 ## Open items
 
 - Encrypted `.org.gpg` files: not handled yet.
-- A file browser, and renaming a node across files.
+- A file browser.
 - Self-hosted GitLab / Bitbucket Server / Gitea: access token + the host in
   the worker's `EXTRA_GIT_HOSTS`.
 - Commit author identity: from the provider profile; editable in Settings.
