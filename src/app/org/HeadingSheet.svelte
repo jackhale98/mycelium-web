@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { fitKeyboard } from '../actions/fit-keyboard';
 	import Icon from '../components/Icon.svelte';
 	import { href, router } from '../router.svelte';
@@ -60,6 +61,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	use:fitKeyboard
 	bind:this={dialog}
 	class="sheet"

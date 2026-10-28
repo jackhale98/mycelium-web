@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Pick where to refile a heading (org-refile): any heading in the vault
 	// (it becomes the last child) or a file (a top-level tree at its end).
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { fitKeyboard } from '../actions/fit-keyboard';
 	import { tick } from 'svelte';
 	import { app } from '../state.svelte';
@@ -76,6 +77,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	bind:this={dialog}
 	class="sheet"
 	use:fitKeyboard

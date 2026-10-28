@@ -350,3 +350,43 @@ test('board: a column per state, move by menu or drag, rows by tag', async ({ pa
 		`${isMobile ? 'NEXT' : 'DONE'} [#B] How to Take Smart Notes`,
 	);
 });
+
+test('phones: a task sheet locks the page behind and a pull down closes it', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(!isMobile, 'bottom sheets are for phones');
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	await page
+		.getByRole('button', { name: /^Edit “/ })
+		.first()
+		.click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet).toBeVisible();
+	const overflow = () => page.evaluate(() => getComputedStyle(document.documentElement).overflowY);
+	expect(await overflow()).toBe('hidden');
+	// A short pull springs back.
+	const cdp = await page.context().newCDPSession(page);
+	const box = (await sheet.boundingBox())!;
+	const x = box.x + box.width / 2;
+	const y = box.y + 12;
+	const pull = async (by: number) => {
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+		for (let i = 1; i <= 10; i++) {
+			await cdp.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: y + (i * by) / 10 }],
+			});
+			await page.waitForTimeout(30);
+		}
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	};
+	await pull(40);
+	await page.waitForTimeout(300);
+	await expect(sheet).toBeVisible();
+	// A real one closes it, and the page scrolls again.
+	await pull(260);
+	await expect(sheet).toHaveCount(0);
+	expect(await overflow()).not.toBe('hidden');
+});

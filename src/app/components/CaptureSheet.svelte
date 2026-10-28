@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { fitKeyboard } from '../actions/fit-keyboard';
 	import {
 		describeTarget,
@@ -117,6 +118,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	use:fitKeyboard
 	bind:this={dialog}
 	class="sheet"

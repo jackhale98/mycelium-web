@@ -3,6 +3,7 @@
 	// type, mistakes are explained in plain words (and marked where they
 	// are), and a palette inserts fractions, sums, matrices, Greek and
 	// symbols with their first blank selected, ready to type over.
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { tick } from 'svelte';
 	import { app } from '../state.svelte';
 	import { checkTex, expandSnippet, TEX_GROUPS } from '../editor/tex';
@@ -64,6 +65,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	bind:this={dialog}
 	class="sheet"
 	aria-labelledby="math-title"

@@ -2,6 +2,7 @@
 	// A note's org-roam details: rename it (updating links that used the old
 	// title), its aliases and refs, and, for a heading note, extracting it
 	// into a note of its own.
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { fitKeyboard } from '../actions/fit-keyboard';
 	import { href, router } from '../router.svelte';
 	import { app } from '../state.svelte';
@@ -98,6 +99,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	bind:this={dialog}
 	class="sheet"
 	aria-labelledby="ns-title"

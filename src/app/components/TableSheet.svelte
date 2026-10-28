@@ -5,6 +5,7 @@
 	// scrolls sideways; for wide tables, "One row" shows a row as a short form
 	// labelled by the header. Saving writes the table back aligned exactly
 	// as org-table-align would.
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { tick } from 'svelte';
 	import {
 		cleanCell,
@@ -176,6 +177,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	bind:this={dialog}
 	class="sheet"
 	aria-labelledby="table-title"

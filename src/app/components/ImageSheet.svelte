@@ -3,6 +3,7 @@
 	// 2000px, re-encoded, location data dropped; the default) and the
 	// original, add an optional caption, and save it into the vault's images
 	// folder. The note gets a link to it, which shows the picture inline.
+	import { sheetGestures } from '../actions/sheet-gestures';
 	import { app } from '../state.svelte';
 	import { canShrink, formatBytes, original, shrink, type Prepared } from '../images';
 	import Icon from './Icon.svelte';
@@ -74,6 +75,7 @@
 </script>
 
 <dialog
+	use:sheetGestures
 	bind:this={dialog}
 	class="sheet"
 	aria-labelledby="image-title"
