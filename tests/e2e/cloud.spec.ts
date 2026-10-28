@@ -82,7 +82,7 @@ test('a Nextcloud folder over WebDAV, through the relay', async ({ page }) => {
 	await expect(page.getByText('Everything is in WebDAV.')).toBeVisible();
 	await page.goto('app#/node/garden-1');
 	await expect(page.getByRole('heading', { name: 'Water roses' })).toBeVisible();
-	await page.goto('app#/settings');
+	await page.goto('app#/settings/vault');
 	await expect(page.getByRole('heading', { name: 'cloud.test' })).toBeVisible();
 	await expect(page.getByText('through the sync relay')).toBeVisible();
 });
@@ -156,7 +156,7 @@ test('a SharePoint document library, signed in with Microsoft', async ({ page })
 	await expect(page.getByText('Everything is in OneDrive.')).toBeVisible();
 	await page.goto('app#/node/garden-1');
 	await expect(page.getByRole('heading', { name: 'Water roses' })).toBeVisible();
-	await page.goto('app#/settings');
+	await page.goto('app#/settings/vault');
 	await expect(
 		page.getByRole('heading', { name: 'SharePoint · Team notes › Documents' }),
 	).toBeVisible();

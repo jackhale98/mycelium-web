@@ -22,6 +22,7 @@
 	import RouteView from './components/RouteView.svelte';
 	import { panes } from './panes.svelte';
 	import { reminders } from './reminders.svelte';
+	import { takeShared } from './share';
 	import { untrack } from 'svelte';
 
 	$effect(() => router.start());
@@ -39,6 +40,12 @@
 		else addEventListener('load', register, { once: true });
 	});
 	$effect(() => panes.start());
+	// Shared to Mycelium from another app: capture it, once the vault is open.
+	$effect(() => {
+		if (!app.ready) return;
+		const text = untrack(() => takeShared());
+		if (text) app.captureSheet = { text };
+	});
 	// Reminders while the app is open, and the task count on the app icon.
 	$effect(() => reminders.start());
 	$effect(() => reminders.badge());

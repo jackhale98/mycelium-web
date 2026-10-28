@@ -35,7 +35,7 @@ const shown = (page: Page) =>
 test('reminders show when an item is due, once, and open its note', async ({ page }) => {
 	await recordNotifications(page);
 	await page.addInitScript(() => localStorage.setItem('mycelium:editor-mode', 'source'));
-	await page.goto('app#/settings');
+	await page.goto('app#/settings/reminders');
 	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
 
 	await page.getByLabel('Remind me about scheduled items and deadlines').check();

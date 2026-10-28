@@ -11,6 +11,18 @@
 	import { href, router } from '../router.svelte';
 	import { app, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
 
+	let { tab = null }: { tab?: string | null } = $props();
+
+	const TABS = [
+		{ id: 'appearance', label: 'Appearance' },
+		{ id: 'tasks', label: 'Tasks' },
+		{ id: 'capture', label: 'Capture' },
+		{ id: 'reminders', label: 'Reminders' },
+		{ id: 'vault', label: 'Vault' },
+		{ id: 'about', label: 'About' },
+	] as const;
+	const current = $derived(TABS.some((t) => t.id === tab) ? tab : 'appearance');
+
 	const vault = $derived(app.activeVault);
 
 	let token = $state('');
@@ -84,315 +96,383 @@
 	</p>
 	<p class="saved" role="status" aria-live="polite">{saved ?? ''}</p>
 
-	<section class="panel stack" aria-labelledby="appearance-h">
-		<h2 id="appearance-h">Appearance</h2>
-		<div class="segmented" role="radiogroup" aria-label="Theme">
-			{#each themes as t (t.value)}
-				<button
-					type="button"
-					role="radio"
-					aria-checked={app.theme === t.value}
-					onclick={() => app.setTheme(t.value)}>{t.label}</button
-				>
-			{/each}
-		</div>
-		<div class="field">
-			<span class="label" id="ts-label">Text size</span>
-			<div class="segmented" role="radiogroup" aria-labelledby="ts-label">
-				{#each TEXT_SIZES as s (s.value)}
+	<nav class="tabs" aria-label="Settings sections">
+		{#each TABS as t (t.id)}
+			<a
+				href={href.settings(t.id === 'appearance' ? undefined : t.id)}
+				aria-current={current === t.id ? 'page' : undefined}>{t.label}</a
+			>
+		{/each}
+	</nav>
+
+	{#if current === 'appearance'}
+		<section class="panel stack" aria-labelledby="appearance-h">
+			<h2 id="appearance-h">Appearance</h2>
+			<div class="segmented" role="radiogroup" aria-label="Theme">
+				{#each themes as t (t.value)}
 					<button
 						type="button"
 						role="radio"
-						aria-checked={app.textSize === s.value}
-						onclick={() => app.setTextSize(s.value)}>{s.label}</button
+						aria-checked={app.theme === t.value}
+						onclick={() => app.setTheme(t.value)}>{t.label}</button
 					>
 				{/each}
 			</div>
-			<p class="preview">
-				The quick brown fox links two notes. <span class="hint"
-					>Ctrl/⌘ + Alt + = / − / 0 also change it.</span
-				>
-			</p>
-		</div>
-		<div class="field">
-			<span class="label" id="lb-label">Line breaks in paragraphs</span>
-			<div class="segmented" role="radiogroup" aria-labelledby="lb-label">
-				<button
-					type="button"
-					role="radio"
-					aria-checked={!app.joinLines}
-					onclick={() => app.setJoinLines(false)}>Keep as written</button
-				>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={app.joinLines}
-					onclick={() => app.setJoinLines(true)}>Join into paragraphs</button
-				>
-			</div>
-			<p class="hint">
-				Keep shows each line where you broke it, as Emacs does. Join flows lines together, as org's
-				HTML export does; pick it if you wrap lines with M-q.
-			</p>
-		</div>
-		<div class="field">
-			<span class="label" id="ed-label">Editor</span>
-			<div class="segmented" role="radiogroup" aria-labelledby="ed-label">
-				<button
-					type="button"
-					role="radio"
-					aria-checked={app.livePreview}
-					onclick={() => app.setLivePreview(true)}>Live preview</button
-				>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={!app.livePreview}
-					onclick={() => app.setLivePreview(false)}>Source</button
-				>
-			</div>
-			<p class="hint">
-				Live preview hides markup (emphasis marks, leading stars, link brackets) except where the
-				cursor is, draws bullets and checkboxes, and typesets maths. Source shows the org text as it
-				is.
-			</p>
-		</div>
-	</section>
-
-	<section class="panel stack" aria-labelledby="reminders-h">
-		<h2 id="reminders-h">Reminders</h2>
-		<RemindersSettings />
-	</section>
-
-	<section class="panel stack" aria-labelledby="workflow-h">
-		<h2 id="workflow-h">Workflow: TODO keywords</h2>
-		{#key app.activeId}<KeywordEditor />{/key}
-	</section>
-
-	<section class="panel stack" aria-labelledby="capture-h">
-		<h2 id="capture-h">Capture templates</h2>
-		{#key app.activeId}<CaptureTemplatesEditor />{/key}
-	</section>
-
-	<section class="panel stack" aria-labelledby="transfer-h">
-		<h2 id="transfer-h">Settings file</h2>
-		{#key app.activeId}<SettingsTransfer />{/key}
-	</section>
-
-	<section class="panel stack" aria-labelledby="logging-h">
-		<h2 id="logging-h">Task logging</h2>
-		<p class="hint">
-			Mirrors org's logging options. Detected from your files; Emacs' defaults otherwise.
-		</p>
-		<label class="check"
-			><input
-				type="checkbox"
-				checked={app.logSettings.logDone}
-				onchange={(e) =>
-					app
-						.updateVault({ log: { ...(vault?.log ?? {}), logDone: e.currentTarget.checked } })
-						.then(() => (app.logSettings.logDone = e.currentTarget.checked))}
-			/>
-			Stamp <code>CLOSED:</code> when a task is done <span class="var">org-log-done</span></label
-		>
-		<label class="check"
-			><input
-				type="checkbox"
-				checked={app.logSettings.logRepeat}
-				onchange={(e) =>
-					app
-						.updateVault({ log: { ...(vault?.log ?? {}), logRepeat: e.currentTarget.checked } })
-						.then(() => (app.logSettings.logRepeat = e.currentTarget.checked))}
-			/>
-			Record <code>LAST_REPEAT</code> and a state note when a repeating task is done
-			<span class="var">org-log-repeat</span></label
-		>
-		<label class="check"
-			><input
-				type="checkbox"
-				checked={app.logSettings.logIntoDrawer !== null}
-				onchange={(e) => {
-					const v = e.currentTarget.checked ? 'LOGBOOK' : null;
-					app
-						.updateVault({ log: { ...(vault?.log ?? {}), logIntoDrawer: v } })
-						.then(() => (app.logSettings.logIntoDrawer = v));
-				}}
-			/>
-			Put state notes in a <code>:LOGBOOK:</code> drawer
-			<span class="var">org-log-into-drawer</span></label
-		>
-	</section>
-
-	{#if vault?.cloud}
-		<section class="panel stack" aria-labelledby="conn-h">
-			<h2 id="conn-h">{serviceLabel(vault.cloud)}</h2>
-			<dl class="facts">
-				<dt>Folder</dt>
-				<dd><code>{vault.cloud.root || '/'}</code></dd>
-				{#if vault.cloud.url}<dt>Server</dt>
-					<dd><code>{vault.cloud.url}</code></dd>{/if}
-				{#if vault.cloud.account}<dt>Account</dt>
-					<dd>{vault.cloud.account}</dd>{/if}
-				<dt>Access</dt>
-				<dd>
-					{vault.cloud.service === 'webdav'
-						? 'App password kept only in this browser'
-						: 'Signed in; the sign-in is kept only in this browser'}{vault.cloud.service ===
-						'webdav' && vault.cloud.proxy
-						? ' · through the sync relay'
-						: ''}
-				</dd>
-			</dl>
-		</section>
-	{/if}
-	{#if vault}
-		{#if !vault.cloud}
-			<form class="panel stack" onsubmit={saveConnection} aria-labelledby="conn-h">
-				<h2 id="conn-h">Repository</h2>
-				<dl class="facts">
-					<dt>Remote</dt>
-					<dd><code>{vault.url}</code></dd>
-					<dt>Host</dt>
-					<dd>{PROVIDERS[vault.provider].name}</dd>
-					<dt>Branch</dt>
-					<dd><Icon name="branch" size={14} /> {vault.branch ?? 'default'}</dd>
-					<dt>Access</dt>
-					<dd>{vault.credentials ? 'Token saved in this browser' : 'Read-only (no token)'}</dd>
-				</dl>
-				<div class="field">
-					<label for="s-token"
-						>{vault.credentials ? 'Replace access token' : 'Add an access token'}</label
+			<div class="field">
+				<span class="label" id="ts-label">Text size</span>
+				<div class="segmented" role="radiogroup" aria-labelledby="ts-label">
+					{#each TEXT_SIZES as s (s.value)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={app.textSize === s.value}
+							onclick={() => app.setTextSize(s.value)}>{s.label}</button
+						>
+					{/each}
+				</div>
+				<p class="preview">
+					The quick brown fox links two notes. <span class="hint"
+						>Ctrl/⌘ + Alt + = / − / 0 also change it.</span
 					>
-					<input id="s-token" class="input" type="password" bind:value={token} autocomplete="off" />
-				</div>
-				<div class="field">
-					<label for="s-proxy">Sync proxy</label>
-					<input
-						id="s-proxy"
-						class="input"
-						bind:value={proxy}
-						autocapitalize="off"
-						spellcheck="false"
-					/>
-				</div>
-				<div class="row two">
-					<div class="field">
-						<label for="s-an">Commit name</label><input
-							id="s-an"
-							class="input"
-							bind:value={authorName}
-						/>
-					</div>
-					<div class="field">
-						<label for="s-ae">Commit email</label><input
-							id="s-ae"
-							class="input"
-							type="email"
-							bind:value={authorEmail}
-						/>
-					</div>
-				</div>
-				<div class="row"><button class="btn primary" type="submit">Save</button></div>
-			</form>
-		{/if}
-
-		<form class="panel stack" onsubmit={saveLayout} aria-labelledby="layout-h">
-			<h2 id="layout-h">Vault layout</h2>
-			<div class="row two">
-				<div class="field">
-					<label for="s-roam">org-roam directory</label>
-					<input id="s-roam" class="input" bind:value={roamDir} placeholder="Repository root" />
-				</div>
-				<div class="field">
-					<label for="s-daily">Dailies directory</label>
-					<input id="s-daily" class="input" bind:value={dailyDir} />
-				</div>
-			</div>
-			<div class="field">
-				<label for="s-format">Daily file names</label>
-				<select id="s-format" class="input" bind:value={dailyFormat}>
-					<option value="YYYY-MM-DD">2026-10-20.org (org-roam default)</option>
-					<option value="YYYYMMDD">20261020.org</option>
-				</select>
-			</div>
-			<div class="field">
-				<label for="s-images">Pictures folder</label>
-				<input id="s-images" class="input" bind:value={imageDir} placeholder="Vault root" />
-				<p class="hint">
-					Pictures you add are saved here, linked from the note with a relative <code>file:</code> link.
 				</p>
 			</div>
+			<div class="field">
+				<span class="label" id="lb-label">Line breaks in paragraphs</span>
+				<div class="segmented" role="radiogroup" aria-labelledby="lb-label">
+					<button
+						type="button"
+						role="radio"
+						aria-checked={!app.joinLines}
+						onclick={() => app.setJoinLines(false)}>Keep as written</button
+					>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={app.joinLines}
+						onclick={() => app.setJoinLines(true)}>Join into paragraphs</button
+					>
+				</div>
+				<p class="hint">
+					Keep shows each line where you broke it, as Emacs does. Join flows lines together, as
+					org's HTML export does; pick it if you wrap lines with M-q.
+				</p>
+			</div>
+			<div class="field">
+				<span class="label" id="ed-label">Editor</span>
+				<div class="segmented" role="radiogroup" aria-labelledby="ed-label">
+					<button
+						type="button"
+						role="radio"
+						aria-checked={app.livePreview}
+						onclick={() => app.setLivePreview(true)}>Live preview</button
+					>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={!app.livePreview}
+						onclick={() => app.setLivePreview(false)}>Source</button
+					>
+				</div>
+				<p class="hint">
+					Live preview hides markup (emphasis marks, leading stars, link brackets) except where the
+					cursor is, draws bullets and checkboxes, and typesets maths. Source shows the org text as
+					it is.
+				</p>
+			</div>
+		</section>
+	{:else if current === 'tasks'}
+		<section class="panel stack" aria-labelledby="workflow-h">
+			<h2 id="workflow-h">Workflow: TODO keywords</h2>
+			{#key app.activeId}<KeywordEditor />{/key}
+		</section>
+		<section class="panel stack" aria-labelledby="logging-h">
+			<h2 id="logging-h">Task logging</h2>
+			<p class="hint">
+				Mirrors org's logging options. Detected from your files; Emacs' defaults otherwise.
+			</p>
+			<label class="check"
+				><input
+					type="checkbox"
+					checked={app.logSettings.logDone}
+					onchange={(e) =>
+						app
+							.updateVault({ log: { ...(vault?.log ?? {}), logDone: e.currentTarget.checked } })
+							.then(() => (app.logSettings.logDone = e.currentTarget.checked))}
+				/>
+				Stamp <code>CLOSED:</code> when a task is done <span class="var">org-log-done</span></label
+			>
+			<label class="check"
+				><input
+					type="checkbox"
+					checked={app.logSettings.logRepeat}
+					onchange={(e) =>
+						app
+							.updateVault({ log: { ...(vault?.log ?? {}), logRepeat: e.currentTarget.checked } })
+							.then(() => (app.logSettings.logRepeat = e.currentTarget.checked))}
+				/>
+				Record <code>LAST_REPEAT</code> and a state note when a repeating task is done
+				<span class="var">org-log-repeat</span></label
+			>
+			<label class="check"
+				><input
+					type="checkbox"
+					checked={app.logSettings.logIntoDrawer !== null}
+					onchange={(e) => {
+						const v = e.currentTarget.checked ? 'LOGBOOK' : null;
+						app
+							.updateVault({ log: { ...(vault?.log ?? {}), logIntoDrawer: v } })
+							.then(() => (app.logSettings.logIntoDrawer = v));
+					}}
+				/>
+				Put state notes in a <code>:LOGBOOK:</code> drawer
+				<span class="var">org-log-into-drawer</span></label
+			>
+		</section>
+	{:else if current === 'capture'}
+		<section class="panel stack" aria-labelledby="capture-h">
+			<h2 id="capture-h">Capture templates</h2>
+			{#key app.activeId}<CaptureTemplatesEditor />{/key}
+		</section>
+	{:else if current === 'reminders'}
+		<section class="panel stack" aria-labelledby="reminders-h">
+			<h2 id="reminders-h">Reminders</h2>
+			<RemindersSettings />
+		</section>
+	{:else if current === 'vault'}
+		{#if vault?.cloud}
+			<section class="panel stack" aria-labelledby="conn-h">
+				<h2 id="conn-h">{serviceLabel(vault.cloud)}</h2>
+				<dl class="facts">
+					<dt>Folder</dt>
+					<dd><code>{vault.cloud.root || '/'}</code></dd>
+					{#if vault.cloud.url}<dt>Server</dt>
+						<dd><code>{vault.cloud.url}</code></dd>{/if}
+					{#if vault.cloud.account}<dt>Account</dt>
+						<dd>{vault.cloud.account}</dd>{/if}
+					<dt>Access</dt>
+					<dd>
+						{vault.cloud.service === 'webdav'
+							? 'App password kept only in this browser'
+							: 'Signed in; the sign-in is kept only in this browser'}{vault.cloud.service ===
+							'webdav' && vault.cloud.proxy
+							? ' · through the sync relay'
+							: ''}
+					</dd>
+				</dl>
+			</section>
+		{/if}
+		{#if vault}
+			{#if !vault.cloud}
+				<form class="panel stack" onsubmit={saveConnection} aria-labelledby="conn-h">
+					<h2 id="conn-h">Repository</h2>
+					<dl class="facts">
+						<dt>Remote</dt>
+						<dd><code>{vault.url}</code></dd>
+						<dt>Host</dt>
+						<dd>{PROVIDERS[vault.provider].name}</dd>
+						<dt>Branch</dt>
+						<dd><Icon name="branch" size={14} /> {vault.branch ?? 'default'}</dd>
+						<dt>Access</dt>
+						<dd>{vault.credentials ? 'Token saved in this browser' : 'Read-only (no token)'}</dd>
+					</dl>
+					<div class="field">
+						<label for="s-token"
+							>{vault.credentials ? 'Replace access token' : 'Add an access token'}</label
+						>
+						<input
+							id="s-token"
+							class="input"
+							type="password"
+							bind:value={token}
+							autocomplete="off"
+						/>
+					</div>
+					<div class="field">
+						<label for="s-proxy">Sync proxy</label>
+						<input
+							id="s-proxy"
+							class="input"
+							bind:value={proxy}
+							autocapitalize="off"
+							spellcheck="false"
+						/>
+					</div>
+					<div class="row two">
+						<div class="field">
+							<label for="s-an">Commit name</label><input
+								id="s-an"
+								class="input"
+								bind:value={authorName}
+							/>
+						</div>
+						<div class="field">
+							<label for="s-ae">Commit email</label><input
+								id="s-ae"
+								class="input"
+								type="email"
+								bind:value={authorEmail}
+							/>
+						</div>
+					</div>
+					<div class="row"><button class="btn primary" type="submit">Save</button></div>
+				</form>
+			{/if}
 
-			<div class="row"><button class="btn primary" type="submit">Save and re-index</button></div>
-		</form>
+			<form class="panel stack" onsubmit={saveLayout} aria-labelledby="layout-h">
+				<h2 id="layout-h">Vault layout</h2>
+				<div class="row two">
+					<div class="field">
+						<label for="s-roam">org-roam directory</label>
+						<input id="s-roam" class="input" bind:value={roamDir} placeholder="Repository root" />
+					</div>
+					<div class="field">
+						<label for="s-daily">Dailies directory</label>
+						<input id="s-daily" class="input" bind:value={dailyDir} />
+					</div>
+				</div>
+				<div class="field">
+					<label for="s-format">Daily file names</label>
+					<select id="s-format" class="input" bind:value={dailyFormat}>
+						<option value="YYYY-MM-DD">2026-10-20.org (org-roam default)</option>
+						<option value="YYYYMMDD">20261020.org</option>
+					</select>
+				</div>
+				<div class="field">
+					<label for="s-images">Pictures folder</label>
+					<input id="s-images" class="input" bind:value={imageDir} placeholder="Vault root" />
+					<p class="hint">
+						Pictures you add are saved here, linked from the note with a relative <code>file:</code> link.
+					</p>
+				</div>
 
-		{#if !vault.cloud}
-			<section class="panel" aria-labelledby="history-h">
-				<h2 id="history-h">Recent history</h2>
-				{#if history === null}
-					<p class="hint">Loading…</p>
-				{:else if history.length === 0}
-					<p class="hint">No commits yet.</p>
-				{:else}
-					<ol class="history">
-						{#each history as c, i (c.oid)}
-							<li>
-								<span class="msg">{c.message}</span>
-								<span class="meta"
-									>{c.author.name} · {date(c.author.timestamp)} ·
-									<code>{c.oid.slice(0, 7)}</code>{#if i < app.unsynced}
-										· <span class="local">not synced</span>{/if}</span
-								>
-							</li>
-						{/each}
-					</ol>
-				{/if}
+				<div class="row"><button class="btn primary" type="submit">Save and re-index</button></div>
+			</form>
+
+			{#if !vault.cloud}
+				<section class="panel" aria-labelledby="history-h">
+					<h2 id="history-h">Recent history</h2>
+					{#if history === null}
+						<p class="hint">Loading…</p>
+					{:else if history.length === 0}
+						<p class="hint">No commits yet.</p>
+					{:else}
+						<ol class="history">
+							{#each history as c, i (c.oid)}
+								<li>
+									<span class="msg">{c.message}</span>
+									<span class="meta"
+										>{c.author.name} · {date(c.author.timestamp)} ·
+										<code>{c.oid.slice(0, 7)}</code>{#if i < app.unsynced}
+											· <span class="local">not synced</span>{/if}</span
+									>
+								</li>
+							{/each}
+						</ol>
+					{/if}
+				</section>
+			{/if}
+
+			<section class="panel stack" aria-labelledby="danger-h">
+				<h2 id="danger-h">Remove from this browser</h2>
+				<p class="hint">
+					{vault.cloud
+						? `Deletes this browser's copy. The folder in ${serviceLabel(vault.cloud)} is not affected`
+						: 'Deletes the local clone and index. The remote repository is not affected'}{app.unsynced
+						? `, but your ${app.unsynced} unsynced ${app.unsynced === 1 ? 'change' : 'changes'} will be lost`
+						: ''}.
+				</p>
+				<div class="row">
+					<button
+						type="button"
+						class="btn danger"
+						onclick={async () => {
+							if (confirm(`Remove ${vault.name} from this browser?`)) {
+								await app.removeVault(vault.id);
+								router.go(href.home());
+							}
+						}}
+					>
+						<Icon name="trash" size={15} /> Remove vault
+					</button>
+				</div>
 			</section>
 		{/if}
 
-		<section class="panel stack" aria-labelledby="danger-h">
-			<h2 id="danger-h">Remove from this browser</h2>
+		{#if !vault}
 			<p class="hint">
-				{vault.cloud
-					? `Deletes this browser's copy. The folder in ${serviceLabel(vault.cloud)} is not affected`
-					: 'Deletes the local clone and index. The remote repository is not affected'}{app.unsynced
-					? `, but your ${app.unsynced} unsynced ${app.unsynced === 1 ? 'change' : 'changes'} will be lost`
-					: ''}.
+				The demo vault has no connection or layout to change. <a href={href.vaults()}
+					>Open your own vault</a
+				> to set one up.
 			</p>
-			<div class="row">
-				<button
-					type="button"
-					class="btn danger"
-					onclick={async () => {
-						if (confirm(`Remove ${vault.name} from this browser?`)) {
-							await app.removeVault(vault.id);
-							router.go(href.home());
-						}
-					}}
+		{/if}
+	{:else}
+		<section class="panel stack" aria-labelledby="transfer-h">
+			<h2 id="transfer-h">Settings file</h2>
+			{#key app.activeId}<SettingsTransfer />{/key}
+		</section>
+		<section class="panel stack" aria-labelledby="about-h">
+			<h2 id="about-h">About Mycelium</h2>
+			<p class="hint">
+				Mycelium is free software: you can redistribute it and change it under the terms of the GNU
+				General Public License, version 3 or (at your option) any later version. It comes with no
+				warranty.
+			</p>
+			<p class="about-links">
+				<a href="https://github.com/jackhale98/mycelium-web" rel="noopener noreferrer"
+					>Source code</a
 				>
-					<Icon name="trash" size={15} /> Remove vault
-				</button>
-			</div>
+				<a href="https://www.gnu.org/licenses/gpl-3.0.html" rel="noopener noreferrer">GNU GPL v3</a>
+				<a href={`${BASE}/third-party-licenses.txt`}>Third-party licences</a>
+			</p>
+			<p class="hint">Not affiliated with org-roam or the GNU Emacs project.</p>
 		</section>
 	{/if}
-
-	<section class="panel stack" aria-labelledby="about-h">
-		<h2 id="about-h">About Mycelium</h2>
-		<p class="hint">
-			Mycelium is free software: you can redistribute it and change it under the terms of the GNU
-			General Public License, version 3 or (at your option) any later version. It comes with no
-			warranty.
-		</p>
-		<p class="about-links">
-			<a href="https://github.com/jackhale98/mycelium-web" rel="noopener noreferrer">Source code</a>
-			<a href="https://www.gnu.org/licenses/gpl-3.0.html" rel="noopener noreferrer">GNU GPL v3</a>
-			<a href={`${BASE}/third-party-licenses.txt`}>Third-party licences</a>
-		</p>
-		<p class="hint">Not affiliated with org-roam or the GNU Emacs project.</p>
-	</section>
 </div>
 
 <style>
+	/* Sections as a row of tabs: wraps on desktop, scrolls sideways on phones. */
+	.tabs {
+		position: sticky;
+		top: var(--clock-h, 0px);
+		z-index: 2;
+		display: flex;
+		gap: 0.3rem;
+		margin: 0 0 1rem;
+		padding: 0.4rem 0;
+		background: var(--bg);
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.tabs::-webkit-scrollbar {
+		display: none;
+	}
+	.tabs a {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		min-height: 2.25rem;
+		padding: 0 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		color: var(--text-muted);
+		font-size: 0.86rem;
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.tabs a:hover {
+		color: var(--text);
+		background: var(--surface-2);
+	}
+	.tabs a[aria-current='page'] {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--accent-strong);
+	}
+	@media (pointer: coarse) {
+		.tabs a {
+			min-height: 2.75rem;
+		}
+	}
 	.about-links {
 		display: flex;
 		flex-wrap: wrap;

@@ -10,7 +10,8 @@ export type Route =
 	| { name: 'agenda'; query: string }
 	| { name: 'tags'; tag: string | null }
 	| { name: 'vaults' }
-	| { name: 'settings' }
+	/** `tab`: the Settings section shown (null for the first). */
+	| { name: 'settings'; tab: string | null }
 	| { name: 'changes' }
 	| { name: 'dailies' }
 	| { name: 'search'; q: string }
@@ -41,7 +42,7 @@ export function parseHash(hash: string): Route {
 		case 'vaults':
 			return { name: 'vaults' };
 		case 'settings':
-			return { name: 'settings' };
+			return { name: 'settings', tab: tail || null };
 		case 'changes':
 			return { name: 'changes' };
 		case 'dailies':
@@ -68,7 +69,7 @@ export const href = {
 	agenda: (query = '') => (query ? `#/agenda?${query}` : '#/agenda'),
 	tags: (tag?: string) => (tag ? `#/tags/${encodeURIComponent(tag)}` : '#/tags'),
 	vaults: () => '#/vaults',
-	settings: () => '#/settings',
+	settings: (tab?: string) => (tab ? `#/settings/${tab}` : '#/settings'),
 	changes: () => '#/changes',
 	dailies: () => '#/dailies',
 	search: (q = '') => (q ? `#/search/${encodeURIComponent(q)}` : '#/search'),

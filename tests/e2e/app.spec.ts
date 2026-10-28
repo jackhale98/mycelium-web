@@ -124,7 +124,7 @@ test('the capture sheet picks templates by key and writes a task', async ({ page
 });
 
 test('a custom template with prompts writes into a file under a heading', async ({ page }) => {
-	await open(page, 'app#/settings');
+	await open(page, 'app#/settings/capture');
 	await page.getByRole('button', { name: 'Add template' }).click();
 	const tpl = page.locator('.tpl').last();
 	await tpl.getByLabel('Name').fill('Call');
@@ -247,13 +247,16 @@ test('the cursor starts in the first empty field of a template', async ({ page }
 });
 
 test('settings export to a file and import back, section by section', async ({ page }) => {
-	await open(page, 'app#/settings');
+	await open(page, 'app#/settings/capture');
 	// A custom template to carry across.
 	await page.getByRole('button', { name: 'Add template' }).click();
 	await page.locator('.tpl').last().getByLabel('Name').fill('Reading');
 	await page.getByRole('button', { name: 'Save templates' }).click();
 	await expect(page.getByText('Capture templates saved')).toBeVisible();
 
+	const tab = (name: string) =>
+		page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name }).click();
+	await tab('About');
 	const download = page.waitForEvent('download');
 	await page.getByRole('button', { name: 'Export settings' }).click();
 	const file = await download;
@@ -269,9 +272,11 @@ test('settings export to a file and import back, section by section', async ({ p
 	expect(text).not.toMatch(/token|credentials/);
 
 	// Back to defaults, then bring only the templates back.
+	await tab('Capture');
 	page.once('dialog', (d) => d.accept());
 	await page.getByRole('button', { name: 'Reset to defaults' }).click();
 	await expect(page.locator('.tpl').getByLabel('Name').last()).not.toHaveValue('Reading');
+	await tab('About');
 	await page.getByLabel('Settings file to import').setInputFiles({
 		name: 'mine.json',
 		mimeType: 'application/json',
@@ -284,9 +289,11 @@ test('settings export to a file and import back, section by section', async ({ p
 	await expect(page.getByText('Imported 1 section from mine.json.')).toBeVisible();
 	await page.reload();
 	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await tab('Capture');
 	await expect(page.locator('.tpl').getByLabel('Name').last()).toHaveValue('Reading');
 
 	// A file that isn't valid says why.
+	await tab('About');
 	await page.getByLabel('Settings file to import').setInputFiles({
 		name: 'bad.json',
 		mimeType: 'application/json',
@@ -563,7 +570,7 @@ test('graph controls are a collapsible footer on phones', async ({ page, isMobil
 });
 
 test('rename a TODO keyword across the vault from Settings', async ({ page }) => {
-	await open(page, 'app#/settings');
+	await open(page, 'app#/settings/tasks');
 	const editor = page.locator('.kw-editor');
 	await expect(editor.locator('pre')).toContainText('#+TODO: TODO NEXT | DONE');
 	const next = editor.locator('.state', { hasText: 'NEXT' }).getByRole('textbox', { name: 'Name' });
@@ -1113,7 +1120,7 @@ test('a page whose code vanished in a deploy reloads, then explains instead of g
 
 test('phones scroll the page itself, so long pages reach the bottom', async ({ page }) => {
 	test.skip((page.viewportSize()?.width ?? 0) > 960, 'phone layout only');
-	await open(page, 'app#/settings');
+	await open(page, 'app#/settings/vault');
 	await page.getByRole('button', { name: 'Remove vault' }).scrollIntoViewIfNeeded();
 	const state = await page.evaluate(() => ({
 		page: window.scrollY,
@@ -1241,4 +1248,32 @@ test('the agenda shows clocked time only when there is some this week', async ({
 	await page.goto(page.url().replace(/#.*/, '#/agenda'));
 	await expect(page.getByRole('heading', { name: /^Clocked/ })).toContainText('1:30');
 	await expect(page.getByRole('cell', { name: 'Review notes' })).toBeVisible();
+});
+
+test('sharing a page to Mycelium opens capture with an org link', async ({ page }) => {
+	await page.goto(
+		`app/?share_title=${encodeURIComponent('Org mode')}&share_text=${encodeURIComponent('Worth a look https://orgmode.org/')}#/`,
+	);
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	const sheet = page.getByRole('dialog');
+	await expect(sheet.locator('textarea')).toHaveValue(
+		'[[https://orgmode.org/][Org mode]]\nWorth a look',
+	);
+	// Shared once: the address no longer carries it, so a reload doesn't capture again.
+	expect(new URL(page.url()).search).toBe('');
+});
+
+test('settings are split into sections, each with its own address', async ({ page }) => {
+	await open(page, 'app#/settings');
+	const tabs = page.getByRole('navigation', { name: 'Settings sections' });
+	await expect(tabs.getByRole('link', { name: 'Appearance' })).toHaveAttribute(
+		'aria-current',
+		'page',
+	);
+	await expect(page.getByRole('heading', { name: 'Reminders' })).toHaveCount(0);
+	await tabs.getByRole('link', { name: 'Reminders' }).click();
+	await expect(page).toHaveURL(/#\/settings\/reminders$/);
+	await expect(page.getByRole('heading', { name: 'Reminders' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Appearance' })).toHaveCount(0);
+	await expectAccessible(page);
 });

@@ -470,5 +470,35 @@
 		.close {
 			display: grid;
 		}
+		/* Phones and tablets: finger-sized targets, clear of the home indicator. */
+		.foot {
+			padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+		}
+		.foot-row {
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
+		.settings {
+			flex: 1 0 100%;
+			min-height: 2.75rem;
+			padding: 0 0.75rem;
+			margin-left: 0;
+			font-size: 0.92rem;
+		}
+		.aa {
+			width: 2.75rem;
+			height: 2.75rem;
+			font-size: 1.05rem;
+		}
+		.theme button {
+			width: 2.75rem;
+			height: 2.75rem;
+		}
+	}
+	@media (pointer: coarse) {
+		.sizes button {
+			min-width: 2.75rem;
+			min-height: 2.75rem;
+		}
 	}
 </style>
