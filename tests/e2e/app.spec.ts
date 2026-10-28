@@ -417,10 +417,12 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 	await bar.getByRole('button', { name: 'Dismiss' }).click();
 	await expect(bar).toHaveCount(0);
 	await page.keyboard.press('Escape');
-	await page.getByRole('button', { name: 'Edit', exact: true }).click();
-	const editor = page.locator('.cm-content');
-	await expect(editor).toContainText(':LOGBOOK:');
-	await expect(editor).toContainText(
+	// What was written to the file, as the Changes page's diff shows it (the editor
+	// would show only the lines in view).
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	const diff = page.locator('main');
+	await expect(diff).toContainText(':LOGBOOK:');
+	await expect(diff).toContainText(
 		/CLOCK: \[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\]--\[\d{4}-\d\d-\d\d \w{3} \d\d:\d\d\] => +\d+:\d\d/,
 	);
 });

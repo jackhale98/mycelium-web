@@ -81,16 +81,29 @@ test('a pushed reminder shows once, even when the open app showed it already', a
 		);
 
 	const reminder = { id: 'r1', title: 'TODO Call the bank', body: 'Due at 17:00', url: '#/agenda' };
-	// A push sent while the worker is still starting up can be dropped: send until it shows.
+	const recorded = () =>
+		page.evaluate(async () => !!(await (await caches.open('reminders-shown')).match('/shown/r1')));
+	// A push sent while the worker is still starting up can be dropped: send until it lands.
 	await expect
 		.poll(
 			async () => {
-				if (!(await notifications()).length) await push(reminder);
-				return (await notifications()).map((n) => [n.title, n.tag]);
+				if (!(await recorded())) await push(reminder);
+				return recorded();
 			},
 			{ timeout: 20_000, intervals: [1000] },
 		)
-		.toEqual([['TODO Call the bank', 'r1']]);
+		.toBe(true);
+	// Headless Chromium refuses notifications whatever the permission: what's shown
+	// can only be checked where they're allowed.
+	if ((await page.evaluate(() => Notification.permission)) !== 'granted') {
+		test
+			.info()
+			.annotations.push({ type: 'note', description: 'notifications not displayable here' });
+		return;
+	}
+	await expect
+		.poll(notifications, { timeout: 10_000 })
+		.toEqual([{ title: 'TODO Call the bank', tag: 'r1', silent: false }]);
 	// The same occurrence again (the app showed it, say): replaced quietly, not doubled.
 	await push(reminder);
 	await expect

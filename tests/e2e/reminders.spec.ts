@@ -8,7 +8,7 @@ const PROJECT = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c12';
 /** A stand-in for the browser's notifications that records what's shown. */
 async function recordNotifications(page: Page) {
 	await page.addInitScript(() => {
-		const shown: { title: string; body?: string; tag?: string }[] = [];
+		const shown: { title: string; body: string | undefined; tag: string | undefined }[] = [];
 		class FakeNotification {
 			static permission: NotificationPermission = 'default';
 			static async requestPermission() {
