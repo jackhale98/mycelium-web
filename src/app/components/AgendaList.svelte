@@ -341,6 +341,8 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+		/* Rows stack by the list's own width (a phone, or a side panel). */
+		container-type: inline-size;
 	}
 	.item {
 		display: grid;
@@ -425,7 +427,7 @@
 		background: var(--surface-2);
 		color: var(--accent);
 	}
-	@media (max-width: 560px) {
+	@container (max-width: 35rem) {
 		.item {
 			grid-template-columns: auto minmax(0, 1fr);
 		}

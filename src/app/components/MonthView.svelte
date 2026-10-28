@@ -100,12 +100,49 @@
 	/** The grid's top in the page, and the bottom bar's height (measured). */
 	let top = $state(0);
 	let barH = $state(64);
+	/** Wider screens: the grid's height, filling what its scroller shows below it. */
+	let fillH = $state(0);
+	/** The nearest scrolling ancestor (a pane or main on wide screens), or none (the page). */
+	function scroller(el: HTMLElement): HTMLElement | null {
+		for (let n = el.parentElement; n; n = n.parentElement) {
+			const y = getComputedStyle(n).overflowY;
+			if (y === 'auto' || y === 'scroll') return n;
+		}
+		return null;
+	}
 	function measure() {
-		const grid = view?.querySelector('.grid-wrap');
-		if (grid) top = Math.round(grid.getBoundingClientRect().top + window.scrollY);
+		const grid = view?.querySelector<HTMLElement>('.grid-wrap');
+		if (grid) {
+			top = Math.round(grid.getBoundingClientRect().top + window.scrollY);
+			const sc = scroller(grid);
+			const inner = sc
+				? grid.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop
+				: top;
+			fillH = Math.max(420, Math.round((sc?.clientHeight ?? window.innerHeight) - inner - 24));
+		}
 		const bar = document.querySelector<HTMLElement>('nav[aria-label="Quick navigation"]');
 		barH = bar && bar.offsetHeight ? bar.offsetHeight : 0;
 	}
+	/** A week row's height, and so how many item labels a day fits (wider screens). */
+	let rowH = $state(0);
+	const LABEL_H = 19;
+	const fit = $derived(Math.max(0, Math.floor((rowH - 32) / LABEL_H)));
+	/** A day's labels: as many as fit, the last line "+n more" when some don't. */
+	function labelsOf(items: AgendaItem[]): { shown: AgendaItem[]; more: number } {
+		if (items.length <= fit) return { shown: items, more: 0 };
+		const shown = items.slice(0, Math.max(0, fit - 1));
+		return { shown, more: items.length - shown.length };
+	}
+	$effect(() => {
+		const el = view?.querySelector<HTMLElement>('.grid-wrap');
+		if (!el) return;
+		const ro = new ResizeObserver(() => {
+			const row = el.querySelector<HTMLElement>('.week:not(.head)');
+			if (row) rowH = row.offsetHeight;
+		});
+		ro.observe(el);
+		return () => ro.disconnect();
+	});
 	onMount(() => {
 		const mq = matchMedia(PHONE);
 		phone = mq.matches;
@@ -307,6 +344,16 @@
 		selected = date;
 	}
 
+	/** What an item's dot and label look like on a day. */
+	function kindOf(item: AgendaItem, date: string): string {
+		if (item.todo && app.vault.keywords.doneKeywords.includes(item.todo)) return 'done';
+		const k = stampOn(item, date);
+		if (k === 'DEADLINE') return 'deadline';
+		if (k === 'SCHEDULED') return 'scheduled';
+		// Carried over from an earlier day (org shows it on today).
+		if (item.todo && date === today) return 'late';
+		return 'appointment';
+	}
 	const time = (item: AgendaItem, date: string) => {
 		const k = stampOn(item, date);
 		return (k === 'SCHEDULED' ? item.scheduled : k === 'DEADLINE' ? item.deadline : null)?.time;
@@ -336,30 +383,33 @@
 		{/if}
 	</nav>
 
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="grid-wrap"
-		inert={phone && expanded}
-		onpointerdown={swipeDown}
-		onpointermove={swipeMove}
-		onpointerup={() => (swipe = null)}
-		onpointercancel={() => (swipe = null)}
-		onclickcapture={swipeClick}
-	>
-		{#key month}
-			<div class="month-panel" in:slide={1} out:slide={-1} onoutrostart={retire}>
-				<table class="grid">
-					<caption class="sr-only">{label}: pick a day to see its items below</caption>
-					<thead>
-						<tr
-							>{#each WEEKDAYS as w (w)}<th scope="col">{w}</th>{/each}</tr
-						>
-					</thead>
-					<tbody>
+	<div class="month-body">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="grid-wrap"
+			style:--fill-h={phone ? undefined : `${fillH}px`}
+			inert={phone && expanded}
+			onpointerdown={swipeDown}
+			onpointermove={swipeMove}
+			onpointerup={() => (swipe = null)}
+			onpointercancel={() => (swipe = null)}
+			onclickcapture={swipeClick}
+		>
+			{#key month}
+				<div class="month-panel" in:slide={1} out:slide={-1} onoutrostart={retire}>
+					<div class="grid" role="table" aria-label={label} style:--weeks={weeks.length}>
+						<div class="week head" role="row">
+							{#each WEEKDAYS as w (w)}<div class="wh" role="columnheader">{w}</div>{/each}
+						</div>
 						{#each weeks as week (week[0]!.date)}
-							<tr>
+							<div class="week" role="row">
 								{#each week as day (day.date)}
-									<td
+									{@const labels = labelsOf(day.items)}
+									<!-- Drop target for dragging with a pointer; the day's list changes dates by keyboard. -->
+									<!-- svelte-ignore a11y_interactive_supports_focus -->
+									<div
+										role="cell"
+										class="gc"
 										class:other={!day.date.startsWith(month)}
 										class:today={day.date === today}
 										class:selected={day.date === selected}
@@ -378,56 +428,73 @@
 										<button
 											type="button"
 											class="day"
+											aria-current={day.date === today ? 'date' : undefined}
 											aria-pressed={day.date === selected}
 											aria-label={`${longDay(day.date)}${day.date === today ? ', today' : ''}: ${day.items.length} item${day.items.length === 1 ? '' : 's'}`}
 											onclick={() => (selected = day.date)}
-											><span class="num">{dayNumber(day.date)}</span>{#if day.items.length}<span
-													class="count">{day.items.length}</span
-												>{/if}</button
+											><span class="num">{dayNumber(day.date)}</span></button
 										>
-										<ul class="chips" aria-hidden="true">
-											{#each day.items.slice(0, 3) as item (`${item.file}:${item.pos}`)}
-												{@const kind = stampOn(item, day.date)}
-												<li
-													class:deadline={kind === 'DEADLINE'}
-													draggable={kind !== null}
-													data-file={item.file}
-													data-pos={item.pos}
-													data-kind={kind ?? ''}
-													ondragstart={(e) => {
-														// Which item, from the element itself.
-														const el = e.currentTarget as HTMLElement;
-														const found = day.items.find(
-															(i) => i.file === el.dataset.file && String(i.pos) === el.dataset.pos,
-														);
-														const k = el.dataset.kind as 'SCHEDULED' | 'DEADLINE' | '';
-														if (!found || !k) return;
-														dragging = { item: found, kind: k };
-														e.dataTransfer?.setData('text/plain', found.title);
-													}}
-													ondragend={() => {
-														dragging = null;
-														over = null;
-													}}
-												>
-													{#if time(item, day.date)}<span class="t">{time(item, day.date)}</span
-														>{/if}{plain(item.title)}
-												</li>
-											{/each}
-											{#if day.items.length > 3}<li class="more">
-													+{day.items.length - 3} more
-												</li>{/if}
-										</ul>
-									</td>
+										<!-- Outside the button, so its name is just the day and its count. -->
+										<div class="extras" aria-hidden="true">
+											<span class="dots">
+												{#each day.items.slice(0, 5) as item (`${item.file}:${item.pos}`)}<i
+														class={kindOf(item, day.date)}
+													></i>{/each}
+											</span>
+											<ul class="chips">
+												{#each labels.shown as item (`${item.file}:${item.pos}`)}
+													{@const kind = stampOn(item, day.date)}
+													<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+													<li
+														class={kindOf(item, day.date)}
+														draggable={kind !== null}
+														data-file={item.file}
+														data-pos={item.pos}
+														data-kind={kind ?? ''}
+														onclick={() => (selected = day.date)}
+														ondragstart={(e) => {
+															// Which item, from the element itself.
+															const el = e.currentTarget as HTMLElement;
+															const found = day.items.find(
+																(i) =>
+																	i.file === el.dataset.file && String(i.pos) === el.dataset.pos,
+															);
+															const k = el.dataset.kind as 'SCHEDULED' | 'DEADLINE' | '';
+															if (!found || !k) return;
+															dragging = { item: found, kind: k };
+															e.dataTransfer?.setData('text/plain', found.title);
+														}}
+														ondragend={() => {
+															dragging = null;
+															over = null;
+														}}
+													>
+														{#if time(item, day.date)}<span class="t">{time(item, day.date)}</span
+															>{/if}{plain(item.title)}
+													</li>
+												{/each}
+												{#if labels.more}<li class="more">+{labels.more} more</li>{/if}
+											</ul>
+										</div>
+									</div>
 								{/each}
-							</tr>
+							</div>
 						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/key}
-	</div>
+					</div>
+				</div>
+			{/key}
+		</div>
 
+		{#if !phone}
+			<section class="group side" aria-labelledby="month-day">
+				{@render heading()}
+				{@render list()}
+				<p class="hint">
+					Drag an item to another day to reschedule it, or change its date in the list.
+				</p>
+			</section>
+		{/if}
+	</div>
 	{#if phone}
 		{#if expanded}
 			<!-- A tap outside closes it; the handle, Escape and a pull down do too. -->
@@ -474,14 +541,6 @@
 				{@render list()}
 			</div>
 		</section>
-	{:else}
-		<section class="group" aria-labelledby="month-day">
-			{@render heading()}
-			{@render list()}
-		</section>
-		<p class="hint">
-			Drag an item to another day to reschedule it, or change its date in the list.
-		</p>
 	{/if}
 </div>
 
@@ -529,92 +588,159 @@
 		grid-area: 1 / 1;
 		min-width: 0;
 		min-height: 0;
+		height: 100%;
+	}
+	.month-body {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		container-type: inline-size;
 	}
 	.grid {
-		width: 100%;
-		border-collapse: collapse;
-		table-layout: fixed;
+		display: grid;
+		grid-template-rows: auto repeat(var(--weeks), minmax(0, 1fr));
+		height: 100%;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+		overflow: hidden;
 	}
-	th {
-		padding: 0.3rem 0;
+	.week {
+		display: grid;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		min-height: 0;
+	}
+	.week + .week:not(.head) .gc,
+	.head + .week .gc {
+		border-top: 1px solid var(--border);
+	}
+	.wh {
+		padding: 0.45rem 0;
 		color: var(--text-muted);
-		font-size: 0.72rem;
-		font-weight: 650;
-		letter-spacing: 0.04em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-align: center;
 		text-transform: uppercase;
 	}
-	td {
-		height: 6.5rem;
-		padding: 0;
-		border: 1px solid var(--border);
-		vertical-align: top;
+	.gc {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
 	}
-	td.other {
+	.gc + .gc {
+		border-left: 1px solid var(--border);
+	}
+	.gc.other {
 		background: color-mix(in oklab, var(--surface-2) 45%, transparent);
 	}
-	td.other .num {
-		color: var(--text-faint);
+	.gc.selected {
+		box-shadow: inset 0 0 0 2px var(--accent);
 	}
-	td.selected {
-		outline: 2px solid var(--accent);
-		outline-offset: -2px;
-	}
-	td.over {
+	.gc.over {
 		background: var(--accent-soft);
 	}
 	.day {
+		position: absolute;
+		inset: 0;
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		padding: 0.25rem 0.4rem;
+		align-items: flex-start;
+		padding: 0.35rem;
 		border: 0;
 		background: none;
 		color: var(--text);
 		font-size: 0.82rem;
-		text-align: left;
+		cursor: pointer;
 	}
-	td.today .num {
+	.day:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -4px;
+	}
+	.num {
 		display: inline-grid;
 		place-items: center;
 		min-width: 1.6rem;
 		height: 1.6rem;
 		border-radius: 999px;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+	}
+	.other .num {
+		color: var(--text-faint);
+		font-weight: 500;
+	}
+	.today .num {
 		background: var(--accent);
 		color: var(--on-accent);
 		font-weight: 700;
 	}
-	h2 .count {
-		margin-left: 0.5rem;
+	/* Under the day number; only the labels take pointer events (to drag). */
+	.extras {
+		position: absolute;
+		inset: 2.2rem 0.3rem 0;
+		pointer-events: none;
 	}
-	.count {
-		color: var(--text-faint);
-		font-size: 0.72rem;
-		font-weight: 650;
+	.dots {
+		display: none;
+		justify-content: center;
+		flex-wrap: wrap;
+		gap: 3px;
+	}
+	.dots i {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--accent);
+	}
+	.dots i.deadline {
+		background: var(--danger);
+	}
+	.dots i.late {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--danger);
+	}
+	.dots i.appointment {
+		background: var(--text-muted);
+	}
+	.dots i.done {
+		background: var(--text-faint);
+		opacity: 0.6;
 	}
 	.chips {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 		margin: 0;
-		padding: 0 0.25rem 0.25rem;
+		padding: 0;
 		list-style: none;
 	}
 	.chips li {
 		overflow: hidden;
-		padding: 1px 0.35rem;
-		border-radius: 5px;
-		background: var(--surface-2);
+		height: 17px;
+		padding: 0 0.35rem;
+		border-radius: 4px;
+		background: var(--accent-soft);
 		font-size: 0.72rem;
-		line-height: 1.4;
+		line-height: 17px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		pointer-events: auto;
+		cursor: pointer;
 	}
 	.chips li[draggable='true'] {
 		cursor: grab;
 	}
-	.chips li.deadline {
+	.chips li.deadline,
+	.chips li.late {
 		background: var(--danger-soft);
+	}
+	.chips li.appointment {
+		background: var(--surface-2);
+	}
+	.chips li.done {
+		background: var(--surface-2);
+		color: var(--text-muted);
+		text-decoration: line-through;
 	}
 	.chips .t {
 		margin-right: 0.3rem;
@@ -624,6 +750,41 @@
 	.chips .more {
 		background: none;
 		color: var(--text-muted);
+		pointer-events: none;
+	}
+	h2 .count {
+		margin-left: 0.5rem;
+	}
+	.side h2 {
+		margin: 0 0 0.25rem;
+		font-size: 1.05rem;
+	}
+	.count {
+		color: var(--text-faint);
+		font-size: 0.72rem;
+		font-weight: 650;
+	}
+	/* Wider screens: the grid fills the height its scroller shows. */
+	@media (min-width: 721px) {
+		.grid-wrap {
+			height: var(--fill-h, 36rem);
+		}
+		.side {
+			margin-top: 0;
+		}
+	}
+	/* Room beside it: the picked day's list sits to the right, scrolling on its own. */
+	@container (min-width: 60rem) {
+		.month-body {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) 21rem;
+			align-items: start;
+		}
+		.side {
+			height: var(--fill-h, 36rem);
+			overflow-y: auto;
+			overscroll-behavior: contain;
+		}
 	}
 	.now {
 		margin-left: 0.5rem;
@@ -643,21 +804,19 @@
 	}
 	/* Narrow: numbers and counts only; the day's list does the rest. */
 	@media (max-width: 720px) {
-		td {
-			height: auto;
-		}
 		.chips,
 		.hint {
 			display: none;
 		}
+		.dots {
+			display: flex;
+		}
+		.extras {
+			inset: 2.1rem 1px 0;
+		}
 		.day {
-			flex-direction: column;
 			justify-content: center;
-			gap: 0.1rem;
-			height: 100%;
-			min-height: 2.75rem;
-			padding: 0.2rem 0;
-			text-align: center;
+			padding: 0.3rem 0;
 		}
 		/* A stationary page: the grid fills what lies between its top and the
 		   docked drawer, so nothing scrolls. --top and --bar-h are measured. */
@@ -673,8 +832,7 @@
 			/* Swipes sideways are the grid's (month to month). */
 			touch-action: pan-y;
 		}
-		.phone .month-panel,
-		.phone .grid {
+		.phone .month-panel {
 			height: 100%;
 		}
 		.scrim {

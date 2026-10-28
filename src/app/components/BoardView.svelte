@@ -217,16 +217,27 @@
 										{#each card.tags.slice(0, 3) as t (t)}<span class="tag">#{t}</span>{/each}
 									</span>
 								{/if}
-								<select
-									class="move"
-									aria-label={`Move “${plain(card.title)}” to`}
-									value={card.todo}
-									onchange={(e) => move(card, e.currentTarget.value)}
-								>
-									{#each columns as k (k)}<option value={k}>{k}</option>{/each}
-									{#if !columns.includes(card.todo!)}<option value={card.todo}>{card.todo}</option
-										>{/if}
-								</select>
+								<div class="card-actions">
+									<select
+										class="move"
+										aria-label={`Move “${plain(card.title)}” to`}
+										value={card.todo}
+										onchange={(e) => move(card, e.currentTarget.value)}
+									>
+										{#each columns as k (k)}<option value={k}>{k}</option>{/each}
+										{#if !columns.includes(card.todo!)}<option value={card.todo}>{card.todo}</option
+											>{/if}
+									</select>
+									<button
+										type="button"
+										class="edit"
+										aria-haspopup="dialog"
+										aria-label={`Edit “${plain(card.title)}”`}
+										title="Edit heading"
+										onclick={() => (app.headingSheet = { path: card.file, pos: card.pos })}
+										><Icon name="settings" size={15} /></button
+									>
+								</div>
 							</li>
 						{/each}
 					</ul>
@@ -374,9 +385,28 @@
 	.tag {
 		color: var(--text-muted);
 	}
-	.move {
-		align-self: flex-start;
+	.card-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
 		margin-top: 0.15rem;
+	}
+	.edit {
+		display: grid;
+		place-items: center;
+		width: 1.9rem;
+		height: 1.9rem;
+		margin-left: auto;
+		border: 0;
+		border-radius: 7px;
+		background: none;
+		color: var(--text-muted);
+	}
+	.edit:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+	.move {
 		padding: 0.15rem 0.4rem;
 		border: 1px solid var(--border);
 		border-radius: 7px;
@@ -388,6 +418,10 @@
 		.move {
 			min-height: 2.25rem;
 			font-size: 16px;
+		}
+		.edit {
+			width: 2.5rem;
+			height: 2.5rem;
 		}
 	}
 	/* Phones: one whole column at a time; a swipe moves to the next one

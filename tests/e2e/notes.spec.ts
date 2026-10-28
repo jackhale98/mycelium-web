@@ -16,6 +16,7 @@ const details = (page: Page) => page.getByRole('dialog', { name: 'Note details' 
 
 /** Drag with the mouse in steps, picking the item up near its top, as a person does. */
 async function drag(page: Page, from: Locator, to: Locator) {
+	await from.scrollIntoViewIfNeeded();
 	const a = (await from.boundingBox())!;
 	await page.mouse.move(a.x + a.width / 2, a.y + Math.min(10, a.height / 2));
 	await page.mouse.down();
@@ -221,10 +222,10 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 }) => {
 	await open(page, 'app#/agenda');
 	await page.getByRole('radio', { name: 'Month' }).click();
-	const grid = page.locator('table.grid');
+	const grid = page.getByRole('table', { name: /\d{4}/ });
 	await expect(grid.getByRole('columnheader')).toHaveCount(7);
 	await expect(grid).not.toContainText('Invalid');
-	const todayCell = grid.locator('td.today');
+	const todayCell = grid.locator('.gc.today');
 	if (isMobile) {
 		// The grid stays put; the day is a drawer above the bottom bar.
 		const scroll = await page.evaluate(
@@ -272,7 +273,7 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 		await expect(label).not.toHaveText(before!);
 		await label.getByRole('button', { name: 'Today' }).click();
 		// Once the months have slid past each other, one grid is left.
-		await expect(page.locator('table.grid')).toHaveCount(1);
+		await expect(page.getByRole('table', { name: /\d{4}/ })).toHaveCount(1);
 	}
 	const list = page.getByRole('region', { name: /Today/ });
 	if (isMobile) await page.getByRole('button', { name: 'Day details' }).click();
@@ -280,9 +281,10 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 	expect(first.length).toBeGreaterThan(0);
 	if (isMobile) await page.keyboard.press('Escape');
 	// Another day: its list.
-	const next = todayCell.locator('xpath=following-sibling::td[1]');
+	const next = todayCell.locator('xpath=following-sibling::div[1]');
 	test.skip(!(await next.count()), 'today is the last day of its week row');
-	await next.getByRole('button').click();
+	// By its number, in the corner: labels cover the middle (and select the day too).
+	await next.getByRole('button').click({ position: { x: 12, y: 12 } });
 	await expect(page.getByRole('region', { name: /Today/ })).toHaveCount(0);
 	if (isMobile) return;
 	// Drag a scheduled item from today to tomorrow.
@@ -320,6 +322,12 @@ test('board: a column per state, move by menu or drag, rows by tag', async ({ pa
 		await scroller.evaluate((el) => el.scrollTo({ left: 0 }));
 	}
 	const card = todo.locator('li', { hasText: 'How to Take Smart Notes' });
+	// Edit a card's heading from the board.
+	await card.getByRole('button', { name: 'Edit “How to Take Smart Notes”' }).click();
+	const sheet = page.getByRole('dialog');
+	await expect(sheet.getByLabel('Heading', { exact: true })).toHaveValue('How to Take Smart Notes');
+	await page.keyboard.press('Escape');
+	await expect(sheet).toHaveCount(0);
 	await card.getByRole('combobox').selectOption('NEXT');
 	await expect(next.locator('li', { hasText: 'How to Take Smart Notes' })).toBeVisible();
 	await expect(card).toHaveCount(0);

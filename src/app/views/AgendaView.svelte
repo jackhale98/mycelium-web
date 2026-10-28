@@ -208,7 +208,11 @@
 	);
 </script>
 
-<div class="agenda-page" class:fit={mode === 'month'}>
+<div
+	class="agenda-page"
+	class:fit={mode === 'month'}
+	class:wide={mode === 'month' || mode === 'board'}
+>
 	<header>
 		<p class="eyebrow">{longDate(today)}</p>
 		<h1>Agenda</h1>
@@ -424,8 +428,17 @@
 		font-size: 0.7rem;
 		letter-spacing: 0;
 	}
+	/* The month and the board use the whole width (and the month the height). */
+	.agenda-page.wide {
+		max-width: none;
+		padding-inline: 2.5rem;
+	}
+	.agenda-page.fit {
+		padding-bottom: 0;
+	}
 	@media (max-width: 720px) {
-		.agenda-page {
+		.agenda-page,
+		.agenda-page.wide {
 			padding: 1.75rem 1rem 6rem;
 		}
 		/* The month fits the screen; its day drawer holds the rest. */
