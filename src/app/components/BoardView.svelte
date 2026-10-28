@@ -270,8 +270,8 @@
 	.scroller {
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
-		scroll-snap-type: x proximity;
 		padding-bottom: 0.5rem;
+		container-type: inline-size;
 	}
 	.board {
 		display: grid;
@@ -293,7 +293,6 @@
 		font-size: 0.78rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
-		scroll-snap-align: start;
 	}
 	.col-head.done {
 		color: var(--text-muted);
@@ -391,13 +390,19 @@
 			font-size: 16px;
 		}
 	}
-	/* Phones: one column at a time, swiping between them. */
+	/* Phones: one whole column at a time; a swipe moves to the next one
+	   (with the edge of the one after peeking in). */
 	@media (max-width: 720px) {
-		.board {
-			grid-template-columns: repeat(var(--cols), 82vw);
+		.scroller {
+			scroll-snap-type: x mandatory;
 		}
-		.cell {
+		.board {
+			grid-template-columns: repeat(var(--cols), calc(100cqw - 1.5rem));
+			gap: 0.5rem;
+		}
+		.col-head {
 			scroll-snap-align: start;
+			scroll-snap-stop: always;
 		}
 	}
 </style>

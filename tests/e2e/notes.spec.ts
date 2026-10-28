@@ -278,6 +278,23 @@ test('board: a column per state, move by menu or drag, rows by tag', async ({ pa
 	await expect(heads.first()).toContainText('TODO');
 	const todo = page.getByRole('list', { name: 'TODO', exact: true });
 	const next = page.getByRole('list', { name: 'NEXT', exact: true });
+	if (isMobile) {
+		// A short swipe lands on the next whole column.
+		const scroller = page.locator('.board-view .scroller');
+		await scroller.evaluate((el) => el.scrollBy({ left: 60 }));
+		await expect
+			.poll(() =>
+				scroller.evaluate((el) => {
+					const second = el.querySelectorAll('.col-head')[1] as HTMLElement;
+					return Math.abs(
+						el.scrollLeft -
+							(second.offsetLeft - el.querySelector<HTMLElement>('.board')!.offsetLeft),
+					);
+				}),
+			)
+			.toBeLessThan(2);
+		await scroller.evaluate((el) => el.scrollTo({ left: 0 }));
+	}
 	const card = todo.locator('li', { hasText: 'How to Take Smart Notes' });
 	await card.getByRole('combobox').selectOption('NEXT');
 	await expect(next.locator('li', { hasText: 'How to Take Smart Notes' })).toBeVisible();

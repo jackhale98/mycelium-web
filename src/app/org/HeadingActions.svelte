@@ -482,6 +482,15 @@
 		background: var(--danger-soft);
 		color: var(--danger);
 	}
+	/* Buttons, no label: they wrap as a group, each at its own width. */
+	.row.move {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.move .btn {
+		white-space: nowrap;
+	}
 	.foot {
 		display: flex;
 		justify-content: flex-end;
