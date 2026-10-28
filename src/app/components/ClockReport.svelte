@@ -1,16 +1,19 @@
 <script lang="ts">
 	// Time clocked per heading over a day or a week, as org-agenda's clock
 	// report shows it (weeks start on Monday, org-agenda-start-on-weekday).
+	// With nothing clocked this week, it isn't shown at all.
 	import { addDays, clockEntries, dayNameFor, formatDuration } from '$lib/org';
 	import { app } from '../state.svelte';
 
 	let { today }: { today: string } = $props();
 	let span = $state<'day' | 'week'>('day');
 
-	const range = $derived.by(() => {
+	type Range = { start: number; end: number };
+	const day = $derived.by((): Range => {
 		const [y, m, d] = today.split('-').map(Number) as [number, number, number];
-		if (span === 'day')
-			return { start: new Date(y, m - 1, d).getTime(), end: new Date(y, m - 1, d + 1).getTime() };
+		return { start: new Date(y, m - 1, d).getTime(), end: new Date(y, m - 1, d + 1).getTime() };
+	});
+	const week = $derived.by((): Range => {
 		const back =
 			(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(dayNameFor(today)) + 7) % 7;
 		const monday = addDays(today, -back);
@@ -21,8 +24,7 @@
 		};
 	});
 
-	const report = $derived.by(() => {
-		void app.rev;
+	function reportFor(range: Range) {
 		const files: {
 			path: string;
 			title: string;
@@ -41,48 +43,57 @@
 		}
 		files.sort((a, b) => b.total - a.total);
 		return { files, total: files.reduce((n, f) => n + f.total, 0) };
+	}
+
+	const weekReport = $derived.by(() => {
+		void app.rev;
+		return reportFor(week);
+	});
+	const report = $derived.by(() => {
+		void app.rev;
+		return span === 'week' ? weekReport : reportFor(day);
 	});
 </script>
 
-<section class="group" aria-labelledby="ag-clock">
-	<h2 id="ag-clock">
-		Clocked<span class="count">{formatDuration(report.total)}</span>
-		<span class="spans" role="radiogroup" aria-label="Clock report span">
-			<button
-				type="button"
-				role="radio"
-				aria-checked={span === 'day'}
-				onclick={() => (span = 'day')}>Today</button
-			>
-			<button
-				type="button"
-				role="radio"
-				aria-checked={span === 'week'}
-				onclick={() => (span = 'week')}>This week</button
-			>
-		</span>
-	</h2>
-	{#if report.files.length === 0}
-		<p class="empty">No time clocked {span === 'day' ? 'today' : 'this week'}.</p>
-	{:else}
-		<table class="report">
-			<thead><tr><th scope="col">Heading</th><th scope="col" class="num">Time</th></tr></thead>
-			{#each report.files as f (f.path)}
-				<tbody>
-					<tr class="file"
-						><th scope="row">{f.title}</th><td class="num">{formatDuration(f.total)}</td></tr
-					>
-					{#each f.entries as e (e.heading)}
-						<tr>
-							<td style:padding-left={`${0.6 + (e.level - 1) * 0.9}rem`}>{e.title}</td>
-							<td class="num">{formatDuration(e.minutes)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			{/each}
-		</table>
-	{/if}
-</section>
+{#if weekReport.total > 0}<section class="group" aria-labelledby="ag-clock">
+		<h2 id="ag-clock">
+			Clocked<span class="count">{formatDuration(report.total)}</span>
+			<span class="spans" role="radiogroup" aria-label="Clock report span">
+				<button
+					type="button"
+					role="radio"
+					aria-checked={span === 'day'}
+					onclick={() => (span = 'day')}>Today</button
+				>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={span === 'week'}
+					onclick={() => (span = 'week')}>This week</button
+				>
+			</span>
+		</h2>
+		{#if report.files.length === 0}
+			<p class="empty">No time clocked {span === 'day' ? 'today' : 'this week'}.</p>
+		{:else}
+			<table class="report">
+				<thead><tr><th scope="col">Heading</th><th scope="col" class="num">Time</th></tr></thead>
+				{#each report.files as f (f.path)}
+					<tbody>
+						<tr class="file"
+							><th scope="row">{f.title}</th><td class="num">{formatDuration(f.total)}</td></tr
+						>
+						{#each f.entries as e (e.heading)}
+							<tr>
+								<td style:padding-left={`${0.6 + (e.level - 1) * 0.9}rem`}>{e.title}</td>
+								<td class="num">{formatDuration(e.minutes)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				{/each}
+			</table>
+		{/if}
+	</section>{/if}
 
 <style>
 	.spans {

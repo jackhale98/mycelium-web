@@ -1218,3 +1218,25 @@ test('phones show one page, without tabs', async ({ page, isMobile }) => {
 	await page.locator('.node-body a[href^="#/node/"]').first().click();
 	await expect(page).not.toHaveURL(new RegExp(`node/${PROJECT}$`));
 });
+
+test('the agenda shows clocked time only when there is some this week', async ({ page }) => {
+	await sourceMode(page);
+	await open(page, 'app#/agenda');
+	await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /^Clocked/ })).toHaveCount(0);
+
+	// Clock an hour and a half on a heading today.
+	const now = new Date();
+	const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${now.toLocaleDateString('en-US', { weekday: 'short' })}`;
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText(
+		`\n* Review notes\n:LOGBOOK:\nCLOCK: [${day} 09:00]--[${day} 10:30] =>  1:30\n:END:\n`,
+	);
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	await page.goto(page.url().replace(/#.*/, '#/agenda'));
+	await expect(page.getByRole('heading', { name: /^Clocked/ })).toContainText('1:30');
+	await expect(page.getByRole('cell', { name: 'Review notes' })).toBeVisible();
+});
