@@ -8,8 +8,13 @@
 	// Keep variables set in the Cloudflare dashboard when deploying (secrets are always
 	// kept); otherwise every build would delete them.
 	"keep_vars": true,
-	// Stateless by design: no KV, D1, R2 or Durable Object bindings, and no logs.
+	// No logs, and no storage except opt-in reminders: one small Durable Object
+	// per browser push subscription (see src/push.ts). No KV, D1 or R2.
 	"observability": { "enabled": false },
+	"durable_objects": {
+		"bindings": [{ "name": "REMINDERS", "class_name": "ReminderQueue" }],
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["ReminderQueue"] }],
 	"vars": {
 		// Origins that may use this worker: the site (my-celium.org, its workers.dev
 		// address and the GitHub Pages copy) and localhost for development.
@@ -20,4 +25,8 @@
 	//   npx wrangler secret put GITHUB_CLIENT_ID
 	//   npx wrangler secret put GITHUB_CLIENT_SECRET
 	// (and GITLAB_*, BITBUCKET_* when those apps are registered)
+	// Reminders (Web Push): `node scripts/vapid-keys.mjs` prints a key pair, then
+	//   npx wrangler secret put VAPID_PUBLIC_KEY
+	//   npx wrangler secret put VAPID_PRIVATE_KEY
+	// and optionally the var VAPID_SUBJECT (mailto: or https contact).
 }

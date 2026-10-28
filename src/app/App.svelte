@@ -21,6 +21,7 @@
 	import PaneView from './components/PaneView.svelte';
 	import RouteView from './components/RouteView.svelte';
 	import { panes } from './panes.svelte';
+	import { reminders } from './reminders.svelte';
 	import { untrack } from 'svelte';
 
 	$effect(() => router.start());
@@ -38,6 +39,18 @@
 		else addEventListener('load', register, { once: true });
 	});
 	$effect(() => panes.start());
+	// Reminders while the app is open, and the task count on the app icon.
+	$effect(() => reminders.start());
+	$effect(() => reminders.badge());
+	// Notes changed: refresh the reminders the sync worker sends while the app is closed.
+	$effect(() => {
+		void app.rev;
+		void app.activeId;
+		untrack(() => {
+			reminders.queuePush();
+			reminders.check();
+		});
+	});
 	// Each vault remembers its tabs and split.
 	$effect(() => {
 		const vault = app.activeId;

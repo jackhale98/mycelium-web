@@ -1,5 +1,6 @@
 <script lang="ts">
 	const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+	import RemindersSettings from '../components/RemindersSettings.svelte';
 	import { serviceLabel } from '$lib/sync/services';
 	import type { CommitSummary } from '$lib/git/repo';
 	import { PROVIDERS } from '$lib/git/providers';
@@ -156,6 +157,11 @@
 				is.
 			</p>
 		</div>
+	</section>
+
+	<section class="panel stack" aria-labelledby="reminders-h">
+		<h2 id="reminders-h">Reminders</h2>
+		<RemindersSettings />
 	</section>
 
 	<section class="panel stack" aria-labelledby="workflow-h">

@@ -87,3 +87,57 @@ self.addEventListener('fetch', (event) => {
 	if (u.pathname.startsWith(`${scope.pathname}auth/`)) return;
 	event.respondWith(request.mode === 'navigate' ? page(request) : file(request));
 });
+
+// ------------------------------------------------------------------ reminders
+
+/** Reminders already shown on this device (by the app or a push), by occurrence. */
+async function firstShowing(id) {
+	try {
+		const cache = await caches.open('reminders-shown');
+		const key = `/shown/${id}`;
+		if (await cache.match(key)) return false;
+		await cache.put(key, new Response(String(Date.now())));
+		return true;
+	} catch {
+		return true;
+	}
+}
+
+// A reminder sent by the sync worker while the app may be closed. The payload
+// was encrypted on this device for this device; the worker never read it.
+self.addEventListener('push', (event) => {
+	let r = null;
+	try {
+		r = event.data?.json();
+	} catch {
+		r = null;
+	}
+	if (!r?.title) return;
+	event.waitUntil(
+		firstShowing(r.id).then((first) =>
+			self.registration.showNotification(r.title, {
+				body: r.body ?? '',
+				tag: r.id,
+				// Shown already by the open app: replace it quietly rather than twice.
+				silent: !first,
+				icon: url('icons/icon-192.png'),
+				data: { url: url(`app/${r.url ?? ''}`) },
+			}),
+		),
+	);
+});
+
+// Tapping a reminder opens its note: in an open Mycelium window if there is one.
+self.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const target = event.notification.data?.url ?? url('app/');
+	const hash = new URL(target).hash;
+	event.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+			const open = windows.find((w) => new URL(w.url).pathname.startsWith(`${scope.pathname}app`));
+			if (!open) return self.clients.openWindow(target);
+			open.postMessage({ type: 'open', hash });
+			return open.focus();
+		}),
+	);
+});

@@ -1,4 +1,4 @@
-/// Mycelium sync worker — stateless, no storage, no logging.
+/// Mycelium sync worker — no logging; stateless apart from opt-in reminders.
 ///
 /// 1. Git proxy: browsers cannot call git hosts' smart-HTTP endpoints (no
 ///    CORS), so isomorphic-git sends them here as `/<host>/<repo path>`. Only
@@ -12,8 +12,14 @@
 ///    Only WebDAV methods, only HTTPS host names (no IPs, no localhost), only
 ///    requests that carry credentials, no redirects followed. Nothing is
 ///    stored or logged; set DAV_HOSTS to allow only your own servers.
+/// 4. Reminders (optional, see push.ts): the one stateful part. For each
+///    browser push subscription, a short list of encrypted messages to send
+///    at set times, so reminders arrive while the app is closed.
 
-export interface Env {
+import { pushRoute, type PushEnv } from './push';
+export { ReminderQueue } from './push';
+
+export interface Env extends PushEnv {
 	/** Comma-separated origins allowed to use the worker, e.g. `https://you.github.io`. */
 	ALLOWED_ORIGINS: string;
 	/** Optional comma-separated extra git hosts (self-hosted GitLab, Gitea, …). */
@@ -104,6 +110,7 @@ export default {
 
 		if (url.pathname.startsWith('/oauth/')) return oauth(request, env, url, origin);
 		if (url.pathname.startsWith('/dav/')) return dav(request, env, url, origin);
+		if (url.pathname.startsWith('/push/')) return pushRoute(request, env, url, () => cors(origin));
 
 		// Git proxy: /<host>/<owner>/<repo>.git/<endpoint>
 		const [, host, ...rest] = url.pathname.split('/');

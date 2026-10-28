@@ -361,7 +361,9 @@ Settings → Sync proxy in the app.
 **Security notes**
 
 - Tokens are kept only in the visitor's browser and travel to the git host
-  through your worker. The worker stores nothing and has logging off.
+  through your worker. The worker stores no tokens and has logging off; the
+  only thing it keeps is the encrypted reminder list of anyone who turns on
+  reminders while closed (see [worker/README.md](../worker/README.md)).
 - Each provider grants only repository read/write (and, on GitLab, read access
   to the profile and project list).
 - To revoke everything at once, regenerate the GitHub client secret, the

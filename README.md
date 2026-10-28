@@ -65,6 +65,10 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   merged line by line
   (overlaps get the same resolver as git). Dropbox and Microsoft are called
   directly from the browser; WebDAV goes through a relay that stores nothing.
+- **Reminders** for SCHEDULED and DEADLINE times (repeats included), with a
+  task count on the app icon. Optionally they arrive while the app is closed:
+  the sync worker sends the next week's reminders, encrypted on your device so
+  it can't read them, with no account.
 - **Works offline:** after your first visit the app opens with no connection;
   git commits wait for you to push, and cloud edits upload when you're back.
 - **Local folders** (Chrome, Edge and friends on desktop): edit an org-roam
@@ -81,7 +85,9 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   lines, `CLOSED` stamps, all three repeater styles, checkbox cookies,
   `ROAM_ALIASES`, `ROAM_REFS` and `ROAM_EXCLUDE` behave as they do in Emacs.
 - **Private by design.** No backend holds your data. Tokens stay on your
-  device; the sync worker is stateless, logs nothing and is self-hostable.
+  device; the sync worker logs nothing, keeps nothing except the encrypted
+  reminders of people who turn on reminders while closed, and is
+  self-hostable.
 - **Fast and accessible.** Strict CSP, no analytics and no requests beyond the
   git host or storage you connect, self-hosted fonts, keyboard-first
   navigation and WCAG 2.1 AA checks in CI.

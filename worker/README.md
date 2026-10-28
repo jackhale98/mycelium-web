@@ -1,7 +1,7 @@
 # Mycelium sync worker
 
-A stateless Cloudflare Worker that lets the browser app talk to git hosts and
-WebDAV servers.
+A Cloudflare Worker that lets the browser app talk to git hosts and WebDAV
+servers, and (optionally) sends reminders while the app is closed.
 
 - **Git proxy.** Browsers can't call `github.com`/`gitlab.com`/`bitbucket.org`
   git endpoints directly (no CORS). The app sends them here as
@@ -20,8 +20,10 @@ WebDAV servers.
   not); redirects aren't followed. Set `DAV_HOSTS` (comma-separated host names) to allow only
   your own servers. See [docs/setup-cloud-storage.md](../docs/setup-cloud-storage.md#webdav-and-nextcloud).
 
-It has no storage bindings and logging is disabled. Tokens pass through in
-memory for the duration of a request and are never written anywhere. The free
+- **Reminders** (optional, the only part that keeps anything): see below.
+
+Logging is disabled. Tokens pass through in memory for the duration of a
+request and are never written anywhere. The free
 plan (100,000 requests/day) covers roughly 20,000 syncs a day.
 
 ## Deploy (about 5 minutes)
@@ -68,6 +70,36 @@ Endpoints: `POST /oauth/<github|gitlab|bitbucket>/token` with
 `{ code, code_verifier?, redirect_uri? }` (Bitbucket sends neither), and
 `POST /oauth/<provider>/refresh` with `{ refresh_token, redirect_uri? }`. A
 missing secret gives a 501 naming it.
+
+## Reminders while the app is closed (optional)
+
+People who turn this on in Settings → Reminders get notifications for their
+SCHEDULED and DEADLINE times even when Mycelium isn't open. Their browser
+creates an anonymous push subscription and sends `PUT /push/reminders` the
+next week's reminders, each one encrypted on the device for that device
+(RFC 8291), so the worker stores times and sealed messages it can't read. One
+small Durable Object per subscription keeps them and wakes itself (an alarm)
+to send each on time, signed with this worker's VAPID key. No accounts.
+
+Limits: 64 reminders per subscription, 4 KB each, at most 8 days ahead. A list
+that isn't refreshed for 14 days deletes itself, as does one whose
+subscription the browser has dropped, and `DELETE /push/reminders` (turning
+reminders off) deletes it at once. Only browser push services
+(`fcm.googleapis.com`, Mozilla, Apple, Windows) are accepted as addresses.
+
+To set it up:
+
+```sh
+node scripts/vapid-keys.mjs            # prints a new key pair
+npx wrangler secret put VAPID_PUBLIC_KEY
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler deploy                     # creates the Durable Object class
+```
+
+Optionally set the variable `VAPID_SUBJECT` (`mailto:you@example.com` or an
+https URL) as the contact push services see. Until the keys are set,
+`/push/key` answers 501 and the app doesn't offer the option. Keep the key
+pair: replacing it invalidates every existing subscription.
 
 ## Hardening
 

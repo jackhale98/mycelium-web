@@ -18,7 +18,7 @@ agenda semantics) but not its UI.
 - [x] **Phase 2a — Git & index:** isomorphic-git clone/commit/pull/push with an org-aware
       merge and conflict resolver, token auth for GitHub/GitLab/Bitbucket/any HTTPS host,
       layout and keyword detection, IndexedDB parse cache, fast line scanner (5,000 files
-      index in 0.3 s), stateless worker (git proxy + OAuth exchange).
+      index in 0.3 s), worker (git proxy + OAuth exchange).
 - [x] **Phase 2b — OAuth sign-in:** GitHub App, GitLab (PKCE) and Bitbucket, token
       exchange and refresh through the worker.
 - [x] **Phase 3 — Read & navigate:** graph (whole vault or local, tag colours, orphans,
@@ -37,7 +37,8 @@ Access); tabs and split view on wide screens; org table editing (with a phone
 table sheet); LaTeX tools (formula sheet, preview, error marks, completion);
 pictures with an offer to compress; clocking with a clock report; refile and
 archive; habits and the agenda time grid; TODO keyword editor; text size; hide
-done items; org-transclusion and link search options.
+done items; org-transclusion and link search options; reminders (in the app,
+and by Web Push through the worker while it's closed) with an app-icon badge.
 
 **Not done:** a file-browser page; renaming a node with link descriptions
 updated across files; `.org.gpg` handling.
@@ -48,7 +49,7 @@ updated across files; `.org.gpg` handling.
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Framework | Astro (static output) + Svelte 5; the app is a single `client:only` Svelte SPA mounted on one Astro page                                                               |
 | Git       | `isomorphic-git` on `@isomorphic-git/lightning-fs` (IndexedDB)                                                                                                         |
-| Transport | Git smart-HTTP through a stateless, locked-down Cloudflare Worker proxy (self-hostable); the same worker relays WebDAV                                                 |
+| Transport | Git smart-HTTP through a locked-down Cloudflare Worker proxy (self-hostable); the same worker relays WebDAV                                                            |
 | Auth      | OAuth sign-in: GitHub App (user-to-server tokens), GitLab OAuth (PKCE), Bitbucket OAuth; Dropbox and Microsoft with PKCE from the browser. Access tokens as a fallback |
 | Sync      | Git: edits autosave to the working tree; commit (or opt-in auto-commit), pull and push are explicit. Cloud: automatic, three-way merge per file                        |
 | Parsing   | `uniorg-parse` with `trackPosition: true` for rendering; a line scanner for indexing                                                                                   |
@@ -85,7 +86,8 @@ updated across files; `.org.gpg` handling.
    │  /dav/<host>/<path>       │──► the user's WebDAV server
    │  /oauth/<provider>/token  │──► provider OAuth token endpoints (adds client secret)
    │  /oauth/<provider>/refresh│
-   │  stateless · no logs      │
+   │  /push/key, /push/…       │──► browser push services (reminders)
+   │  no logs                  │
    └───────────────────────────┘
 ```
 
