@@ -999,6 +999,7 @@ class AppState {
 				autoCommit: record?.autoCommit,
 				captureTemplates: $state.snapshot(this.captureTemplates) as CaptureTemplate[],
 				agendaViews: record?.agendaViews,
+				stuckProjects: record?.stuckProjects,
 				layout: this.layout,
 			}),
 		);
@@ -1024,7 +1025,10 @@ class AppState {
 			if (file.workflow.autoCommit !== undefined) patch.autoCommit = file.workflow.autoCommit;
 		}
 		if (sections.has('capture') && file.capture) patch.captureTemplates = file.capture.templates;
-		if (sections.has('agenda') && file.agenda) patch.agendaViews = file.agenda.views;
+		if (sections.has('agenda') && file.agenda) {
+			patch.agendaViews = file.agenda.views;
+			if (file.agenda.stuck) patch.stuckProjects = file.agenda.stuck;
+		}
 		if (sections.has('layout') && file.layout) patch.layout = file.layout;
 		if (Object.keys(patch).length) await this.updateVault(patch);
 	}

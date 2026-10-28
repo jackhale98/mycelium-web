@@ -137,18 +137,30 @@ export function weekAgenda(
 
 // ---------------------------------------------------------------- stuck projects
 
+/** org's `org-stuck-projects`, its four parts. */
 export interface StuckSettings {
 	/** Which headings are projects: an org match string. */
 	match: string;
 	/** A project with an entry under it in one of these states isn't stuck. */
 	keywords: string[];
+	/** …or with a heading under it carrying one of these tags. */
+	tags: string[];
+	/** …or whose text (below its heading) matches this regular expression. */
+	regexp: string;
 }
 
 /** org's default `org-stuck-projects`. */
 export const DEFAULT_STUCK: StuckSettings = {
 	match: '+LEVEL=2/-DONE',
 	keywords: ['TODO', 'NEXT', 'NEXTACTION'],
+	tags: [],
+	regexp: '',
 };
+
+/** A vault's saved definition, with org's defaults for any part it lacks. */
+export function stuckSettingsOf(saved: Partial<StuckSettings> | undefined): StuckSettings {
+	return { ...DEFAULT_STUCK, ...saved };
+}
 
 /**
  * org's stuck projects (`C-c a #`): headings matching the project match
@@ -162,6 +174,13 @@ export function stuckProjects(
 ): AgendaItem[] {
 	const matcher = parseMatch(settings.match);
 	const next = new Set(settings.keywords);
+	const tags = new Set(settings.tags);
+	let re: RegExp | null = null;
+	try {
+		re = settings.regexp.trim() ? new RegExp(settings.regexp, 'm') : null;
+	} catch {
+		throw new Error(`the text pattern “${settings.regexp}” isn't a valid regular expression`);
+	}
 	const out: AgendaItem[] = [];
 	for (const file of vault.files.values()) {
 		if (file.index.excluded) continue;
@@ -177,12 +196,30 @@ export function stuckProjects(
 				},
 			);
 			if (!ok) return;
-			for (let j = i + 1; j < hs.length && hs[j]!.level > h.level; j += 1)
-				if (hs[j]!.todo && next.has(hs[j]!.todo!)) return;
+			let j = i + 1;
+			for (; j < hs.length && hs[j]!.level > h.level; j += 1) {
+				const sub = hs[j]!;
+				if (sub.todo && next.has(sub.todo)) return;
+				// The tag written on that heading (not inherited from the project).
+				if (tags.size && ownTags(file.source, sub.pos).some((t) => tags.has(t))) return;
+			}
+			if (re) {
+				const end = hs[j]?.pos ?? file.source.length;
+				const below = file.source.slice(file.source.indexOf('\n', h.pos) + 1, end);
+				if (h.pos < end && re.test(below)) return;
+			}
 			out.push({ ...h, file: file.path, node: (h.ownerId && vault.nodes.get(h.ownerId)) || null });
 		});
 	}
 	return out;
+}
+
+/** Tags written on the heading line at `pos` (`:a:b:` at its end). */
+function ownTags(source: string, pos: number): string[] {
+	const eol = source.indexOf('\n', pos);
+	const line = source.slice(pos, eol === -1 ? undefined : eol);
+	const m = /[ \t](:[\w@#%:]+:)[ \t]*$/.exec(line);
+	return m ? m[1]!.split(':').filter(Boolean) : [];
 }
 
 // ---------------------------------------------------------------- filters

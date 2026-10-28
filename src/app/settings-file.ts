@@ -23,6 +23,14 @@ export const SETTINGS_VERSION = 1;
 
 export type SettingsSection = 'appearance' | 'workflow' | 'capture' | 'agenda' | 'layout';
 
+/** org-stuck-projects, as a vault stores it. */
+export interface StuckDefinition {
+	match: string;
+	keywords: string[];
+	tags?: string[];
+	regexp?: string;
+}
+
 export interface SettingsFile {
 	format: typeof SETTINGS_FORMAT;
 	version: number;
@@ -36,7 +44,7 @@ export interface SettingsFile {
 		autoCommit?: boolean;
 	};
 	capture?: { templates: CaptureTemplate[] };
-	agenda?: { views: SavedAgendaView[] };
+	agenda?: { views: SavedAgendaView[]; stuck?: StuckDefinition };
 	layout?: VaultLayout;
 }
 
@@ -50,6 +58,7 @@ export interface SettingsSource {
 	autoCommit?: boolean | undefined;
 	captureTemplates: CaptureTemplate[];
 	agendaViews?: SavedAgendaView[] | undefined;
+	stuckProjects?: StuckDefinition | undefined;
 	layout: VaultLayout;
 }
 
@@ -66,7 +75,10 @@ export function exportSettings(src: SettingsSource, now = new Date()): SettingsF
 			...(src.autoCommit !== undefined ? { autoCommit: src.autoCommit } : {}),
 		},
 		capture: { templates: src.captureTemplates },
-		agenda: { views: src.agendaViews ?? [] },
+		agenda: {
+			views: src.agendaViews ?? [],
+			...(src.stuckProjects ? { stuck: src.stuckProjects } : {}),
+		},
 		layout: src.layout,
 	};
 }
@@ -197,6 +209,21 @@ export function parseSettings(text: string): SettingsFile {
 				};
 			}),
 		};
+		const st = raw.agenda.stuck;
+		if (st !== undefined) {
+			if (!isObject(st)) throw new SettingsError('Stuck projects should be an object.');
+			const list = (v: unknown, what: string) => {
+				if (v === undefined) return [];
+				if (!Array.isArray(v)) throw new SettingsError(`${what} should be a list.`);
+				return v.map((x) => str(x, what));
+			};
+			out.agenda.stuck = {
+				match: str(st.match, 'The stuck-project match'),
+				keywords: list(st.keywords, 'Stuck-project keywords'),
+				tags: list(st.tags, 'Stuck-project tags'),
+				regexp: st.regexp === undefined ? '' : str(st.regexp, 'The stuck-project pattern'),
+			};
+		}
 	}
 
 	if (isObject(raw.layout)) {
@@ -238,7 +265,7 @@ export function describeSettings(
 	if (file.agenda)
 		out.push({
 			section: 'agenda',
-			label: `Agenda views: ${file.agenda.views.map((v) => v.name).join(', ') || 'none'}`,
+			label: `Agenda views: ${file.agenda.views.map((v) => v.name).join(', ') || 'none'}${file.agenda.stuck ? `; stuck projects: ${file.agenda.stuck.match}` : ''}`,
 		});
 	if (file.layout)
 		out.push({

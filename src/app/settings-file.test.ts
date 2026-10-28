@@ -20,6 +20,7 @@ const source: SettingsSource = {
 	autoCommit: false,
 	captureTemplates: DEFAULT_CAPTURE_TEMPLATES,
 	agendaViews: [{ id: 'v1', name: 'Work', query: 'tag=%2Bwork' }],
+	stuckProjects: { match: '+project/-DONE', keywords: ['NEXT'], tags: ['someday'], regexp: '' },
 	layout: { roamDir: 'roam', dailyDir: 'daily', dailyFormat: 'YYYY-MM-DD' },
 };
 
@@ -34,6 +35,7 @@ describe('settings file', () => {
 		expect(file.workflow?.log).toEqual({ logDone: true });
 		expect(file.capture?.templates).toEqual(DEFAULT_CAPTURE_TEMPLATES);
 		expect(file.agenda?.views).toEqual(source.agendaViews);
+		expect(file.agenda?.stuck).toEqual(source.stuckProjects);
 		expect(file.layout).toEqual(source.layout);
 		expect(describeSettings(file).map((s) => s.section)).toEqual([
 			'appearance',
@@ -112,5 +114,25 @@ describe('settings file', () => {
 		);
 		expect(bad(tpl({ key: 'ab' }))).toThrow('one character');
 		expect(bad({ layout: { roamDir: '../up' } })).toThrow("can't leave the repository");
+	});
+
+	it('checks a stuck-project definition it imports', () => {
+		const bad = JSON.stringify({
+			format: 'mycelium-settings',
+			version: 1,
+			agenda: { views: [], stuck: { match: '+x', keywords: 'NEXT' } },
+		});
+		expect(() => parseSettings(bad)).toThrow(/keywords should be a list/);
+		const old = JSON.stringify({
+			format: 'mycelium-settings',
+			version: 1,
+			agenda: { views: [], stuck: { match: '+x', keywords: ['NEXT'] } },
+		});
+		expect(parseSettings(old).agenda?.stuck).toEqual({
+			match: '+x',
+			keywords: ['NEXT'],
+			tags: [],
+			regexp: '',
+		});
 	});
 });

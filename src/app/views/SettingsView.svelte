@@ -1,6 +1,7 @@
 <script lang="ts">
 	const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 	import RemindersSettings from '../components/RemindersSettings.svelte';
+	import StuckEditor from '../components/StuckEditor.svelte';
 	import { serviceLabel } from '$lib/sync/services';
 	import type { CommitSummary } from '$lib/git/repo';
 	import { PROVIDERS } from '$lib/git/providers';
@@ -227,6 +228,14 @@
 				Put state notes in a <code>:LOGBOOK:</code> drawer
 				<span class="var">org-log-into-drawer</span></label
 			>
+		</section>
+		<section class="panel stack" aria-labelledby="stuck-h">
+			<h2 id="stuck-h">Stuck projects</h2>
+			<p class="hint">
+				What the agenda’s Stuck view lists, as org’s <code>org-stuck-projects</code> defines it: projects
+				with no next action under them.
+			</p>
+			<StuckEditor idPrefix="s-stuck" />
 		</section>
 	{:else if current === 'capture'}
 		<section class="panel stack" aria-labelledby="capture-h">

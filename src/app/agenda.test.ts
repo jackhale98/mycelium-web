@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_KEYWORD_CONFIG } from '$lib/org';
 import { Vault } from '$lib/vault/vault';
-import { DEFAULT_STUCK, stuckProjects, weekAgenda, weekStart } from './agenda';
+import { DEFAULT_STUCK, stuckProjects, stuckSettingsOf, weekAgenda, weekStart } from './agenda';
 
 const vault = Vault.fromSources(
 	{
@@ -92,12 +92,39 @@ describe('stuckProjects', () => {
 
 	it('follows a different project definition and next-action keywords', () => {
 		expect(
-			stuckProjects(projects, { match: '+project', keywords: ['NEXT'] }, now).map((p) => p.title),
-		).toEqual(['Tax prep']);
-		expect(
-			stuckProjects(projects, { match: '+LEVEL=2/-DONE', keywords: ['NEXT', 'WAITING'] }, now).map(
+			stuckProjects(projects, stuckSettingsOf({ match: '+project', keywords: ['NEXT'] }), now).map(
 				(p) => p.title,
 			),
 		).toEqual(['Tax prep']);
+		expect(
+			stuckProjects(projects, stuckSettingsOf({ keywords: ['NEXT', 'WAITING'] }), now).map(
+				(p) => p.title,
+			),
+		).toEqual(['Tax prep']);
+	});
+
+	it('is not stuck with a tagged heading or matching text under it, as org allows', () => {
+		const more = Vault.fromSources(
+			{
+				'p.org': [
+					'* Areas',
+					'** Kitchen remodel :home:',
+					'*** Ideas :someday:',
+					'** Learn Rust',
+					'Reading the book; see https://doc.rust-lang.org',
+					'** Travel',
+					'',
+				].join('\n'),
+			},
+			DEFAULT_KEYWORD_CONFIG,
+		);
+		const titles = (s: Partial<typeof DEFAULT_STUCK>) =>
+			stuckProjects(more, stuckSettingsOf(s), now).map((p) => p.title);
+		expect(titles({})).toEqual(['Kitchen remodel', 'Learn Rust', 'Travel']);
+		// A :someday: heading under it: parked, not stuck. (Tags it only inherits don't count.)
+		expect(titles({ tags: ['someday'] })).toEqual(['Learn Rust', 'Travel']);
+		expect(titles({ tags: ['home'] })).toEqual(['Kitchen remodel', 'Learn Rust', 'Travel']);
+		expect(titles({ regexp: 'https?://' })).toEqual(['Kitchen remodel', 'Travel']);
+		expect(() => titles({ regexp: '(' })).toThrow(/isn't a valid regular expression/);
 	});
 });

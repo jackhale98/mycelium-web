@@ -9,7 +9,7 @@
 		weekAgenda,
 		weekStart,
 		stuckProjects,
-		DEFAULT_STUCK,
+		stuckSettingsOf,
 		compileFilter,
 		decodeFilter,
 		emptyFilter,
@@ -23,6 +23,7 @@
 	import { longDate } from '../util';
 	import { addDays } from '$lib/org';
 	import Icon from '../components/Icon.svelte';
+	import StuckEditor from '../components/StuckEditor.svelte';
 	import { untrack } from 'svelte';
 
 	let { query = '' }: { query?: string } = $props();
@@ -169,7 +170,7 @@
 	let start = $state(weekStart(localNow().date));
 
 	// Stuck projects (org's C-c a #): this vault's definition, or org's default.
-	const stuckSettings = $derived(app.activeVault?.stuckProjects ?? DEFAULT_STUCK);
+	const stuckSettings = $derived(stuckSettingsOf(app.activeVault?.stuckProjects));
 	const stuck = $derived.by(() => {
 		void app.rev;
 		if (mode !== 'stuck') return { items: [], error: null };
@@ -182,21 +183,6 @@
 			return { items: [], error: e instanceof Error ? e.message : String(e) };
 		}
 	});
-	let projectMatch = $state('');
-	let projectKeywords = $state('');
-	$effect(() => {
-		projectMatch = stuckSettings.match;
-		projectKeywords = stuckSettings.keywords.join(' ');
-	});
-	async function saveStuck(e: SubmitEvent) {
-		e.preventDefault();
-		await app.updateVault({
-			stuckProjects: {
-				match: projectMatch.trim() || DEFAULT_STUCK.match,
-				keywords: projectKeywords.split(/\s+/).filter(Boolean),
-			},
-		});
-	}
 	const days = $derived.by(() => {
 		void app.rev;
 		return mode === 'week' ? weekAgenda(app.vault, start, today, compiled.keep) : [];
@@ -250,11 +236,17 @@
 		<section class="group" aria-labelledby="ag-stuck">
 			<h2 id="ag-stuck">Stuck projects<span class="count">{stuck.items.length}</span></h2>
 			<p class="stuck-hint">
-				Projects with nothing under them marked {stuckSettings.keywords.join(', ') ||
-					'(no keywords)'}: each needs a next action.
+				Projects: headings matching <code>{stuckSettings.match}</code>. Stuck when nothing under
+				them is {stuckSettings.keywords.join(', ') || 'in any listed state'}{stuckSettings.tags
+					.length
+					? `, tagged ${stuckSettings.tags.map((t) => `:${t}:`).join(' ')}`
+					: ''}{stuckSettings.regexp ? ', or matches the text pattern' : ''}.
+				<a href={href.settings('tasks')}>Change in Settings</a>
 			</p>
 			{#if stuck.error}
-				<p class="notice warn" role="alert">The project match doesn’t parse: {stuck.error}</p>
+				<p class="notice warn" role="alert">
+					The stuck-project definition doesn’t work: {stuck.error}
+				</p>
 			{:else}
 				<AgendaList
 					items={stuck.items}
@@ -263,24 +255,9 @@
 					{onTop}
 				/>
 			{/if}
-			<details class="stuck-settings">
-				<summary>What counts as a project</summary>
-				<form onsubmit={saveStuck}>
-					<label class="field">
-						<span class="label">Projects (an org match string)</span>
-						<input class="input" bind:value={projectMatch} spellcheck="false" />
-						<span class="hint"
-							>org’s default is <code>+LEVEL=2/-DONE</code>: every second-level heading not done.
-							<code>+project</code> means headings tagged :project:.</span
-						>
-					</label>
-					<label class="field">
-						<span class="label">Not stuck when something under it is</span>
-						<input class="input" bind:value={projectKeywords} spellcheck="false" />
-						<span class="hint">TODO keywords, separated by spaces.</span>
-					</label>
-					<button class="btn small">Save for this vault</button>
-				</form>
+			<details class="stuck-settings" id="stuck-settings">
+				<summary>What counts as a stuck project</summary>
+				<StuckEditor idPrefix="ag-stuck" />
 			</details>
 		</section>
 	{:else if mode === 'week'}
@@ -373,16 +350,6 @@
 		color: var(--text-2);
 		font-weight: 600;
 		cursor: pointer;
-	}
-	.stuck-settings form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 32rem;
-		padding-top: 0.5rem;
-	}
-	.stuck-settings .btn {
-		align-self: flex-start;
 	}
 	.week-nav {
 		display: flex;

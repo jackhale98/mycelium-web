@@ -41,7 +41,7 @@ export interface VaultRecord {
 	/** Named agenda filters (an encoded filter query each), shown as chips on the agenda. */
 	agendaViews?: SavedAgendaView[];
 	/** org-stuck-projects: what a project is (a match string) and the keywords that keep it moving. */
-	stuckProjects?: { match: string; keywords: string[] };
+	stuckProjects?: { match: string; keywords: string[]; tags?: string[]; regexp?: string };
 	/**
 	 * `folder`: a directory on this computer opened with the File System Access API (no git here).
 	 * `cloud`: a folder in Dropbox, OneDrive/SharePoint or on a WebDAV server, synced

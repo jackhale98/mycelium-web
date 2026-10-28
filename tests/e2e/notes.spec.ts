@@ -172,8 +172,8 @@ test('stuck projects list projects without a next action', async ({ page }) => {
 	await expect(section.getByRole('heading', { name: /Stuck projects/ })).toBeVisible();
 	// org's default (second-level headings) finds none in the demo, whose projects are level 1.
 	await expect(section).toContainText('No stuck projects');
-	await page.getByText('What counts as a project').click();
-	const match = page.getByLabel('Projects (an org match string)');
+	await page.getByText('What counts as a stuck project').click();
+	const match = page.getByLabel('Projects are headings matching');
 	// Tagged :project: (the demo note's file tag, inherited as in org).
 	await match.fill('+project');
 	await page.getByRole('button', { name: 'Save for this vault' }).click();
@@ -185,5 +185,22 @@ test('stuck projects list projects without a next action', async ({ page }) => {
 	// A match string that doesn't parse says so.
 	await match.fill('+{unclosed');
 	await page.getByRole('button', { name: 'Save for this vault' }).click();
-	await expect(page.getByRole('alert')).toContainText('doesn’t parse');
+	await expect(page.getByRole('alert')).toContainText('definition doesn’t work');
+});
+
+test('stuck projects are configured in Settings too, all four org parts', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Stuck' }).click();
+	await page.getByRole('link', { name: 'Change in Settings' }).click();
+	await expect(page).toHaveURL(/#\/settings\/tasks$/);
+	await page.getByLabel('Projects are headings matching').fill('+project');
+	await page.getByLabel('…or its text matches').fill('name and the graph');
+	await page.getByRole('button', { name: 'Save for this vault' }).click();
+	await expect(page.getByText('Saved for this vault.')).toBeVisible();
+	await page.goBack();
+	const section = page.getByRole('region', { name: /Stuck projects/ });
+	await expect(section.getByText('Ship the design system', { exact: true })).toBeVisible();
+	// Its text mentions "name and the graph": not stuck.
+	await expect(section.getByText('Inspiration', { exact: true })).toHaveCount(0);
+	await expect(section).toContainText('or matches the text pattern');
 });
