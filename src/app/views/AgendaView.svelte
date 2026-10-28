@@ -24,6 +24,8 @@
 	import { addDays } from '$lib/org';
 	import Icon from '../components/Icon.svelte';
 	import StuckEditor from '../components/StuckEditor.svelte';
+	import MonthView from '../components/MonthView.svelte';
+	import BoardView from '../components/BoardView.svelte';
 	import { untrack } from 'svelte';
 
 	let { query = '' }: { query?: string } = $props();
@@ -148,12 +150,20 @@
 
 	// List (overdue, today, next 7 days…) or org's week view; remembered here.
 	const MODE_KEY = 'mycelium:agenda-mode';
-	type Mode = 'list' | 'week' | 'stuck';
+	type Mode = 'list' | 'week' | 'month' | 'board' | 'stuck';
+	const MODES: Mode[] = ['list', 'week', 'month', 'board', 'stuck'];
+	const MODE_LABELS: Record<Mode, string> = {
+		list: 'List',
+		week: 'Week',
+		month: 'Month',
+		board: 'Board',
+		stuck: 'Stuck',
+	};
 	let mode = $state<Mode>(
 		(() => {
 			try {
 				const m = localStorage.getItem(MODE_KEY);
-				return m === 'week' || m === 'stuck' ? m : 'list';
+				return MODES.includes(m as Mode) ? (m as Mode) : 'list';
 			} catch {
 				return 'list';
 			}
@@ -203,24 +213,11 @@
 		<p class="eyebrow">{longDate(today)}</p>
 		<h1>Agenda</h1>
 		<div class="segmented mode" role="radiogroup" aria-label="Agenda view">
-			<button
-				type="button"
-				role="radio"
-				aria-checked={mode === 'list'}
-				onclick={() => setMode('list')}>List</button
-			>
-			<button
-				type="button"
-				role="radio"
-				aria-checked={mode === 'week'}
-				onclick={() => setMode('week')}>Week</button
-			>
-			<button
-				type="button"
-				role="radio"
-				aria-checked={mode === 'stuck'}
-				onclick={() => setMode('stuck')}>Stuck</button
-			>
+			{#each MODES as m (m)}
+				<button type="button" role="radio" aria-checked={mode === m} onclick={() => setMode(m)}
+					>{MODE_LABELS[m]}</button
+				>
+			{/each}
 		</div>
 	</header>
 	<SavedViews query={encoded} onpick={(v) => (filter = decodeFilter(v.query, app.vault))} />
@@ -260,6 +257,10 @@
 				<StuckEditor idPrefix="ag-stuck" />
 			</details>
 		</section>
+	{:else if mode === 'month'}
+		<MonthView {today} keep={compiled.keep} {onTop} />
+	{:else if mode === 'board'}
+		<BoardView {today} keep={compiled.keep} {categoryLabels} />
 	{:else if mode === 'week'}
 		<nav class="week-nav" aria-label="Week">
 			<button
@@ -333,6 +334,9 @@
 	}
 	.mode {
 		margin-left: auto;
+		max-width: 100%;
+		overflow-x: auto;
+		scrollbar-width: none;
 	}
 	.stuck-hint {
 		margin: 0 0 0.5rem;

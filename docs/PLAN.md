@@ -40,7 +40,8 @@ archive; habits and the agenda time grid; TODO keyword editor; text size; hide
 done items; org-transclusion and link search options; reminders (in the app,
 and by Web Push through the worker while it's closed) with an app-icon badge;
 note details (rename with link updates, aliases, refs, extract to note); the
-agenda week view and stuck projects; a properties editor; contents for long
+agenda week view, stuck projects, month calendar and task board (rows by
+tag, category or note), with appointments; a properties editor; contents for long
 notes; a share target; Settings in
 sections.
 

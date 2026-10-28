@@ -28,6 +28,7 @@ export * from './clock';
 export * from './habit';
 export * from './reminders';
 export * from './note-edit';
+export * from './appointments';
 export * from './statistics';
 export * from './refile';
 export * from './transclude';

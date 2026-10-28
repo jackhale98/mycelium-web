@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_KEYWORD_CONFIG } from '$lib/org';
 import { Vault } from '$lib/vault/vault';
-import { DEFAULT_STUCK, stuckProjects, stuckSettingsOf, weekAgenda, weekStart } from './agenda';
+import {
+	agendaDays,
+	DEFAULT_STUCK,
+	monthGrid,
+	stuckProjects,
+	stuckSettingsOf,
+	weekAgenda,
+	weekStart,
+} from './agenda';
 
 const vault = Vault.fromSources(
 	{
@@ -126,5 +134,39 @@ describe('stuckProjects', () => {
 		expect(titles({ tags: ['home'] })).toEqual(['Kitchen remodel', 'Learn Rust', 'Travel']);
 		expect(titles({ regexp: 'https?://' })).toEqual(['Kitchen remodel', 'Travel']);
 		expect(() => titles({ regexp: '(' })).toThrow(/isn't a valid regular expression/);
+	});
+});
+
+describe('agendaDays', () => {
+	const v = Vault.fromSources(
+		{
+			'cal.org': [
+				'* Team lunch <2026-10-29 Thu 12:30>',
+				'* Conference',
+				'<2026-10-30 Fri>--<2026-11-02 Mon>',
+				'* TODO Report',
+				'DEADLINE: <2026-10-30 Fri 17:00>',
+				'',
+			].join('\n'),
+		},
+		DEFAULT_KEYWORD_CONFIG,
+	);
+	it('shows appointments, ranges on every day, timed first', () => {
+		const days = agendaDays(v, '2026-10-28', '2026-11-03', '2026-10-28');
+		const titles = Object.fromEntries(days.map((d) => [d.date, d.items.map((i) => i.title)]));
+		expect(titles).toEqual({
+			'2026-10-28': [],
+			'2026-10-29': ['Team lunch <2026-10-29 Thu 12:30>'],
+			'2026-10-30': ['Report', 'Conference'],
+			'2026-10-31': ['Conference'],
+			'2026-11-01': ['Conference'],
+			'2026-11-02': ['Conference'],
+			'2026-11-03': [],
+		});
+	});
+	it('covers a month in whole Monday-started weeks', () => {
+		expect(monthGrid('2026-10')).toEqual({ start: '2026-09-28', end: '2026-11-01' });
+		expect(monthGrid('2026-02')).toEqual({ start: '2026-01-26', end: '2026-03-01' });
+		expect(monthGrid('2026-12')).toEqual({ start: '2026-11-30', end: '2027-01-03' });
 	});
 });

@@ -1,11 +1,13 @@
 import {
 	addDays,
+	appointmentsIn,
 	dayNameFor,
 	getProperties,
 	isHabit,
 	matches,
 	parseMatch,
 	timestampDates,
+	type Appointment,
 } from '$lib/org';
 import type { AgendaItem, Vault } from '$lib/vault/vault';
 
@@ -85,43 +87,87 @@ export function weekStart(date: string): string {
 	return addDays(date, -back);
 }
 
+/** Appointments per file, re-read only when the file changes. */
+const appointmentCache = new Map<string, { source: string; found: Map<number, Appointment[]> }>();
+function appointmentsOf(path: string, source: string): Map<number, Appointment[]> {
+	const hit = appointmentCache.get(path);
+	if (hit && hit.source === source) return hit.found;
+	const found = appointmentsIn(source);
+	appointmentCache.set(path, { source, found });
+	return found;
+}
+
 /**
- * org's week agenda: each day of the week from `start` with the open items
- * scheduled or due that day (repeating ones on every day they recur), timed
- * ones first in time order; today also lists what is overdue.
+ * org's agenda over a run of days (`start` to `end`): each day's open items
+ * scheduled or due then (repeating ones on every day they recur, from today
+ * on; habits on today only) and its appointments (active timestamps in an
+ * entry, ranges on every day they span), timed ones first in time order;
+ * today also carries what's overdue.
  */
-export function weekAgenda(
+export function agendaDays(
 	vault: Vault,
 	start: string,
+	end: string,
 	today: string,
 	keep: (item: AgendaItem) => boolean = () => true,
 ): AgendaDay[] {
-	const end = addDays(start, 6);
-	const days = Array.from({ length: 7 }, (_, i) => ({
-		date: addDays(start, i),
-		items: [] as { item: AgendaItem; time: string }[],
-	}));
+	const days: { date: string; items: { item: AgendaItem; time: string }[] }[] = [];
+	for (let d = start; d <= end; d = addDays(d, 1)) days.push({ date: d, items: [] });
 	const byDate = new Map(days.map((d) => [d.date, d]));
+	const placed = new Map<AgendaItem | string, Set<string>>();
+	const place = (item: AgendaItem, date: string, time: string | null) => {
+		const key = `${item.file}\u0000${item.pos}`;
+		const seen = placed.get(key) ?? new Set<string>();
+		placed.set(key, seen);
+		if (seen.has(date)) return false;
+		seen.add(date);
+		byDate.get(date)?.items.push({ item, time: time ?? '99:99' });
+		return true;
+	};
 	for (const item of vault.agenda()) {
 		if (!keep(item) || vault.isDone(item.todo, item.file)) continue;
-		const placed = new Set<string>();
 		// Habits show on today only (org-habit-show-habits-only-for-today).
 		const source = item.scheduled ? vault.file(item.file)?.source : undefined;
 		const habit = !!source && isHabit(source, item.pos, vault.file(item.file)!.index.keywords);
+		let onToday = false;
 		for (const ts of [item.scheduled, item.deadline]) {
 			if (!ts?.active) continue;
 			for (const date of timestampDates(ts, start, end)) {
-				if (placed.has(date) || (habit && date !== today)) continue;
+				if (habit && date !== today) continue;
 				// Before today, a repeat is only where it's written: missed repeats aren't entries.
 				if (date < today && date !== ts.date) continue;
-				placed.add(date);
-				byDate.get(date)!.items.push({ item, time: ts.time ?? '99:99' });
+				if (place(item, date, ts.time) && date === today) onToday = true;
 			}
 		}
 		const due = item.deadline ?? item.scheduled;
-		const todayRow = byDate.get(today);
-		if (todayRow && due && due.date < today && !placed.has(today) && !habit)
-			todayRow.items.push({ item, time: '99:99' });
+		if (byDate.has(today) && due && due.date < today && !onToday && !habit)
+			place(item, today, null);
+	}
+	// Appointments: active timestamps in entries' text.
+	for (const file of vault.files.values()) {
+		if (file.index.excluded) continue;
+		const found = appointmentsOf(file.path, file.source);
+		if (!found.size) continue;
+		for (const h of file.index.headlines) {
+			const list = found.get(h.pos);
+			if (!list) continue;
+			const item: AgendaItem = {
+				...h,
+				file: file.path,
+				node: (h.ownerId && vault.nodes.get(h.ownerId)) || null,
+			};
+			if (!keep(item) || vault.isDone(item.todo, item.file)) continue;
+			for (const { timestamp: ts, until } of list) {
+				if (until) {
+					const from = ts.date > start ? ts.date : start;
+					for (let d = from; d <= end && d <= until; d = addDays(d, 1))
+						place(item, d, d === ts.date ? ts.time : null);
+					continue;
+				}
+				for (const date of timestampDates(ts, start, end))
+					if (date >= today || date === ts.date) place(item, date, ts.time);
+			}
+		}
 	}
 	return days.map((d) => ({
 		date: d.date,
@@ -133,6 +179,29 @@ export function weekAgenda(
 			)
 			.map((x) => x.item),
 	}));
+}
+
+/** org's week agenda: seven days from `start` (see {@link agendaDays}). */
+export function weekAgenda(
+	vault: Vault,
+	start: string,
+	today: string,
+	keep: (item: AgendaItem) => boolean = () => true,
+): AgendaDay[] {
+	return agendaDays(vault, start, addDays(start, 6), today, keep);
+}
+
+/** The Monday-started weeks covering a month (`YYYY-MM`): 4 to 6 rows of 7 days. */
+export function monthGrid(month: string): { start: string; end: string } {
+	const first = `${month}-01`;
+	const start = weekStart(first);
+	const [y, m] = month.split('-').map(Number) as [number, number];
+	const last = addDays(
+		`${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`,
+		-1,
+	);
+	const end = addDays(weekStart(last), 6);
+	return { start, end };
 }
 
 // ---------------------------------------------------------------- stuck projects

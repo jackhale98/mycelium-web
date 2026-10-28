@@ -55,8 +55,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   share sheet: a shared page arrives as an org link, ready to capture.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
   phrases and snippets, tags, backlinks, dailies, contents for long notes,
-  and an agenda (a list, org's week view, or stuck projects) with org's
-  filters and tag/property match strings.
+  and an agenda (a list, org's week view, stuck projects, a month calendar,
+  or a board with a column per TODO state and rows by tag, category or
+  note) with org's filters and tag/property match strings. Appointments
+  (plain active timestamps in a heading's text) show on their days; drag to
+  reschedule or to change state, or use the menus.
 - **Graph** of the whole vault or the neighbourhood of a note.
 - **Git, not a sync service.** Edits autosave to the working tree; you review
   diffs, write commit messages, and pull/push/branch when you choose

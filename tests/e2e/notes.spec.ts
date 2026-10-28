@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /// org-roam note tools: aliases, refs, renaming (with the links that used
 /// the old title), and extracting a heading into a note of its own.
@@ -13,6 +13,16 @@ async function open(page: Page, path: string) {
 	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
 }
 const details = (page: Page) => page.getByRole('dialog', { name: 'Note details' });
+
+/** Drag with the mouse in steps, picking the item up near its top, as a person does. */
+async function drag(page: Page, from: Locator, to: Locator) {
+	const a = (await from.boundingBox())!;
+	await page.mouse.move(a.x + a.width / 2, a.y + Math.min(10, a.height / 2));
+	await page.mouse.down();
+	const b = (await to.boundingBox())!;
+	await page.mouse.move(b.x + b.width / 2, b.y + Math.min(24, b.height / 2), { steps: 8 });
+	await page.mouse.up();
+}
 
 test('aliases and refs are added and removed from the note details', async ({ page }) => {
 	await open(page, `app#/node/${MYCELIAL}`);
@@ -203,4 +213,64 @@ test('stuck projects are configured in Settings too, all four org parts', async 
 	// Its text mentions "name and the graph": not stuck.
 	await expect(section.getByText('Inspiration', { exact: true })).toHaveCount(0);
 	await expect(section).toContainText('or matches the text pattern');
+});
+
+test('month view: days with their items, pick a day, drag to reschedule', async ({
+	page,
+	isMobile,
+}) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Month' }).click();
+	const grid = page.locator('table.grid');
+	await expect(grid.getByRole('columnheader')).toHaveCount(7);
+	await expect(grid).not.toContainText('Invalid');
+	const todayCell = grid.locator('td.today');
+	const list = page.getByRole('region', { name: /Today/ });
+	const first = (await list.locator('li').first().textContent())!;
+	expect(first.length).toBeGreaterThan(0);
+	// Another day: its list.
+	const next = todayCell.locator('xpath=following-sibling::td[1]');
+	test.skip(!(await next.count()), 'today is the last day of its week row');
+	await next.getByRole('button').click();
+	await expect(page.getByRole('region', { name: /Today/ })).toHaveCount(0);
+	if (isMobile) return;
+	// Drag a scheduled item from today to tomorrow.
+	const chip = todayCell.locator('li[draggable="true"]').first();
+	const title = (await chip.textContent())!.replace(/^\d\d:\d\d/, '').trim();
+	await drag(page, chip, next);
+	// It leaves today (a repeat starts from its new date) and is on the next day.
+	await expect(todayCell.locator('li', { hasText: title })).toHaveCount(0);
+	await expect(next.locator('li', { hasText: title }).first()).toBeVisible();
+});
+
+test('board: a column per state, move by menu or drag, rows by tag', async ({ page, isMobile }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Board' }).click();
+	const heads = page.locator('.col-head');
+	await expect(heads).toHaveCount(3);
+	await expect(heads.first()).toContainText('TODO');
+	const todo = page.getByRole('list', { name: 'TODO', exact: true });
+	const next = page.getByRole('list', { name: 'NEXT', exact: true });
+	const card = todo.locator('li', { hasText: 'How to Take Smart Notes' });
+	await card.getByRole('combobox').selectOption('NEXT');
+	await expect(next.locator('li', { hasText: 'How to Take Smart Notes' })).toBeVisible();
+	await expect(card).toHaveCount(0);
+	if (!isMobile) {
+		const done = page.getByRole('list', { name: 'DONE', exact: true });
+		await drag(page, next.locator('li', { hasText: 'How to Take Smart Notes' }), done);
+		await expect(done.locator('li', { hasText: 'How to Take Smart Notes' })).toBeVisible();
+	}
+	// Rows by tag: a card shows in each of its tags' rows.
+	await page.getByLabel('Rows').selectOption('tag');
+	await expect(page.getByRole('heading', { level: 3, name: 'books' })).toBeVisible();
+	await expect(page.getByRole('list', { name: 'TODO, books' })).toBeVisible();
+	// Remembered.
+	await page.reload();
+	await expect(page.locator('#myc-loader')).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.getByLabel('Rows')).toHaveValue('tag');
+	// The state change is what's in the file.
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	await expect(page.locator('main')).toContainText(
+		`${isMobile ? 'NEXT' : 'DONE'} [#B] How to Take Smart Notes`,
+	);
 });
