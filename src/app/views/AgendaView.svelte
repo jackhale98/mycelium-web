@@ -208,7 +208,7 @@
 	);
 </script>
 
-<div class="agenda-page">
+<div class="agenda-page" class:fit={mode === 'month'}>
 	<header>
 		<p class="eyebrow">{longDate(today)}</p>
 		<h1>Agenda</h1>
@@ -327,6 +327,7 @@
 		flex-wrap: wrap;
 		align-items: end;
 		gap: 0.5rem 1rem;
+		margin-bottom: 1rem;
 	}
 	header > :first-child {
 		flex-basis: 100%;
@@ -426,6 +427,10 @@
 	@media (max-width: 720px) {
 		.agenda-page {
 			padding: 1.75rem 1rem 6rem;
+		}
+		/* The month fits the screen; its day drawer holds the rest. */
+		.agenda-page.fit {
+			padding-bottom: 0;
 		}
 	}
 </style>

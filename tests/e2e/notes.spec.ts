@@ -225,9 +225,36 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 	await expect(grid.getByRole('columnheader')).toHaveCount(7);
 	await expect(grid).not.toContainText('Invalid');
 	const todayCell = grid.locator('td.today');
+	if (isMobile) {
+		// The grid stays put; the day is a drawer above the bottom bar.
+		const scroll = await page.evaluate(
+			() => document.documentElement.scrollHeight - window.innerHeight,
+		);
+		expect(scroll).toBeLessThanOrEqual(2);
+		const drawer = page.getByRole('region', { name: 'Selected day' });
+		await expect(drawer).toContainText(/more|Nothing/);
+		const handle = drawer.getByRole('button', { name: 'Day details' });
+		await expect(handle).toHaveAttribute('aria-expanded', 'false');
+		await handle.click();
+		await expect(handle).toHaveAttribute('aria-expanded', 'true');
+		await page.keyboard.press('Escape');
+		await expect(handle).toHaveAttribute('aria-expanded', 'false');
+		// Swipe the grid to the next month and back.
+		const label = page.getByRole('navigation', { name: 'Month' });
+		const before = await label.textContent();
+		const box = (await grid.boundingBox())!;
+		await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 6 });
+		await page.mouse.up();
+		await expect(label).not.toHaveText(before!);
+		await label.getByRole('button', { name: 'Today' }).click();
+	}
 	const list = page.getByRole('region', { name: /Today/ });
+	if (isMobile) await page.getByRole('button', { name: 'Day details' }).click();
 	const first = (await list.locator('li').first().textContent())!;
 	expect(first.length).toBeGreaterThan(0);
+	if (isMobile) await page.keyboard.press('Escape');
 	// Another day: its list.
 	const next = todayCell.locator('xpath=following-sibling::td[1]');
 	test.skip(!(await next.count()), 'today is the last day of its week row');
