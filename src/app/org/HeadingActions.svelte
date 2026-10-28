@@ -98,6 +98,18 @@
 		app.setPlanningDate(path, offset, kind, value || null);
 	}
 
+	/** org-roam-extract-subtree: a note of its own, linked from where it was. */
+	function extract() {
+		const nodeId = app.extractNode(path, offset);
+		if (!nodeId) {
+			archiveNote = 'Couldn’t extract it (a note with that file name may already exist).';
+			return;
+		}
+		app.headingSheet = null;
+		onclose();
+		router.go(href.node(nodeId));
+	}
+
 	function makeNode() {
 		const nodeId = app.makeNode(path, offset);
 		if (nodeId) router.go(href.node(nodeId));
@@ -284,6 +296,12 @@
 		>
 		<button type="button" class="btn small" onclick={archive} title={`Move to ${archiveTo}`}
 			><Icon name="inbox" size={14} />Archive</button
+		>
+		<button
+			type="button"
+			class="btn small"
+			title="Move it and everything under it into a note of its own, linked from here"
+			onclick={extract}><Icon name="file" size={14} />Extract to note</button
 		>
 		{#if archiveNote}<span class="raw" role="status">{archiveNote}</span>{/if}
 	</div>

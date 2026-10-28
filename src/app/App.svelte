@@ -8,6 +8,7 @@
 	import MobileBar from './components/MobileBar.svelte';
 	import NewNoteDialog from './components/NewNoteDialog.svelte';
 	import HeadingSheet from './org/HeadingSheet.svelte';
+	import NoteSheet from './components/NoteSheet.svelte';
 	import Sidebar from './components/Sidebar.svelte';
 	import SyncDialog from './components/SyncDialog.svelte';
 	import { href, router } from './router.svelte';
@@ -257,6 +258,7 @@
 <MathSheet />
 <ImageSheet />
 <HeadingSheet />
+<NoteSheet />
 <CaptureSheet />
 
 {#if app.captureNotice}

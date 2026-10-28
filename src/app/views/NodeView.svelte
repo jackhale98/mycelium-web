@@ -199,6 +199,16 @@
 			></button
 		>
 	{/if}
+	{#if !pane.editing}
+		<button
+			type="button"
+			class="btn small"
+			aria-haspopup="dialog"
+			title="Rename, aliases, refs"
+			onclick={() => (app.noteSheet = { id: n.id })}
+			><Icon name="info" size={14} /><span class="label">Details</span></button
+		>
+	{/if}
 	{#if n.level > 0 && !pane.editing}
 		<button
 			type="button"

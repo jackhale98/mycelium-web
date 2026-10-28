@@ -48,6 +48,11 @@ import {
 	setPriority,
 	setProperty,
 	getProperty,
+	joinPropertyValues,
+	splitPropertyValues,
+	setFileTitle,
+	renameLinkDescriptions,
+	extractSubtree,
 	toggleCheckbox,
 	setTodoKeyword,
 	fileTodoKeywords,
@@ -234,6 +239,8 @@ class AppState {
 	editAt = $state<number | null>(null);
 	/** The heading open in the heading sheet, if any. */
 	headingSheet = $state<{ path: string; pos: number } | null>(null);
+	/** A note's details sheet: rename, aliases, refs, extract. */
+	noteSheet = $state<{ id: string } | null>(null);
 	/** The quick capture sheet: open with a template chosen, and text to start from. */
 	captureSheet = $state<{ templateId?: string; text?: string } | null>(null);
 	/** "Saved to …" after a capture, with the note to open. */
@@ -1483,6 +1490,88 @@ class AppState {
 			`Make ${this.#title(path)} a note`,
 		);
 		return id;
+	}
+
+	/** A note's aliases or refs (`ROAM_ALIASES`, `ROAM_REFS`) as written. */
+	roamValues(id: string, key: 'ROAM_ALIASES' | 'ROAM_REFS'): string[] {
+		const node = this.vault.node(id);
+		const file = node && this.vault.file(node.file);
+		if (!node || !file) return [];
+		const owner = node.level === 0 ? null : node.pos;
+		return splitPropertyValues(getProperty(file.source, owner, key, file.index.keywords));
+	}
+
+	/** Replace a note's aliases or refs (org-roam-alias-add/-remove, -ref-add/-remove). */
+	setRoamValues(id: string, key: 'ROAM_ALIASES' | 'ROAM_REFS', values: string[]) {
+		const node = this.vault.node(id);
+		const file = node && this.vault.file(node.file);
+		if (!node || !file) return;
+		const owner = node.level === 0 ? null : node.pos;
+		const clean = [...new Set(values.map((v) => v.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+		this.#edit(
+			node.file,
+			(s) =>
+				setProperty(
+					s,
+					owner,
+					key,
+					clean.length ? joinPropertyValues(clean) : null,
+					file.index.keywords,
+				),
+			`${key === 'ROAM_ALIASES' ? 'Aliases' : 'Refs'} for ${node.title}`,
+		);
+	}
+
+	/** Links elsewhere whose description is a note's title (what a rename would update). */
+	linksNamed(id: string, title: string): { path: string; count: number }[] {
+		const out: { path: string; count: number }[] = [];
+		for (const file of this.vault.files.values()) {
+			if (!file.source.includes(`id:${id}`)) continue;
+			const count = renameLinkDescriptions(file.source, id, title, `${title}\u0000`).length;
+			if (count) out.push({ path: file.path, count });
+		}
+		return out;
+	}
+
+	/** Rename a note; optionally update links that were described by its old title. */
+	renameNode(id: string, title: string, updateLinks: boolean) {
+		const node = this.vault.node(id);
+		const clean = title.replace(/\s+/g, ' ').trim();
+		if (!node || !clean || clean === node.title) return;
+		const old = node.title;
+		const kw = this.vault.file(node.file)?.index.keywords;
+		this.#edit(
+			node.file,
+			(s) => (node.level === 0 ? setFileTitle(s, clean) : setHeadlineTitle(s, node.pos, clean, kw)),
+			`Rename ${old} to ${clean}`,
+		);
+		if (!updateLinks) return;
+		for (const { path } of this.linksNamed(id, old))
+			this.#edit(
+				path,
+				(s) => renameLinkDescriptions(s, id, old, clean),
+				`Update links to ${clean}`,
+			);
+	}
+
+	/**
+	 * Extract the heading at `pos` into a note of its own (org-roam-extract-subtree),
+	 * linking to it from where it was. Returns the new note's id.
+	 */
+	extractNode(path: string, pos: number, leaveLink = true): string | null {
+		const file = this.vault.file(path);
+		if (!file) return null;
+		const r = extractSubtree(file.source, pos, crypto.randomUUID(), {
+			leaveLink,
+			config: file.index.keywords,
+		});
+		if (!r) return null;
+		const target = nodePath(this.layout, roamFileName(slugify(r.title) || 'note', new Date()));
+		if (this.vault.file(target)) return null;
+		// The new note first, so the link left behind never points nowhere.
+		this.#write(target, r.text, `Extract ${r.title} into its own note`);
+		this.#edit(path, () => r.changes, `Extract ${r.title} from ${this.#title(path)}`);
+		return r.id;
 	}
 
 	#title(path: string) {
