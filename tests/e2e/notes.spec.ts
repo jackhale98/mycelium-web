@@ -237,8 +237,30 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 		await expect(handle).toHaveAttribute('aria-expanded', 'false');
 		await handle.click();
 		await expect(handle).toHaveAttribute('aria-expanded', 'true');
+		// The page behind is locked while it's open.
+		expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflowY)).toBe(
+			'hidden',
+		);
 		await page.keyboard.press('Escape');
 		await expect(handle).toHaveAttribute('aria-expanded', 'false');
+		// A pull down on the open list closes it.
+		await handle.click();
+		await expect(handle).toHaveAttribute('aria-expanded', 'true');
+		const cdp = await page.context().newCDPSession(page);
+		const l = (await drawer.locator('.dlist').boundingBox())!;
+		const x = l.x + l.width / 2;
+		const y = l.y + 40;
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+		for (let i = 1; i <= 10; i++)
+			await cdp.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: y + i * 25 }],
+			});
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		await expect(handle).toHaveAttribute('aria-expanded', 'false');
+		expect(
+			await page.evaluate(() => getComputedStyle(document.documentElement).overflowY),
+		).not.toBe('hidden');
 		// Swipe the grid to the next month and back.
 		const label = page.getByRole('navigation', { name: 'Month' });
 		const before = await label.textContent();
@@ -249,6 +271,8 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 		await page.mouse.up();
 		await expect(label).not.toHaveText(before!);
 		await label.getByRole('button', { name: 'Today' }).click();
+		// Once the months have slid past each other, one grid is left.
+		await expect(page.locator('table.grid')).toHaveCount(1);
 	}
 	const list = page.getByRole('region', { name: /Today/ });
 	if (isMobile) await page.getByRole('button', { name: 'Day details' }).click();

@@ -7,6 +7,8 @@
 	// a drawer docked above the bottom bar: tap or drag it up to see its list.
 	// Swipe the grid sideways to change month.
 	import { onMount } from 'svelte';
+	import { cubicOut } from 'svelte/easing';
+	import { fly } from 'svelte/transition';
 	import { timestampDates } from '$lib/org';
 	import type { AgendaItem } from '$lib/vault/vault';
 	import { agendaDays, monthGrid } from '../agenda';
@@ -54,15 +56,38 @@
 			month: 'long',
 		});
 
+	/** Which way the last month change went: 1 later, -1 earlier (the slide's direction). */
+	let dir = $state<1 | -1>(1);
+	function go(target: string) {
+		if (target === month) return;
+		// 'YYYY-MM' strings order like months.
+		dir = target > month ? 1 : -1;
+		month = target;
+	}
 	function shift(by: number) {
 		const [y, m] = month.split('-').map(Number) as [number, number];
 		const d = new Date(y, m - 1 + by, 1);
-		month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+		const target = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+		go(target);
+		// The day shown follows the month: today in its own month, else the 1st.
+		selected = target === today.slice(0, 7) ? today : `${target}-01`;
 	}
 	function goToday() {
-		month = today.slice(0, 7);
+		go(today.slice(0, 7));
 		selected = today;
 	}
+
+	// The month slides in from the side it comes from; the one leaving goes
+	// out the other way and can't be clicked meanwhile.
+	const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const slide = (node: Element, side: 1 | -1) =>
+		fly(node, {
+			x: `${side * dir * 100}%`,
+			opacity: 1,
+			duration: reduced() ? 0 : 260,
+			easing: cubicOut,
+		});
+	const retire = (e: Event) => ((e.currentTarget as HTMLElement).inert = true);
 
 	// ---- phones: a stationary grid and the day drawer ----
 	const PHONE = '(max-width: 720px)';
@@ -96,6 +121,7 @@
 		const page = view?.closest('.agenda-page') ?? view?.parentElement;
 		if (page) ro.observe(page);
 		window.addEventListener('resize', measure);
+		void document.fonts?.ready.then(measure);
 		return () => {
 			mq.removeEventListener('change', change);
 			ro.disconnect();
@@ -106,6 +132,68 @@
 	$effect(() => {
 		void selected;
 		if (listEl) listEl.scrollTop = 0;
+	});
+	// While the drawer is open the page behind it stays still.
+	$effect(() => {
+		if (!phone || !expanded) return;
+		const root = document.documentElement;
+		const { overflow, overscrollBehavior } = root.style;
+		const bodyOverflow = document.body.style.overflow;
+		root.style.overflow = 'hidden';
+		root.style.overscrollBehavior = 'none';
+		document.body.style.overflow = 'hidden';
+		return () => {
+			root.style.overflow = overflow;
+			root.style.overscrollBehavior = overscrollBehavior;
+			document.body.style.overflow = bodyOverflow;
+		};
+	});
+	// Pulling the open list down from its top drags the drawer closed; any
+	// other touch scrolls the list. Touch events, as only they can stop the
+	// scroll once the pull has begun.
+	$effect(() => {
+		const el = listEl;
+		if (!el) return;
+		let start: { y: number; t: number } | null = null;
+		let pulling = false;
+		const touchstart = (e: TouchEvent) => {
+			pulling = false;
+			start =
+				expanded && e.touches.length === 1 && el.scrollTop <= 0
+					? { y: e.touches[0]!.clientY, t: e.timeStamp }
+					: null;
+		};
+		const touchmove = (e: TouchEvent) => {
+			if (!start) return;
+			const y = e.touches[0]!.clientY;
+			if (!pulling) {
+				const dy = y - start.y;
+				if (dy < -6 || el.scrollTop > 0) start = null; // scrolling the list
+				if (dy < 6 || !start) return;
+				pulling = true;
+				beginDrag(start.y, start.t);
+			}
+			e.preventDefault();
+			moveDrag(y);
+		};
+		const touchend = (e: TouchEvent) => {
+			if (pulling) {
+				if (e.type === 'touchcancel') dragCancel();
+				else endDrag(e.changedTouches[0]!.clientY, e.timeStamp);
+			}
+			start = null;
+			pulling = false;
+		};
+		el.addEventListener('touchstart', touchstart, { passive: true });
+		el.addEventListener('touchmove', touchmove, { passive: false });
+		el.addEventListener('touchend', touchend);
+		el.addEventListener('touchcancel', touchend);
+		return () => {
+			el.removeEventListener('touchstart', touchstart);
+			el.removeEventListener('touchmove', touchmove);
+			el.removeEventListener('touchend', touchend);
+			el.removeEventListener('touchcancel', touchend);
+		};
 	});
 
 	// Swiping the grid sideways changes month; the click that ends a swipe is swallowed.
@@ -139,28 +227,38 @@
 	const collapsedH = () =>
 		parseFloat(getComputedStyle(drawer!).getPropertyValue('--col-h')) *
 			parseFloat(getComputedStyle(document.documentElement).fontSize) || 104;
-	function dragStart(e: PointerEvent) {
-		if (!e.isPrimary || !drawer) return;
+	function beginDrag(y: number, t: number) {
+		if (!drawer) return;
 		const max = drawer.offsetHeight - collapsedH();
-		drag = { y: e.clientY, t: e.timeStamp, base: expanded ? 0 : max, max, moved: false };
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		drag = { y, t, base: expanded ? 0 : max, max, moved: false };
 	}
-	function dragMove(e: PointerEvent) {
+	function moveDrag(y: number) {
 		if (!drag) return;
-		const dy = e.clientY - drag.y;
+		const dy = y - drag.y;
 		if (!drag.moved && Math.abs(dy) < 6) return;
 		drag.moved = true;
 		dragY = Math.min(drag.max, Math.max(0, drag.base + dy));
 	}
-	function dragEnd(e: PointerEvent) {
-		if (!drag) return;
-		const dy = e.clientY - drag.y;
-		const fast = Math.abs(dy) / Math.max(1, e.timeStamp - drag.t) > 0.5;
+	/** Ends a drag, toggling if it went far or fast enough; false when it never moved (a tap). */
+	function endDrag(y: number, t: number): boolean {
+		if (!drag) return false;
+		const dy = y - drag.y;
+		const fast = Math.abs(dy) / Math.max(1, t - drag.t) > 0.5;
 		const moved = drag.moved;
 		drag = null;
 		dragY = null;
-		if (!moved) expanded = !expanded;
-		else if (expanded ? dy > (fast ? 12 : 60) : dy < -(fast ? 12 : 60)) expanded = !expanded;
+		if (moved && (expanded ? dy > (fast ? 12 : 60) : dy < -(fast ? 12 : 60))) expanded = !expanded;
+		return moved;
+	}
+	function dragStart(e: PointerEvent) {
+		if (!e.isPrimary) return;
+		beginDrag(e.clientY, e.timeStamp);
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	const dragMove = (e: PointerEvent) => moveDrag(e.clientY);
+	function dragEnd(e: PointerEvent) {
+		// A tap anywhere on the header toggles.
+		if (drag && !endDrag(e.clientY, e.timeStamp)) expanded = !expanded;
 	}
 	function dragCancel() {
 		drag = null;
@@ -248,83 +346,94 @@
 		onpointercancel={() => (swipe = null)}
 		onclickcapture={swipeClick}
 	>
-		<table class="grid">
-			<caption class="sr-only">{label}: pick a day to see its items below</caption>
-			<thead>
-				<tr
-					>{#each WEEKDAYS as w (w)}<th scope="col">{w}</th>{/each}</tr
-				>
-			</thead>
-			<tbody>
-				{#each weeks as week (week[0]!.date)}
-					<tr>
-						{#each week as day (day.date)}
-							<td
-								class:other={!day.date.startsWith(month)}
-								class:today={day.date === today}
-								class:selected={day.date === selected}
-								class:over={over === day.date}
-								ondragover={(e) => {
-									if (!dragging) return;
-									e.preventDefault();
-									over = day.date;
-								}}
-								ondragleave={() => over === day.date && (over = null)}
-								ondrop={(e) => {
-									e.preventDefault();
-									drop(day.date);
-								}}
-							>
-								<button
-									type="button"
-									class="day"
-									aria-pressed={day.date === selected}
-									aria-label={`${longDay(day.date)}${day.date === today ? ', today' : ''}: ${day.items.length} item${day.items.length === 1 ? '' : 's'}`}
-									onclick={() => (selected = day.date)}
-									><span class="num">{dayNumber(day.date)}</span>{#if day.items.length}<span
-											class="count">{day.items.length}</span
-										>{/if}</button
-								>
-								<ul class="chips" aria-hidden="true">
-									{#each day.items.slice(0, 3) as item (`${item.file}:${item.pos}`)}
-										{@const kind = stampOn(item, day.date)}
-										<li
-											class:deadline={kind === 'DEADLINE'}
-											draggable={kind !== null}
-											data-file={item.file}
-											data-pos={item.pos}
-											data-kind={kind ?? ''}
-											ondragstart={(e) => {
-												// Which item, from the element itself.
-												const el = e.currentTarget as HTMLElement;
-												const found = day.items.find(
-													(i) => i.file === el.dataset.file && String(i.pos) === el.dataset.pos,
-												);
-												const k = el.dataset.kind as 'SCHEDULED' | 'DEADLINE' | '';
-												if (!found || !k) return;
-												dragging = { item: found, kind: k };
-												e.dataTransfer?.setData('text/plain', found.title);
-											}}
-											ondragend={() => {
-												dragging = null;
-												over = null;
-											}}
+		{#key month}
+			<div class="month-panel" in:slide={1} out:slide={-1} onoutrostart={retire}>
+				<table class="grid">
+					<caption class="sr-only">{label}: pick a day to see its items below</caption>
+					<thead>
+						<tr
+							>{#each WEEKDAYS as w (w)}<th scope="col">{w}</th>{/each}</tr
+						>
+					</thead>
+					<tbody>
+						{#each weeks as week (week[0]!.date)}
+							<tr>
+								{#each week as day (day.date)}
+									<td
+										class:other={!day.date.startsWith(month)}
+										class:today={day.date === today}
+										class:selected={day.date === selected}
+										class:over={over === day.date}
+										ondragover={(e) => {
+											if (!dragging) return;
+											e.preventDefault();
+											over = day.date;
+										}}
+										ondragleave={() => over === day.date && (over = null)}
+										ondrop={(e) => {
+											e.preventDefault();
+											drop(day.date);
+										}}
+									>
+										<button
+											type="button"
+											class="day"
+											aria-pressed={day.date === selected}
+											aria-label={`${longDay(day.date)}${day.date === today ? ', today' : ''}: ${day.items.length} item${day.items.length === 1 ? '' : 's'}`}
+											onclick={() => (selected = day.date)}
+											><span class="num">{dayNumber(day.date)}</span>{#if day.items.length}<span
+													class="count">{day.items.length}</span
+												>{/if}</button
 										>
-											{#if time(item, day.date)}<span class="t">{time(item, day.date)}</span
-												>{/if}{plain(item.title)}
-										</li>
-									{/each}
-									{#if day.items.length > 3}<li class="more">+{day.items.length - 3} more</li>{/if}
-								</ul>
-							</td>
+										<ul class="chips" aria-hidden="true">
+											{#each day.items.slice(0, 3) as item (`${item.file}:${item.pos}`)}
+												{@const kind = stampOn(item, day.date)}
+												<li
+													class:deadline={kind === 'DEADLINE'}
+													draggable={kind !== null}
+													data-file={item.file}
+													data-pos={item.pos}
+													data-kind={kind ?? ''}
+													ondragstart={(e) => {
+														// Which item, from the element itself.
+														const el = e.currentTarget as HTMLElement;
+														const found = day.items.find(
+															(i) => i.file === el.dataset.file && String(i.pos) === el.dataset.pos,
+														);
+														const k = el.dataset.kind as 'SCHEDULED' | 'DEADLINE' | '';
+														if (!found || !k) return;
+														dragging = { item: found, kind: k };
+														e.dataTransfer?.setData('text/plain', found.title);
+													}}
+													ondragend={() => {
+														dragging = null;
+														over = null;
+													}}
+												>
+													{#if time(item, day.date)}<span class="t">{time(item, day.date)}</span
+														>{/if}{plain(item.title)}
+												</li>
+											{/each}
+											{#if day.items.length > 3}<li class="more">
+													+{day.items.length - 3} more
+												</li>{/if}
+										</ul>
+									</td>
+								{/each}
+							</tr>
 						{/each}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+					</tbody>
+				</table>
+			</div>
+		{/key}
 	</div>
 
 	{#if phone}
+		{#if expanded}
+			<!-- A tap outside closes it; the handle, Escape and a pull down do too. -->
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+			<div class="scrim" onclick={() => (expanded = false)}></div>
+		{/if}
 		<section
 			class="drawer"
 			class:open={expanded}
@@ -411,6 +520,16 @@
 		font-weight: 650;
 		text-align: center;
 	}
+	.grid-wrap {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		overflow: hidden;
+	}
+	.month-panel {
+		grid-area: 1 / 1;
+		min-width: 0;
+		min-height: 0;
+	}
 	.grid {
 		width: 100%;
 		border-collapse: collapse;
@@ -464,6 +583,9 @@
 		background: var(--accent);
 		color: var(--on-accent);
 		font-weight: 700;
+	}
+	h2 .count {
+		margin-left: 0.5rem;
 	}
 	.count {
 		color: var(--text-faint);
@@ -541,17 +663,31 @@
 		   docked drawer, so nothing scrolls. --top and --bar-h are measured. */
 		.month-view.phone {
 			--col-h: 6.5rem;
-			padding-bottom: var(--col-h);
+			--gap: 0.5rem;
+			/* Room for the drawer and the bottom bar, less the 4.5rem the app
+			   already leaves under every page for that bar. */
+			padding-bottom: calc(var(--col-h) + var(--bar-h) + var(--gap) - 4.5rem);
 		}
 		.phone .grid-wrap {
+			height: max(17rem, calc(100dvh - var(--top) - var(--col-h) - var(--bar-h) - var(--gap)));
 			/* Swipes sideways are the grid's (month to month). */
 			touch-action: pan-y;
 		}
+		.phone .month-panel,
 		.phone .grid {
-			height: max(
-				17rem,
-				calc(100dvh - var(--top) - var(--col-h) - max(var(--bar-h), 4.5rem) - 0.75rem)
-			);
+			height: 100%;
+		}
+		.scrim {
+			position: fixed;
+			inset: 0;
+			z-index: 19;
+			background: rgb(0 0 0 / 0.25);
+			animation: fade 0.2s ease;
+		}
+		@keyframes fade {
+			from {
+				opacity: 0;
+			}
 		}
 		.drawer {
 			--col-h: 6.5rem;
