@@ -298,28 +298,49 @@
 		return () => clearInterval(timer);
 	});
 
-	// Fingers: hold a block or a task for a moment to lift it, then drag; a
-	// quick swipe still scrolls. The bottom of a block resizes it.
+	// Fingers: hold a block or a task for a moment to lift it, then drag; the
+	// bottom of a block resizes it. Blocks and tasks don't hand touches to the
+	// browser's own scrolling (touch-action: none), so a lifted drag can never
+	// race a native scroll; a quick swipe that starts on one is scrolled here
+	// instead, coasting on a little as a native scroll would.
 	let root = $state<HTMLElement>();
 	$effect(() => {
 		const el = root;
 		if (!el) return;
 		let hold: ReturnType<typeof setTimeout> | null = null;
 		let from: { x: number; y: number } | null = null;
+		/** A swipe that started on a block or task: what it scrolls, and how fast. */
+		let pan: { el: Element; y: number; t: number; v: number; moving: boolean } | null = null;
+		let coast: ReturnType<typeof setInterval> | null = null;
+		const stopCoast = () => {
+			if (coast) clearInterval(coast);
+			coast = null;
+		};
 		const cancelHold = () => {
 			if (hold) clearTimeout(hold);
 			hold = null;
 		};
+		/** The nearest ancestor that scrolls up and down (the timeline, else the page). */
+		const scrollerOf = (n: Element): Element => {
+			for (let p = n.parentElement; p; p = p.parentElement) {
+				const y = getComputedStyle(p).overflowY;
+				if ((y === 'auto' || y === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+			}
+			return document.scrollingElement ?? document.documentElement;
+		};
 		const touchstart = (e: TouchEvent) => {
 			cancelHold();
+			stopCoast();
+			pan = null;
 			const t = e.touches[0];
 			const target = (e.target as Element).closest<HTMLElement>('[data-drag]');
 			if (e.touches.length !== 1 || !t || !target) return;
 			from = { x: t.clientX, y: t.clientY };
+			pan = { el: scrollerOf(target), y: t.clientY, t: e.timeStamp, v: 0, moving: false };
 			const key = target.dataset.key!;
 			hold = setTimeout(() => {
 				hold = null;
-				if (!from) return;
+				if (!from || pan?.moving) return;
 				if (target.dataset.drag === 'place') {
 					const item = plan.unplanned.find((i) => keyOf(i) === key);
 					if (!item) return;
@@ -339,17 +360,41 @@
 			const t = e.touches[0];
 			if (!t) return;
 			if (drag?.touch) {
-				// Lifted: the finger drags it, not the page.
+				// Lifted: the finger drags it.
 				e.preventDefault();
 				dragTo(t.clientX, t.clientY);
 				return;
 			}
-			if (from && Math.hypot(t.clientX - from.x, t.clientY - from.y) > 10) cancelHold();
+			if (!pan) return;
+			if (!pan.moving && from && Math.hypot(t.clientX - from.x, t.clientY - from.y) > 10) {
+				cancelHold();
+				pan.moving = true;
+			}
+			if (!pan.moving) return;
+			// A swipe: scroll what's under it by the finger's move.
+			e.preventDefault();
+			const dy = t.clientY - pan.y;
+			const dt = Math.max(1, e.timeStamp - pan.t);
+			pan.el.scrollTop -= dy;
+			pan.v = 0.8 * (dy / dt) + 0.2 * pan.v;
+			pan.y = t.clientY;
+			pan.t = e.timeStamp;
 		};
 		const touchend = () => {
 			cancelHold();
 			from = null;
 			if (drag?.touch) endDrag();
+			const p = pan;
+			pan = null;
+			// Let a quick swipe coast to a stop.
+			if (p?.moving && Math.abs(p.v) > 0.2) {
+				let v = p.v;
+				coast = setInterval(() => {
+					p.el.scrollTop -= v * 16;
+					v *= 0.94;
+					if (Math.abs(v) < 0.02) stopCoast();
+				}, 16);
+			}
 		};
 		el.addEventListener('touchstart', touchstart, { passive: true });
 		el.addEventListener('touchmove', touchmove, { passive: false });
@@ -357,6 +402,7 @@
 		el.addEventListener('touchcancel', touchend);
 		return () => {
 			cancelHold();
+			stopCoast();
 			el.removeEventListener('touchstart', touchstart);
 			el.removeEventListener('touchmove', touchmove);
 			el.removeEventListener('touchend', touchend);
@@ -754,6 +800,8 @@
 	}
 	.task,
 	.block {
+		/* Touches here are the planner's (drag after a hold, or a swipe it scrolls). */
+		touch-action: none;
 		-webkit-touch-callout: none;
 		-webkit-user-select: none;
 		user-select: none;
@@ -873,7 +921,6 @@
 		background: var(--accent-soft);
 		color: var(--text);
 		cursor: grab;
-		touch-action: manipulation;
 	}
 	.block.deadline {
 		border-left-color: var(--danger);

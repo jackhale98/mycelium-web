@@ -691,6 +691,8 @@ test('day planner on a phone: hold and drag blocks and tasks; a quick swipe scro
 	await scroller.scrollIntoViewIfNeeded();
 	await scroller.evaluate((el) => (el.scrollTop = 64 * 2)); // 08:00 at the top
 	const cdp = await page.context().newCDPSession(page);
+	// A slow phone: a drag must never race the browser's own scrolling.
+	await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 	const touch = async (path: { x: number; y: number }[], hold: number) => {
 		const [first, ...rest] = path;
 		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first!] });
@@ -704,10 +706,12 @@ test('day planner on a phone: hold and drag blocks and tasks; a quick swipe scro
 	const steps = (x: number, y: number, dy: number) =>
 		Array.from({ length: 11 }, (_, i) => ({ x, y: y + (dy * i) / 10 }));
 
-	// A quick swipe over a block scrolls; nothing moves.
+	// A quick swipe over a block scrolls the day; the block stays put.
 	let b = (await block('Plan the week').boundingBox())!;
+	const top = await scroller.evaluate((el) => el.scrollTop);
 	await touch(steps(b.x + b.width / 2, b.y + 10, -80), 0);
 	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:00–09:30');
+	await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(top + 40);
 
 	// Hold, then drag: two hours later.
 	await scroller.evaluate((el) => (el.scrollTop = 64 * 2));
