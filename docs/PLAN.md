@@ -41,7 +41,8 @@ done items; org-transclusion and link search options; reminders (in the app,
 and by Web Push through the worker while it's closed) with an app-icon badge;
 note details (rename with link updates, aliases, refs, extract to note); the
 agenda week view, stuck projects, month calendar and task board (rows by
-tag, category or note), with appointments; a properties editor; contents for long
+tag, category or note), with appointments; quick add in plain language; inbox
+triage and the weekly review; the day planner (time blocking); a properties editor; contents for long
 notes; a share target; Settings in
 sections.
 

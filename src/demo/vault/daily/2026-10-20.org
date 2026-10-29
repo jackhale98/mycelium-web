@@ -13,6 +13,12 @@ DEADLINE: <2026-10-22 Thu>
 - [ ] Highlight orphans
 - [ ] Local graph on each note
 
+* TODO Plan the week
+SCHEDULED: <2026-10-20 Tue 09:00-09:30>
+
+* Reading group at the library
+<2026-10-20 Tue 18:30-20:00>
+
 * Forest walk
 1. [X] Pack the hand lens
 2. [ ] Photograph the bracket fungi

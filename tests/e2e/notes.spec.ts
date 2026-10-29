@@ -609,3 +609,71 @@ test('the weekly review walks its steps and remembers the day', async ({ page })
 	await page.locator('.review').getByRole('link', { name: 'Home' }).click();
 	await expect(page.getByRole('link', { name: /Weekly review\s*today/ })).toBeVisible();
 });
+
+test('day planner: place, move, resize, take the time off, with undo', async ({
+	page,
+	isMobile,
+}) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Day' }).click();
+	const block = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}, `) });
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:00–09:30');
+	await expect(block('Reading group at the library')).toHaveAccessibleName(
+		'Reading group at the library, 18:30–20:00, appointment',
+	);
+	await expect(page.getByRole('status').first()).toContainText('Planned 30 min');
+	const tray = page.getByRole('region', { name: /To plan/ });
+	const habit = tray.getByRole('button', { name: /Review this week's flashcards/ });
+
+	if (isMobile) {
+		// Tap a task, then a time on the day.
+		await habit.click();
+		const line = page.locator('.line');
+		await page.locator('.scroller').scrollIntoViewIfNeeded();
+		await page.locator('.scroller').evaluate((el) => (el.scrollTop = 64 * 8)); // 14:00 at the top
+		const box = (await line.boundingBox())!;
+		await page.mouse.click(box.x + box.width / 2, box.y + 64 * 9 + 4); // 15:00
+		await expect(block("Review this week's flashcards")).toHaveAccessibleName(
+			"Review this week's flashcards, 15:00–15:30",
+		);
+		return;
+	}
+
+	// Pick and type a time.
+	await habit.click();
+	await page.getByLabel('Start time').fill('14:00');
+	await page.getByRole('button', { name: 'Plan', exact: true }).click();
+	await expect(block("Review this week's flashcards")).toHaveAccessibleName(
+		"Review this week's flashcards, 14:00–14:30",
+	);
+	// Keyboard: later, then longer.
+	await block('Plan the week').focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:15–09:45');
+	await page.keyboard.press('Shift+ArrowDown');
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:15–10:00');
+	// Drag with the mouse: an hour later; then undo it.
+	await block('Plan the week').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+	const b = (await block('Plan the week').boundingBox())!;
+	await page.mouse.move(b.x + b.width / 2, b.y + 6);
+	await page.mouse.down();
+	await page.mouse.move(b.x + b.width / 2, b.y + 6 + 64, { steps: 8 });
+	await page.mouse.up();
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 10:15–11:00');
+	await page
+		.getByRole('status')
+		.filter({ hasText: 'Plan the week' })
+		.getByRole('button', { name: 'Undo' })
+		.click();
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:15–10:00');
+	// The toolbar: no time puts it back in the tray.
+	await block('Plan the week').click();
+	await page.getByRole('toolbar').getByRole('button', { name: 'No time' }).click();
+	await expect(tray.getByRole('button', { name: /Plan the week/ })).toBeVisible();
+
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	const main = page.locator('main');
+	await expect(main).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3} 14:00-14:30 \.\+1d>/);
+	// Plan the week: its time taken off, the date kept.
+	await expect(main).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3}>/);
+});

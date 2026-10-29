@@ -82,6 +82,7 @@ import {
 } from '$lib/vault/layout';
 import { buildSearch } from '$lib/vault/search';
 import { Vault } from '$lib/vault/vault';
+import { fromMinutes } from './planner';
 import { demoDay, demoSources } from './demo';
 import { href } from './router.svelte';
 import { slugify } from './util';
@@ -1521,6 +1522,31 @@ class AppState {
 			`${label}: ${title}`,
 			() =>
 				this.setPlanningDate(path, offset, 'SCHEDULED', date && time ? `${date}T${time}` : date),
+			'calendar',
+		);
+	}
+
+	/**
+	 * Plan a heading on the day planner: its SCHEDULED (or DEADLINE) stamp
+	 * gets `date` at `start`–`end` (minutes from midnight; repeater and warning
+	 * stay), or with `start` null just the date (the time taken off).
+	 * Undoable for a few seconds.
+	 */
+	planTask(
+		path: string,
+		offset: number,
+		kind: 'SCHEDULED' | 'DEADLINE',
+		date: string,
+		start: number | null,
+		end: number | null = null,
+	) {
+		const title = this.#headingTitle(path, offset);
+		const hhmm = (n: number) => fromMinutes(n);
+		const range = start === null ? null : `${hhmm(start)}${end !== null ? `-${hhmm(end)}` : ''}`;
+		this.#undoable(
+			path,
+			range === null ? `No time: ${title}` : `${range.replace('-', '–')}: ${title}`,
+			() => this.setPlanningDate(path, offset, kind, range === null ? date : `${date}T${range}`),
 			'calendar',
 		);
 	}

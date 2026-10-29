@@ -64,6 +64,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   delete (with undo) or later, by tap, swipe or key. The weekly review walks
   the inbox, overdue, the next 7 days, waiting tasks, stuck projects,
   slipped habits and what got done; Home shows when you last did it.
+- **Day planner (time blocking):** the agenda's Day view lays the day's
+  timed tasks out as blocks; untimed ones wait in a tray. Pick a task and a
+  time (or drag it with a mouse), move and resize blocks (drag, toolbar or
+  arrow keys), all written back as org time ranges with Undo; planned and
+  free time are counted against your working hours.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
   phrases and snippets, tags, backlinks, dailies, contents for long notes,
   and an agenda (a list, org's week view, stuck projects, a month calendar,

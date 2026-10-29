@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DayPlanner from '../components/DayPlanner.svelte';
 	import QuickAddBar from '../components/QuickAddBar.svelte';
 	import { SWIPE_LABELS } from '../swipe';
 	import type { AgendaItem } from '$lib/vault/vault';
@@ -154,10 +155,11 @@
 
 	// List (overdue, today, next 7 days…) or org's week view; remembered here.
 	const MODE_KEY = 'mycelium:agenda-mode';
-	type Mode = 'list' | 'week' | 'month' | 'board' | 'stuck';
-	const MODES: Mode[] = ['list', 'week', 'month', 'board', 'stuck'];
+	type Mode = 'list' | 'day' | 'week' | 'month' | 'board' | 'stuck';
+	const MODES: Mode[] = ['list', 'day', 'week', 'month', 'board', 'stuck'];
 	const MODE_LABELS: Record<Mode, string> = {
 		list: 'List',
+		day: 'Day',
 		week: 'Week',
 		month: 'Month',
 		board: 'Board',
@@ -215,7 +217,7 @@
 <div
 	class="agenda-page"
 	class:fit={mode === 'month'}
-	class:wide={mode === 'month' || mode === 'board'}
+	class:wide={mode === 'month' || mode === 'board' || mode === 'day'}
 >
 	<header>
 		<p class="eyebrow">{longDate(today)}</p>
@@ -252,7 +254,7 @@
 			>
 		</p>
 	{/if}
-	{#if mode === 'list'}<QuickAddBar />{/if}
+	{#if mode === 'list' || mode === 'day'}<QuickAddBar />{/if}
 	{#if mode === 'stuck'}
 		<section class="group" aria-labelledby="ag-stuck">
 			<h2 id="ag-stuck">Stuck projects<span class="count">{stuck.items.length}</span></h2>
@@ -281,6 +283,8 @@
 				<StuckEditor idPrefix="ag-stuck" />
 			</details>
 		</section>
+	{:else if mode === 'day'}
+		<DayPlanner {today} keep={compiled.keep} />
 	{:else if mode === 'month'}
 		<MonthView {today} keep={compiled.keep} {onTop} />
 	{:else if mode === 'board'}
