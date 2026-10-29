@@ -8,6 +8,7 @@
 
 import { panes } from './panes.svelte';
 import {
+	addDays,
 	applyChanges,
 	applyTemplate,
 	DEFAULT_CAPTURE_TEMPLATES,
@@ -1372,18 +1373,72 @@ class AppState {
 		);
 	}
 
-	/** The last clock stop or cancel, which can be undone for a few seconds. */
-	clockUndo = $state<{ path: string; before: string; after: string; text: string } | null>(null);
+	/**
+	 * The last change that can be undone for a few seconds (a clock stopped or
+	 * cancelled, a task completed or deferred by a swipe), shown by the clock bar.
+	 */
+	clockUndo = $state<{
+		path: string;
+		before: string;
+		after: string;
+		text: string;
+		icon?: 'clock' | 'check' | 'calendar' | 'undo';
+	} | null>(null);
 
-	#undoable(path: string, text: string, run: () => void) {
+	#undoable(
+		path: string,
+		text: string,
+		run: () => void,
+		icon?: 'clock' | 'check' | 'calendar' | 'undo',
+	) {
 		const before = this.vault.file(path)?.source;
 		run();
 		const after = this.vault.file(path)?.source;
 		if (before !== undefined && after !== undefined && after !== before)
-			this.clockUndo = { path, before, after, text };
+			this.clockUndo = { path, before, after, text, ...(icon ? { icon } : {}) };
 	}
 
-	/** Put back the clock that was just stopped or cancelled (if the file hasn't changed since). */
+	#headingTitle(path: string, offset: number): string {
+		const file = this.vault.file(path);
+		return (
+			(file && headlineAt(file.source, offset, file.index.keywords)?.title.value) ||
+			this.#title(path)
+		);
+	}
+
+	/** Mark a task done (its file's first done keyword), undoable for a few seconds. */
+	completeTask(path: string, offset: number) {
+		const done = this.vault.file(path)?.index.keywords.doneKeywords[0];
+		if (!done) return;
+		const title = this.#headingTitle(path, offset);
+		this.#undoable(path, `Done: ${title}`, () => this.setTodo(path, offset, done), 'check');
+	}
+
+	/** Open a done task again (its file's first TODO keyword), undoable for a few seconds. */
+	reopenTask(path: string, offset: number) {
+		const todo = this.vault.file(path)?.index.keywords.todoKeywords[0];
+		if (!todo) return;
+		const title = this.#headingTitle(path, offset);
+		this.#undoable(path, `Reopened: ${title}`, () => this.setTodo(path, offset, todo), 'undo');
+	}
+
+	/** Schedule a task for tomorrow (keeping its time and repeater), undoable for a few seconds. */
+	deferTask(path: string, offset: number) {
+		const file = this.vault.file(path);
+		if (!file) return;
+		const time = getPlanning(file.source, offset, file.index.keywords).SCHEDULED?.time;
+		const tomorrow = addDays(localNow().date, 1);
+		const title = this.#headingTitle(path, offset);
+		this.#undoable(
+			path,
+			`Tomorrow: ${title}`,
+			() =>
+				this.setPlanningDate(path, offset, 'SCHEDULED', time ? `${tomorrow}T${time}` : tomorrow),
+			'calendar',
+		);
+	}
+
+	/** Put back the last undoable change (if the file hasn't changed since). */
 	undoClock() {
 		const u = this.clockUndo;
 		this.clockUndo = null;

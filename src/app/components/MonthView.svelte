@@ -860,6 +860,8 @@
 			border-top: 1px solid var(--border);
 			border-radius: 18px 18px 0 0;
 			background: var(--bg-raised);
+			/* Swiped rows in its list uncover their actions over this colour. */
+			--swipe-bg: var(--bg-raised);
 			box-shadow: 0 -6px 24px rgb(0 0 0 / 0.12);
 			transform: translateY(calc(100% - var(--col-h)));
 			transition: transform 200ms ease;

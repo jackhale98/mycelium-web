@@ -176,12 +176,28 @@
 
 /* Narrow screens have no left margin to hang it in: put it inline, first in the row. */
 @media (max-width: 720px) {
+	/* The fold button and the gear keep to the first line; a long title wraps
+	   inside its own box instead of pushing them onto lines of their own. */
 	.prose .heading-row {
-		gap: 0.35em;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: start;
+		gap: 0.15em 0.35em;
+	}
+	.prose .heading-row > .heading {
+		grid-column: 2;
+	}
+	.prose .heading-row > .more {
+		grid-column: 3;
+		grid-row: 1;
+	}
+	.prose .heading-row > .htags {
+		grid-column: 2 / -1;
+		margin-left: 0;
 	}
 	.prose .fold {
 		position: static;
-		align-self: center;
+		align-self: start;
 		flex: none;
 		width: 1.75rem;
 		height: 1.75rem;
@@ -222,6 +238,37 @@
 .prose h5.heading,
 .prose h6.heading {
 	font-size: 1.08em;
+}
+
+/* A task is something to do, not a section title: it reads at the size of
+   the text, in the interface face, like a row on the agenda. */
+.prose .heading.task {
+	font-family: var(--font-ui);
+	font-size: 1em;
+	font-weight: 620;
+	letter-spacing: 0;
+	line-height: 1.35;
+}
+
+/* Phones: smaller reading text and a flatter heading scale. */
+@media (max-width: 720px) {
+	.prose {
+		font-size: 1.0625rem;
+	}
+	.prose h2.heading {
+		font-size: 1.3em;
+	}
+	.prose h3.heading {
+		font-size: 1.12em;
+	}
+	.prose h4.heading,
+	.prose h5.heading,
+	.prose h6.heading {
+		font-size: 1em;
+	}
+	.prose .heading.task {
+		font-size: 1em;
+	}
 }
 
 .prose .heading.done .heading-text {

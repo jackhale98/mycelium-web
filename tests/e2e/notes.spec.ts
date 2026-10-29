@@ -432,3 +432,66 @@ test('a habit: its graph on the agenda, details with streak and rate, mark done 
 	await page.goto(page.url().replace(/#.*/, '#/changes'));
 	await expect(page.locator('main')).toContainText(/- State "DONE" +from "TODO" +\[/);
 });
+
+/** A one-finger horizontal swipe on a phone, from `from` to `to` (x positions) at height `y`. */
+async function swipe(page: Page, y: number, from: number, to: number) {
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from, y }] });
+	for (let i = 1; i <= 10; i++)
+		await cdp.send('Input.dispatchTouchEvent', {
+			type: 'touchMove',
+			touchPoints: [{ x: from + ((to - from) * i) / 10, y }],
+		});
+	await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	await cdp.detach();
+}
+
+test('phones: swipe a task right to complete it (with undo), left for quick actions', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(!isMobile, 'swipes are for touch screens');
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	const row = page.locator('li.row', { hasText: 'Write the self-hosting guide' });
+	await expect(row).toBeVisible();
+	await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+	let box = (await row.boundingBox())!;
+	const y = box.y + 20;
+	// A short swipe springs back and changes nothing.
+	await swipe(page, y, box.x + 60, box.x + 110);
+	await expect(row.locator('.front')).not.toHaveAttribute('style', /translateX/);
+	// All the way right: done, with an undo.
+	await swipe(page, y, box.x + 60, box.x + box.width - 20);
+	const toast = page.getByRole('status').filter({ hasText: 'Done: Write the self-hosting guide' });
+	await expect(toast).toBeVisible();
+	await toast.getByRole('button', { name: 'Undo' }).click();
+	await expect(row.getByRole('button', { name: /TODO/ }).first()).toBeVisible();
+	// Right to left: the tray, then Tomorrow.
+	await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+	box = (await row.boundingBox())!;
+	await swipe(page, box.y + 20, box.x + box.width - 40, box.x + 60);
+	const tray = row.locator('.tray');
+	await expect(tray.getByRole('button', { name: 'Tomorrow' })).toBeVisible();
+	await expect(tray.getByRole('button', { name: 'Clock in' })).toBeVisible();
+	await tray.getByRole('button', { name: 'Tomorrow' }).click();
+	await expect(
+		page.getByRole('status').filter({ hasText: 'Tomorrow: Write the self-hosting guide' }),
+	).toBeVisible();
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	await expect(page.locator('main')).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3}>/);
+});
+
+test('phones: swipe a task heading in a note for its actions', async ({ page, isMobile }) => {
+	test.skip(!isMobile, 'swipes are for touch screens');
+	await open(page, 'app#/node/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c12');
+	const heading = page.locator('.swipe', { hasText: 'Write the self-hosting guide' });
+	await heading.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+	const box = (await heading.boundingBox())!;
+	await swipe(page, box.y + box.height / 2, box.x + box.width - 40, box.x + 60);
+	await heading.locator('.tray').getByRole('button', { name: 'More' }).click();
+	await expect(page.getByRole('dialog')).toBeVisible();
+	await expect(page.getByRole('dialog').getByLabel('Heading', { exact: true })).toHaveValue(
+		'Write the self-hosting guide',
+	);
+});

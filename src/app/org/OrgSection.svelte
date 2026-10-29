@@ -3,6 +3,7 @@
 	import { parseTimestamp, startOf } from '$lib/org';
 	import { tsLabel } from '../util';
 	import Icon from '../components/Icon.svelte';
+	import SwipeRow, { type SwipeAction } from '../components/SwipeRow.svelte';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import Blocks from './OrgBlocks.svelte';
@@ -44,6 +45,36 @@
 		CLOSED: planning?.closed ? parseTimestamp(planning.closed.rawValue) : null,
 	});
 
+	// A task heading answers swipes on touch screens, as agenda rows do.
+	const swipeMain = $derived.by((): SwipeAction | null => {
+		if (!ctx.interactive || !headline?.todoKeyword) return null;
+		const at = offset;
+		return done
+			? { label: 'Reopen', icon: 'undo', tone: 'warn', run: () => app.reopenTask(ctx.path, at) }
+			: { label: 'Done', icon: 'check', run: () => app.completeTask(ctx.path, at) };
+	});
+	const swipeActions = $derived.by((): SwipeAction[] => {
+		if (!ctx.interactive || !headline?.todoKeyword) return [];
+		const at = offset;
+		const out: SwipeAction[] = [];
+		if (!done) {
+			out.push({ label: 'Tomorrow', icon: 'calendar', run: () => app.deferTask(ctx.path, at) });
+			const running = app.runningClocks.some((c) => c.path === ctx.path && c.heading === at);
+			out.push(
+				running
+					? { label: 'Stop', icon: 'clock', tone: 'warn', run: () => app.clockOut(ctx.path, at) }
+					: { label: 'Clock in', icon: 'clock', run: () => app.clockIn(ctx.path, at) },
+			);
+		}
+		out.push({
+			label: 'More',
+			icon: 'settings',
+			tone: 'accent',
+			run: () => (app.headingSheet = { path: ctx.path, pos: at }),
+		});
+		return out;
+	});
+
 	const when = (raw: string) => {
 		const ts = parseTimestamp(raw);
 		return ts ? `${tsLabel(ts)}${ts.repeater ? ` · repeats ${ts.repeater}` : ''}` : raw;
@@ -52,62 +83,11 @@
 
 {#if headline && !headline.commented && !(done && ctx.interactive && app.hideDone)}
 	<section class="org-section" data-level={headline.level} data-pos={offset}>
-		<div class="heading-row">
-			<button
-				type="button"
-				class="fold"
-				aria-expanded={open}
-				aria-label={open ? 'Collapse section' : 'Expand section'}
-				onclick={() => (open = !open)}
-			>
-				<span class="fold-icon" class:closed={!open}><Icon name="chevronDown" size={16} /></span>
-			</button>
-			<svelte:element this={`h${level}`} class="heading" class:done>
-				{#if headline.todoKeyword}
-					<TodoChip
-						keyword={headline.todoKeyword}
-						config={keywords}
-						onchange={ctx.interactive
-							? (next) => app.setTodo(ctx.path, startOf(headline), next)
-							: undefined}
-					/>
-				{/if}
-				{#if headline.priority}<span class="prio" title={`Priority ${headline.priority}`}
-						>{headline.priority}</span
-					>{/if}
-				<span class="heading-text"><Inline nodes={headline.children} {ctx} /></span>
-				{#if id}
-					<a
-						class="node-link"
-						href={href.node(id)}
-						title="Open as its own note"
-						aria-label="Open this heading as a note"><Icon name="arrowRight" size={15} /></a
-					>
-				{/if}
-			</svelte:element>
-			{#if ctx.interactive}
-				<button
-					type="button"
-					class="more"
-					class:on={editing}
-					aria-expanded={editing}
-					aria-label="Edit heading: state, priority, tags and dates"
-					title="State, priority, tags, dates"
-					onclick={() => {
-						// Phones get the bottom sheet; wider screens the inline tray.
-						if (matchMedia('(max-width: 720px)').matches)
-							app.headingSheet = { path: ctx.path, pos: offset };
-						else editing = !editing;
-					}}><Icon name="settings" size={15} /></button
-				>
-			{/if}
-			{#if headline.tags.length}
-				<span class="htags"
-					>{#each headline.tags as tag (tag)}<a class="tag" href={href.tags(tag)}>#{tag}</a
-						>{/each}</span
-				>
-			{/if}
-		</div>
+		{#if swipeMain}
+			<SwipeRow main={swipeMain} actions={swipeActions}>{@render headingRow(headline)}</SwipeRow>
+		{:else}
+			{@render headingRow(headline)}
+		{/if}
 		{#if editing}
 			<HeadingActions
 				path={ctx.path}
@@ -139,3 +119,57 @@
 		{/if}
 	</section>
 {/if}
+
+{#snippet headingRow(h: Headline)}
+	<div class="heading-row">
+		<button
+			type="button"
+			class="fold"
+			aria-expanded={open}
+			aria-label={open ? 'Collapse section' : 'Expand section'}
+			onclick={() => (open = !open)}
+		>
+			<span class="fold-icon" class:closed={!open}><Icon name="chevronDown" size={16} /></span>
+		</button>
+		<svelte:element this={`h${level}`} class="heading" class:done class:task={!!h.todoKeyword}>
+			{#if h.todoKeyword}
+				<TodoChip
+					keyword={h.todoKeyword}
+					config={keywords}
+					onchange={ctx.interactive ? (next) => app.setTodo(ctx.path, startOf(h), next) : undefined}
+				/>
+			{/if}
+			{#if h.priority}<span class="prio" title={`Priority ${h.priority}`}>{h.priority}</span>{/if}
+			<span class="heading-text"><Inline nodes={h.children} {ctx} /></span>
+			{#if id}
+				<a
+					class="node-link"
+					href={href.node(id)}
+					title="Open as its own note"
+					aria-label="Open this heading as a note"><Icon name="arrowRight" size={15} /></a
+				>
+			{/if}
+		</svelte:element>
+		{#if ctx.interactive}
+			<button
+				type="button"
+				class="more"
+				class:on={editing}
+				aria-expanded={editing}
+				aria-label="Edit heading: state, priority, tags and dates"
+				title="State, priority, tags, dates"
+				onclick={() => {
+					// Phones get the bottom sheet; wider screens the inline tray.
+					if (matchMedia('(max-width: 720px)').matches)
+						app.headingSheet = { path: ctx.path, pos: offset };
+					else editing = !editing;
+				}}><Icon name="settings" size={15} /></button
+			>
+		{/if}
+		{#if h.tags.length}
+			<span class="htags"
+				>{#each h.tags as tag (tag)}<a class="tag" href={href.tags(tag)}>#{tag}</a>{/each}</span
+			>
+		{/if}
+	</div>
+{/snippet}

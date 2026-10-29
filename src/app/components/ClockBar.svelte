@@ -69,7 +69,7 @@
 
 {#if undo}
 	<div class="clockbar done" role="status" aria-live="polite" bind:this={bar}>
-		<Icon name="clock" size={15} />
+		<Icon name={undo.icon ?? 'clock'} size={15} />
 		<span class="title">{undo.text}</span>
 		<button type="button" class="btn small" onclick={() => app.undoClock()}>Undo</button>
 		<button type="button" class="x" aria-label="Dismiss" onclick={() => (app.clockUndo = null)}

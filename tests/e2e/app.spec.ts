@@ -957,14 +957,16 @@ test('switching between reading and editing keeps your place', async ({ page }) 
 			return el ? el.getBoundingClientRect().top : null;
 		}, text);
 	await scrollTo(450);
+	// Within about a line: reading and editing size headings differently, so a
+	// line a little below the one kept in place drifts by a few pixels.
 	const line = 'Git sync through a stateless worker';
 	const reading = (await top(line))!;
 	await toggle();
 	await expect(page.locator('.cm-content')).toBeVisible();
-	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(30);
+	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(40);
 	await toggle();
 	await expect(page.locator('.node-body')).toBeVisible();
-	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(30);
+	await expect.poll(async () => Math.abs((await top(line))! - reading)).toBeLessThan(40);
 });
 
 test('dragging a node in the graph moves it with the pointer, zoomed in or not', async ({

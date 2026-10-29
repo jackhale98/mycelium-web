@@ -8,6 +8,7 @@
 	import { habitGraph, parseHabit } from '$lib/org';
 	import { relativeDay, shortDate } from '../util';
 	import Icon from './Icon.svelte';
+	import SwipeRow, { type SwipeAction } from './SwipeRow.svelte';
 
 	let {
 		items,
@@ -87,6 +88,43 @@
 
 	const edit = (item: AgendaItem) => (app.headingSheet = { path: item.file, pos: item.pos });
 
+	// Swipes on touch screens: left to right completes (or reopens) a task;
+	// right to left uncovers Tomorrow, Clock and More.
+	function swipeMain(item: AgendaItem): SwipeAction | null {
+		if (!item.todo) return null;
+		return app.vault.isDone(item.todo, item.file)
+			? {
+					label: 'Reopen',
+					icon: 'undo',
+					tone: 'warn',
+					run: () => app.reopenTask(item.file, item.pos),
+				}
+			: { label: 'Done', icon: 'check', run: () => app.completeTask(item.file, item.pos) };
+	}
+	function swipeActions(item: AgendaItem): SwipeAction[] {
+		const out: SwipeAction[] = [];
+		if (item.todo && !app.vault.isDone(item.todo, item.file)) {
+			out.push({
+				label: 'Tomorrow',
+				icon: 'calendar',
+				run: () => app.deferTask(item.file, item.pos),
+			});
+			const running = app.runningClocks.some((c) => c.path === item.file && c.heading === item.pos);
+			out.push(
+				running
+					? {
+							label: 'Stop',
+							icon: 'clock',
+							tone: 'warn',
+							run: () => app.clockOut(item.file, item.pos),
+						}
+					: { label: 'Clock in', icon: 'clock', run: () => app.clockIn(item.file, item.pos) },
+			);
+		}
+		out.push({ label: 'More', icon: 'settings', tone: 'accent', run: () => edit(item) });
+		return out;
+	}
+
 	// Touch: a long press on a row opens the heading sheet.
 	let press: ReturnType<typeof setTimeout> | null = null;
 	let pressed = false;
@@ -121,93 +159,99 @@
 {#snippet itemRow(item: AgendaItem, time: string | null)}
 	{@const due = item.deadline ?? item.scheduled}
 	{@const overdue = !!due && due.date < today && !app.vault.isDone(item.todo, item.file)}
-	<li
-		class="item"
-		class:done={app.vault.isDone(item.todo, item.file)}
-		onpointerdown={(e) => startPress(e, item)}
-		onpointerup={endPress}
-		onpointercancel={endPress}
-		onpointermove={endPress}
-		onclickcapture={(e) => {
-			// The long press already opened the sheet; don't also follow the link.
-			if (pressed) {
-				e.preventDefault();
-				e.stopPropagation();
-				pressed = false;
-			}
-		}}
-	>
-		<div class="kw-col">
-			{#if item.todo}
-				<TodoChip
-					keyword={item.todo}
-					config={keywordsFor(item.file)}
-					onchange={(next) => app.setTodo(item.file, item.pos, next)}
-				/>
-			{/if}
-		</div>
-		<div class="main">
-			{#if time}<span class="at">{time}</span>{/if}
-			<a
-				class="title"
-				href={item.id
-					? href.node(item.id)
-					: item.node?.id
-						? href.node(item.node.id, lineAt(item))
-						: href.file(item.file, lineAt(item))}
+	<li class="row">
+		<SwipeRow main={swipeMain(item)} actions={swipeActions(item)}>
+			<!-- A long press is a touch shortcut for the row's Edit button. -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="item"
+				class:done={app.vault.isDone(item.todo, item.file)}
+				onpointerdown={(e) => startPress(e, item)}
+				onpointerup={endPress}
+				onpointercancel={endPress}
+				onpointermove={endPress}
+				onclickcapture={(e) => {
+					// The long press already opened the sheet; don't also follow the link.
+					if (pressed) {
+						e.preventDefault();
+						e.stopPropagation();
+						pressed = false;
+					}
+				}}
 			>
-				{#if item.priority}<span class="prio">{item.priority}</span>{/if}{item.title}
-			</a>
-			<span class="where">
-				{item.olp.length
-					? item.olp.join(' › ')
-					: (app.vault.fileNode(item.file)?.title ?? item.file)}
-				{#each item.tags.filter((t) => item.id || !item.node?.tags.includes(t)) as tag (tag)}<span
-						class="tag">#{tag}</span
-					>{/each}
-			</span>
-			{#if habitCells(item)}
-				{@const cells = habitCells(item)!}
-				<button
-					type="button"
-					class="habit"
-					aria-haspopup="dialog"
-					aria-label={`Habit: done ${cells.filter((c) => c.done).length} of the last ${cells.length} days. Details`}
-					onclick={() => (app.habitSheet = { path: item.file, pos: item.pos })}
-					><HabitGraph {cells} {today} /></button
-				>
-			{/if}
-		</div>
-		<div class="end">
-			{#if due}
-				<DateChip
-					path={item.file}
-					offset={item.pos}
-					kind={item.deadline ? 'DEADLINE' : 'SCHEDULED'}
-					ts={due}
-					compact
-					{overdue}
-					label={`${relativeDay(due.date, today)}${due.time ? ` · ${due.time}` : ''}`}
-				/>
-			{/if}
-			{#if onTop}
-				<button
-					type="button"
-					class="more"
-					aria-label={`Only items under the top heading of “${item.title}”`}
-					title="Only items under this top-level heading"
-					onclick={() => onTop(item)}><Icon name="flag" size={14} /></button
-				>
-			{/if}
-			<button
-				type="button"
-				class="more"
-				aria-haspopup="dialog"
-				aria-label={`Edit “${item.title}”`}
-				title={`${shortDate(due?.date ?? today)} — edit heading`}
-				onclick={() => edit(item)}><Icon name="settings" size={15} /></button
-			>
-		</div>
+				<div class="kw-col">
+					{#if item.todo}
+						<TodoChip
+							keyword={item.todo}
+							config={keywordsFor(item.file)}
+							onchange={(next) => app.setTodo(item.file, item.pos, next)}
+						/>
+					{/if}
+				</div>
+				<div class="main">
+					{#if time}<span class="at">{time}</span>{/if}
+					<a
+						class="title"
+						href={item.id
+							? href.node(item.id)
+							: item.node?.id
+								? href.node(item.node.id, lineAt(item))
+								: href.file(item.file, lineAt(item))}
+					>
+						{#if item.priority}<span class="prio">{item.priority}</span>{/if}{item.title}
+					</a>
+					<span class="where">
+						{item.olp.length
+							? item.olp.join(' › ')
+							: (app.vault.fileNode(item.file)?.title ?? item.file)}
+						{#each item.tags.filter((t) => item.id || !item.node?.tags.includes(t)) as tag (tag)}<span
+								class="tag">#{tag}</span
+							>{/each}
+					</span>
+					{#if habitCells(item)}
+						{@const cells = habitCells(item)!}
+						<button
+							type="button"
+							class="habit"
+							aria-haspopup="dialog"
+							aria-label={`Habit: done ${cells.filter((c) => c.done).length} of the last ${cells.length} days. Details`}
+							onclick={() => (app.habitSheet = { path: item.file, pos: item.pos })}
+							><HabitGraph {cells} {today} /></button
+						>
+					{/if}
+				</div>
+				<div class="end">
+					{#if due}
+						<DateChip
+							path={item.file}
+							offset={item.pos}
+							kind={item.deadline ? 'DEADLINE' : 'SCHEDULED'}
+							ts={due}
+							compact
+							{overdue}
+							label={`${relativeDay(due.date, today)}${due.time ? ` · ${due.time}` : ''}`}
+						/>
+					{/if}
+					{#if onTop}
+						<button
+							type="button"
+							class="more"
+							aria-label={`Only items under the top heading of “${item.title}”`}
+							title="Only items under this top-level heading"
+							onclick={() => onTop(item)}><Icon name="flag" size={14} /></button
+						>
+					{/if}
+					<button
+						type="button"
+						class="more"
+						aria-haspopup="dialog"
+						aria-label={`Edit “${item.title}”`}
+						title={`${shortDate(due?.date ?? today)} — edit heading`}
+						onclick={() => edit(item)}><Icon name="settings" size={15} /></button
+					>
+				</div>
+			</div>
+		</SwipeRow>
 	</li>
 {/snippet}
 
@@ -298,7 +342,7 @@
 		padding: 0.65rem 0.25rem;
 		border-bottom: 1px solid var(--border);
 	}
-	.item:last-child {
+	.row:last-child .item {
 		border-bottom: 0;
 	}
 	.kw-col {
