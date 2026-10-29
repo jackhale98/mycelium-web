@@ -428,9 +428,29 @@
 	margin: 0.2em 0 0.2em;
 }
 
-.prose ul.checklist {
+.prose ul.checklist,
+.prose ol.checklist {
 	list-style: none;
 	padding-left: 0.1em;
+}
+
+/* A numbered checklist shows each item's number (as written: 1. or 1)) before its box. */
+.prose ol.checklist > li {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.6em;
+}
+
+.prose ol.checklist > li > .li-body {
+	flex: 1;
+}
+
+.prose ol.checklist .num {
+	flex: none;
+	min-width: 1.4em;
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
 }
 
 .prose li.has-box {

@@ -67,6 +67,10 @@
 						class:checked={item.checkbox === 'on'}
 						class:has-box={item.checkbox !== null}
 					>
+						{#if node.listType === 'ordered' && node.children.some((c) => c.checkbox)}
+							<!-- A checklist's rows are laid out without list markers: its number, as written. -->
+							<span class="num">{item.bullet.trim()}</span>
+						{/if}
 						{#if item.checkbox}
 							<input
 								type="checkbox"

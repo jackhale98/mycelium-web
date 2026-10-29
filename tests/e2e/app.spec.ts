@@ -454,6 +454,15 @@ test('LaTeX maths renders with KaTeX', async ({ page }) => {
 	await expect(page.locator('.node-body .katex').first()).toBeVisible();
 });
 
+test('a numbered checklist keeps its numbers when reading', async ({ page }) => {
+	// Today's daily in the demo has one.
+	await open(page, 'app#/node/d0a1b2c3-0000-4000-8000-202610200001');
+	const list = page.locator('main ol.checklist', { hasText: 'Pack the hand lens' });
+	await expect(list.locator('.num')).toHaveText(['1.', '2.', '3.']);
+	await expect(list.getByRole('checkbox')).toHaveCount(3);
+	await expect(list.getByRole('checkbox').first()).toBeChecked();
+});
+
 test('full-text search finds words inside notes', async ({ page }) => {
 	await open(page, 'app#/search/hyphae');
 	await expect(page.getByRole('status')).toContainText(/match/);
