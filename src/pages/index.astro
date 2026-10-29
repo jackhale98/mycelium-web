@@ -23,8 +23,23 @@ const features = [
 	},
 	{
 		title: 'Agenda that respects org',
-		body: 'TODO keywords per file, SCHEDULED and DEADLINE, CLOSED stamps and all three repeater styles behave the way org-mode does. See it as a list, a week, a month or a board.',
+		body: 'TODO keywords per file, SCHEDULED and DEADLINE, CLOSED stamps, habits and all three repeater styles behave the way org-mode does. See it as a list, a week, a month or a board, filtered with org’s own match syntax.',
 		icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11"/><circle cx="5" cy="18" r="1.2"/>',
+	},
+	{
+		title: 'Plan your day or week',
+		body: 'Drag tasks onto a timeline, a day at a time or a whole week side by side. Effort estimates become work sessions spread over several days, all written as plain org timestamps Emacs’ own agenda shows.',
+		icon: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M7.5 13h4v3h-4z"/>',
+	},
+	{
+		title: 'Quick add, triage, review',
+		body: 'Type “Call Sam tomorrow 3pm #work ~30m” and it becomes a proper org task. Clear your inbox one card at a time, then walk through a weekly review of what’s overdue, waiting, stuck and done.',
+		icon: '<path d="M4 13.5 7 4h10l3 9.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 13.5h4.5l1 2h5l1-2H20"/>',
+	},
+	{
+		title: 'Made for your thumb',
+		body: 'Swipe a task right to finish it or left for the actions you choose, hold and drag to reschedule, and get reminders on your phone. Add it to your home screen and it works offline.',
+		icon: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/><path d="m3 10 2-2-2-2M21 10l-2-2 2-2"/>',
 	},
 	{
 		title: 'Your git, or your cloud',
@@ -81,10 +96,10 @@ const features = [
 					Your second brain, <em>wherever you are.</em>
 				</h1>
 				<p class="lede">
-					Mycelium is a fast, beautiful web app for reading, editing, linking and capturing your
-					org-roam notes straight from your git repository or cloud storage — on your phone, tablet
-					or any computer. No Emacs required, and nothing about your files changes that you didn’t
-					change.
+					Mycelium is a fast, beautiful web app for reading, editing, linking, capturing and
+					planning with your org-roam notes straight from your git repository or cloud storage — on
+					your phone, tablet or any computer. No Emacs required, and nothing about your files
+					changes that you didn’t change.
 				</p>
 				<div class="ctas">
 					<a class="btn" href={appUrl}>
