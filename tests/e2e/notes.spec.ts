@@ -677,3 +677,79 @@ test('day planner: place, move, resize, take the time off, with undo', async ({
 	// Plan the week: its time taken off, the date kept.
 	await expect(main).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3}>/);
 });
+
+test('day planner on a phone: hold and drag blocks and tasks; a quick swipe scrolls', async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(!isMobile, 'touch');
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Day' }).click();
+	const block = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}, `) });
+	const scroller = page.locator('.scroller');
+	await scroller.scrollIntoViewIfNeeded();
+	await scroller.evaluate((el) => (el.scrollTop = 64 * 2)); // 08:00 at the top
+	const cdp = await page.context().newCDPSession(page);
+	const touch = async (path: { x: number; y: number }[], hold: number) => {
+		const [first, ...rest] = path;
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first!] });
+		if (hold) await page.waitForTimeout(hold);
+		for (const p of rest) {
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [p] });
+			await page.waitForTimeout(16);
+		}
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	};
+	const steps = (x: number, y: number, dy: number) =>
+		Array.from({ length: 11 }, (_, i) => ({ x, y: y + (dy * i) / 10 }));
+
+	// A quick swipe over a block scrolls; nothing moves.
+	let b = (await block('Plan the week').boundingBox())!;
+	await touch(steps(b.x + b.width / 2, b.y + 10, -80), 0);
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:00–09:30');
+
+	// Hold, then drag: two hours later.
+	await scroller.evaluate((el) => (el.scrollTop = 64 * 2));
+	b = (await block('Plan the week').boundingBox())!;
+	await touch(steps(b.x + b.width / 2, b.y + 10, 128), 450);
+	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 11:00–11:30');
+
+	// Resting a lifted block by the bottom edge scrolls the day on.
+	await scroller.evaluate((el) => (el.scrollTop = 64 * 2));
+	b = (await block('Plan the week').boundingBox())!;
+	{
+		const sb = (await scroller.boundingBox())!;
+		const x = b.x + b.width / 2;
+		await cdp.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [{ x, y: b.y + 8 }],
+		});
+		await page.waitForTimeout(450);
+		const bottom = sb.y + sb.height - 10;
+		for (let i = 1; i <= 10; i++) {
+			await cdp.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: b.y + 8 + ((bottom - b.y - 8) * i) / 10 }],
+			});
+			await page.waitForTimeout(16);
+		}
+		const before = await scroller.evaluate((el) => el.scrollTop);
+		await page.waitForTimeout(1200);
+		expect(await scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(before + 100);
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	}
+	await scroller.evaluate((el) => (el.scrollTop = 64 * 2));
+
+	// A task from the tray, held and dragged onto the day.
+	const task = page.getByRole('region', { name: /To plan/ }).getByRole('button', {
+		name: /Review this week's flashcards/,
+	});
+	const t = (await task.boundingBox())!;
+	const s = (await scroller.boundingBox())!;
+	// From the task down to 09:00 (an hour below the top of the timeline's view).
+	const target = s.y + 64 + 4;
+	await touch(steps(t.x + 30, t.y + t.height / 2, target - (t.y + t.height / 2)), 450);
+	await expect(block("Review this week's flashcards")).toHaveAccessibleName(
+		"Review this week's flashcards, 09:00–09:30",
+	);
+});

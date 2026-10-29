@@ -32,6 +32,8 @@ jobs:
           key: org-corpus-${{ hashFiles('scripts/fetch-corpus.mjs') }}
       - name: Fetch real-world org corpus
         run: node scripts/fetch-corpus.mjs
+      - name: Install Emacs (org-mode reads back what we write)
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends emacs-nox
       - run: npm test
       - run: npm run build
 

@@ -128,6 +128,8 @@ describe('quick add', () => {
 		const entry = '* TODO Call Sam\nSCHEDULED: <2026-10-29 Thu>\n';
 		const out = applyQuickAdd(entry, q, keywords);
 		expect(out).toMatch(/^\* TODO \[#A\] Call Sam +:work:\n/);
+		// Tags right-aligned to column 77, as Emacs writes them.
+		expect(out.split('\n')[0]!.length).toBe(77);
 		expect(out).toContain('SCHEDULED: <2026-10-30 Fri 15:00 +1w>');
 		expect(out).not.toContain('2026-10-29');
 		expect(out).toMatch(/:Effort: +0:30/);

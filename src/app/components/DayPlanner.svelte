@@ -104,12 +104,12 @@
 
 	/** A tap on the day (not on a block) places the picked task there. */
 	function onTimelineClick(e: MouseEvent) {
-		if ((e.target as Element).closest('.block')) return;
+		if (justDragged || (e.target as Element).closest('.block')) return;
 		if (pickedTray) place(pickedTray, minutesAt(e.clientY));
 		else picked = null;
 	}
 
-	// ---- dragging with a mouse ----
+	// ---- dragging: a mouse right away, a finger after a long press ----
 	type Drag = {
 		mode: 'move' | 'resize' | 'place';
 		key: string;
@@ -120,15 +120,28 @@
 		end: number;
 		x: number;
 		y: number;
+		/** Where the pointer is now (screen), for the floating card and edge scrolling. */
+		cx: number;
+		cy: number;
 		moved: boolean;
 		overTray: boolean;
 		overLine: boolean;
+		touch: boolean;
 	};
 	let drag = $state<Drag | null>(null);
+	/** A drag just ended: the click that follows it isn't a tap. */
+	let justDragged = false;
 
-	function beginDrag(e: PointerEvent, mode: Drag['mode'], key: string, start: number, end: number) {
-		if (e.pointerType !== 'mouse' || e.button !== 0) return;
-		const at = line ? minutesAt(e.clientY) : start;
+	function startDrag(
+		mode: Drag['mode'],
+		key: string,
+		start: number,
+		end: number,
+		x: number,
+		y: number,
+		touch: boolean,
+	) {
+		const at = line ? minutesAt(y) : start;
 		drag = {
 			mode,
 			key,
@@ -136,28 +149,33 @@
 			length: end - start,
 			start,
 			end,
-			x: e.clientX,
-			y: e.clientY,
-			moved: false,
+			x,
+			y,
+			cx: x,
+			cy: y,
+			// A finger has already held still to pick it up: it's lifted at once.
+			moved: touch,
 			overTray: false,
 			overLine: false,
+			touch,
 		};
 	}
-	function onPointerMove(e: PointerEvent) {
+	function beginDrag(e: PointerEvent, mode: Drag['mode'], key: string, start: number, end: number) {
+		if (e.pointerType !== 'mouse' || e.button !== 0) return;
+		startDrag(mode, key, start, end, e.clientX, e.clientY, false);
+	}
+	function dragTo(x: number, y: number) {
 		const d = drag;
 		if (!d || !line) return;
-		if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
+		if (!d.moved && Math.hypot(x - d.x, y - d.y) < 4) return;
 		d.moved = true;
-		const lr = line.getBoundingClientRect();
-		d.overLine = e.clientX >= lr.left && e.clientX <= lr.right;
+		d.cx = x;
+		d.cy = y;
+		const sr = scroller!.getBoundingClientRect();
+		d.overLine = x >= sr.left && x <= sr.right && y >= sr.top && y <= sr.bottom;
 		const tr = tray?.getBoundingClientRect();
-		d.overTray =
-			!!tr &&
-			e.clientX >= tr.left &&
-			e.clientX <= tr.right &&
-			e.clientY >= tr.top &&
-			e.clientY <= tr.bottom;
-		const at = minutesAt(e.clientY);
+		d.overTray = !!tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
+		const at = minutesAt(y);
 		if (d.mode === 'resize') d.end = Math.max(d.start + SNAP, Math.min(24 * 60 - 1, snap(at)));
 		else {
 			d.start = Math.max(FIRST_HOUR * 60, Math.min(24 * 60 - 1 - d.length, snap(at - d.grip)));
@@ -165,11 +183,12 @@
 		}
 		drag = { ...d };
 	}
-	function onPointerUp() {
+	function endDrag() {
 		const d = drag;
 		drag = null;
-		if (!d) return;
-		if (!d.moved) return;
+		if (!d?.moved) return;
+		justDragged = true;
+		setTimeout(() => (justDragged = false), 0);
 		if (d.mode === 'place') {
 			const item = plan.unplanned.find((i) => keyOf(i) === d.key);
 			if (item && d.overLine) place(item, d.start);
@@ -178,8 +197,125 @@
 		const b = plan.blocks.find((x) => x.key === d.key);
 		if (!b) return;
 		if (d.mode === 'move' && d.overTray) return unplan(b);
-		move(b, d.start, d.end);
+		if (d.overLine || d.mode === 'resize') move(b, d.start, d.end);
 	}
+	const onPointerMove = (e: PointerEvent) => {
+		if (drag && !drag.touch) dragTo(e.clientX, e.clientY);
+	};
+	const onPointerUp = () => {
+		if (drag && !drag.touch) endDrag();
+	};
+
+	// Resting near the timeline's top or bottom edge (inside it), a drag
+	// scrolls it; passing through on the way in (from the tray) doesn't.
+	/** A drag is under way (changes only when one starts or ends, not as it moves). */
+	const lifted = $derived(!!drag?.moved);
+	$effect(() => {
+		if (!lifted) return;
+		let since = 0;
+		let last = 0;
+		/** Fractions of a pixel left over, so slow scrolling still moves. */
+		let carry = 0;
+		const tick = () => {
+			const t = performance.now();
+			const dt = last ? Math.min(250, t - last) : 0;
+			last = t;
+			const d = drag;
+			const el = scroller;
+			if (d && el) {
+				const r = el.getBoundingClientRect();
+				const edge = 44;
+				const inside = d.cx >= r.left && d.cx <= r.right && d.cy >= r.top && d.cy <= r.bottom;
+				// Pixels a second: faster the closer to the edge (up to about 9 hours a minute).
+				const depth = !inside
+					? 0
+					: d.cy < r.top + edge
+						? -(r.top + edge - d.cy)
+						: d.cy > r.bottom - edge
+							? d.cy - (r.bottom - edge)
+							: 0;
+				const speed = (depth / edge) * 600;
+				if (!speed) since = 0;
+				else if (!since) since = t;
+				else if (t - since > 350) {
+					carry += (speed * dt) / 1000;
+					const step = Math.trunc(carry);
+					carry -= step;
+					el.scrollTop += step;
+					dragTo(d.cx, d.cy);
+				}
+			}
+		};
+		// A timer, not animation frames, so the pace is the same however busy the page is.
+		const timer = setInterval(tick, 16);
+		return () => clearInterval(timer);
+	});
+
+	// Fingers: hold a block or a task for a moment to lift it, then drag; a
+	// quick swipe still scrolls. The bottom of a block resizes it.
+	let root = $state<HTMLElement>();
+	$effect(() => {
+		const el = root;
+		if (!el) return;
+		let hold: ReturnType<typeof setTimeout> | null = null;
+		let from: { x: number; y: number } | null = null;
+		const cancelHold = () => {
+			if (hold) clearTimeout(hold);
+			hold = null;
+		};
+		const touchstart = (e: TouchEvent) => {
+			cancelHold();
+			const t = e.touches[0];
+			const target = (e.target as Element).closest<HTMLElement>('[data-drag]');
+			if (e.touches.length !== 1 || !t || !target) return;
+			from = { x: t.clientX, y: t.clientY };
+			const key = target.dataset.key!;
+			hold = setTimeout(() => {
+				hold = null;
+				if (!from) return;
+				if (target.dataset.drag === 'place') {
+					const item = plan.unplanned.find((i) => keyOf(i) === key);
+					if (!item) return;
+					startDrag('place', key, 0, lengthOf(item), from.x, from.y, true);
+				} else {
+					const b = plan.blocks.find((x) => x.key === key);
+					if (!b || b.source === 'appointment') return;
+					const r = target.getBoundingClientRect();
+					const mode = from.y > r.bottom - 16 ? 'resize' : 'move';
+					startDrag(mode, key, b.start, b.end, from.x, from.y, true);
+				}
+				picked = null;
+				navigator.vibrate?.(12);
+			}, 280);
+		};
+		const touchmove = (e: TouchEvent) => {
+			const t = e.touches[0];
+			if (!t) return;
+			if (drag?.touch) {
+				// Lifted: the finger drags it, not the page.
+				e.preventDefault();
+				dragTo(t.clientX, t.clientY);
+				return;
+			}
+			if (from && Math.hypot(t.clientX - from.x, t.clientY - from.y) > 10) cancelHold();
+		};
+		const touchend = () => {
+			cancelHold();
+			from = null;
+			if (drag?.touch) endDrag();
+		};
+		el.addEventListener('touchstart', touchstart, { passive: true });
+		el.addEventListener('touchmove', touchmove, { passive: false });
+		el.addEventListener('touchend', touchend);
+		el.addEventListener('touchcancel', touchend);
+		return () => {
+			cancelHold();
+			el.removeEventListener('touchstart', touchstart);
+			el.removeEventListener('touchmove', touchmove);
+			el.removeEventListener('touchend', touchend);
+			el.removeEventListener('touchcancel', touchend);
+		};
+	});
 
 	/** A block where it's drawn: being dragged, or as written. */
 	const shown = (b: PlanBlock) =>
@@ -249,7 +385,16 @@
 
 <svelte:window onpointermove={onPointerMove} onpointerup={onPointerUp} />
 
-<div class="planner" class:dragging={drag?.moved}>
+{#if drag?.moved && drag.mode === 'place' && !drag.overLine}
+	{@const item = plan.unplanned.find((i) => keyOf(i) === drag!.key)}
+	{#if item}
+		<div class="float" style:left="{drag.cx}px" style:top="{drag.cy}px" aria-hidden="true">
+			{item.title}
+		</div>
+	{/if}
+{/if}
+
+<div class="planner" class:dragging={drag?.moved} bind:this={root}>
 	<nav class="day-nav" aria-label="Day">
 		<button
 			type="button"
@@ -297,8 +442,12 @@
 								type="button"
 								class="task"
 								aria-pressed={picked?.kind === 'tray' && picked.key === keyOf(i)}
+								data-drag="place"
+								data-key={keyOf(i)}
+								class:lifted={drag?.moved && drag.key === keyOf(i)}
 								onpointerdown={(e) => beginDrag(e, 'place', keyOf(i), 0, lengthOf(i))}
 								onclick={() =>
+									!justDragged &&
 									(picked =
 										picked?.kind === 'tray' && picked.key === keyOf(i)
 											? null
@@ -310,7 +459,7 @@
 						</li>
 					{/each}
 				</ul>
-				<p class="hint">Pick a task, then a time on the day. With a mouse, drag it there.</p>
+				<p class="hint">Hold a task and drag it onto the day, or pick it and tap a time.</p>
 			{:else}
 				<p class="hint">Nothing left to plan on this day.</p>
 			{/if}
@@ -407,7 +556,10 @@
 							style:width="calc((100% - 3.75rem) / {b.cols} - 2px)"
 							onpointerdown={(e) =>
 								b.source !== 'appointment' && beginDrag(e, 'move', b.key, b.start, b.end)}
-							onclick={() => (picked = { kind: 'block', key: b.key })}
+							data-drag="move"
+							data-key={b.key}
+							class:lifted={drag?.moved && drag.key === b.key}
+							onclick={() => !justDragged && (picked = { kind: 'block', key: b.key })}
 							onkeydown={(e) => onBlockKey(e, b)}
 						>
 							<span class="bt">{b.item.title}</span>
@@ -534,6 +686,34 @@
 		font-weight: 600;
 		text-align: left;
 		cursor: grab;
+	}
+	.task,
+	.block {
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	.task.lifted {
+		opacity: 0.45;
+	}
+	.block.lifted {
+		z-index: 4;
+		box-shadow: var(--shadow-md);
+		transform: scale(1.02);
+	}
+	.float {
+		position: fixed;
+		z-index: 50;
+		max-width: 14rem;
+		padding: 0.45rem 0.7rem;
+		border: 1px solid var(--accent);
+		border-radius: 10px;
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
+		font-size: 0.85rem;
+		font-weight: 650;
+		pointer-events: none;
+		transform: translate(-50%, -120%);
 	}
 	.task[aria-pressed='true'] {
 		border-color: var(--accent);
@@ -682,6 +862,17 @@
 		bottom: 0;
 		height: 8px;
 		cursor: ns-resize;
+	}
+	/* Touch: the bottom edge shows where a long press resizes. */
+	@media (pointer: coarse) {
+		.handle {
+			left: 40%;
+			right: 40%;
+			bottom: 3px;
+			height: 4px;
+			border-radius: 999px;
+			background: color-mix(in oklab, currentColor 25%, transparent);
+		}
 	}
 	@media (max-width: 720px) {
 		.body {

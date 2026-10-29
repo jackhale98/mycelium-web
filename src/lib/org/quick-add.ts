@@ -468,6 +468,20 @@ export function describeQuickPart(part: QuickPart, q: QuickAdd, today: string): 
 	}
 }
 
+/** org-tags-column's default (-77): a new heading's tags end at column 77. */
+const TAGS_COLUMN = 77;
+
+/** Right-align the first heading's tags as Emacs does by default (one space if it's too long). */
+function alignTags(entry: string): string {
+	const nl = entry.indexOf('\n');
+	const line = nl === -1 ? entry : entry.slice(0, nl);
+	const m = /^(.*?\S)[ \t]+(:[\w@#%:]+:)[ \t]*$/.exec(line);
+	if (!m) return entry;
+	const [, head, block] = m as unknown as [string, string, string];
+	const pad = Math.max(1, TAGS_COLUMN - [...head].length - [...block].length);
+	return `${head}${' '.repeat(pad)}${block}${nl === -1 ? '' : entry.slice(nl)}`;
+}
+
 /**
  * Apply a quick add to a captured entry (an `* TODO …` text whose title is
  * already `q.title`): its state, priority, tags, SCHEDULED (replacing the
@@ -491,6 +505,7 @@ export function applyQuickAdd(
 		edit((src) =>
 			setHeadlineTags(src, 0, [...own, ...q.tags.filter((t) => !own.includes(t))], config),
 		);
+		s = alignTags(s);
 	}
 	const stamp = (w: QuickWhen, repeater: string | null) =>
 		makeTimestamp({ date: w.date, time: w.time, endTime: w.endTime, repeater, active: true });
