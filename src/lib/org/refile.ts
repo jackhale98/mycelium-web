@@ -41,6 +41,16 @@ export function subtreeAt(
 	return { from: h.line.from, to, text: source.slice(h.line.from, to), level: h.level };
 }
 
+/** Remove the subtree at `offset` (its heading, everything under it and its trailing blank lines). */
+export function deleteSubtree(
+	source: string,
+	offset: number,
+	config: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+): Change[] {
+	const tree = subtreeAt(source, offset, config);
+	return tree ? [{ from: tree.from, to: tree.to, insert: '' }] : [];
+}
+
 /** Shift every heading in a subtree's text by `delta` levels (never above level 1). */
 export function shiftLevels(text: string, delta: number): string {
 	if (delta === 0) return text;

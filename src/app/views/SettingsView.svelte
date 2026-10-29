@@ -194,6 +194,76 @@
 			<h2 id="workflow-h">Workflow: TODO keywords</h2>
 			{#key app.activeId}<KeywordEditor />{/key}
 		</section>
+		<section class="panel stack" aria-labelledby="inbox-h">
+			<h2 id="inbox-h">Inbox and weekly review</h2>
+			<p class="hint">
+				The inbox is a file whose top-level headings are things not yet decided: <a
+					href={href.triage()}>Process the inbox</a
+				> goes through them one at a time. Point a capture template at it to collect there.
+			</p>
+			<label class="field"
+				><span>Inbox file</span>
+				<input
+					class="input"
+					list="s-inbox-files"
+					value={app.activeVault?.inbox ?? 'inbox.org'}
+					placeholder="inbox.org"
+					autocapitalize="off"
+					spellcheck="false"
+					onchange={(e) => app.updateVault({ inbox: e.currentTarget.value.trim() })}
+				/>
+				<datalist id="s-inbox-files"
+					>{#each [...app.vault.files.keys()].sort() as p (p)}<option value={p}
+						></option>{/each}</datalist
+				>
+				<span class="hint"
+					>{app.inboxPath
+						? `${app.inbox.length} undecided in ${app.inboxPath}`
+						: 'No such file yet: it will count once it exists.'}</span
+				>
+			</label>
+			<fieldset class="waiting">
+				<legend>Waiting states (shown in the review's “Waiting on others”)</legend>
+				{#each app.vault.keywords.todoKeywords as k (k)}
+					<label class="check"
+						><input
+							type="checkbox"
+							checked={app.waitKeywords.includes(k)}
+							onchange={(e) =>
+								app.updateVault({
+									waitKeywords: e.currentTarget.checked
+										? [...app.waitKeywords, k]
+										: app.waitKeywords.filter((w) => w !== k),
+								})}
+						/>
+						{k}</label
+					>
+				{/each}
+			</fieldset>
+			<div class="hours">
+				<label class="field"
+					><span>Working day starts</span><input
+						type="time"
+						class="input"
+						value={app.workHours.start}
+						onchange={(e) =>
+							e.currentTarget.value &&
+							app.updateVault({ workHours: { ...app.workHours, start: e.currentTarget.value } })}
+					/></label
+				>
+				<label class="field"
+					><span>and ends</span><input
+						type="time"
+						class="input"
+						value={app.workHours.end}
+						onchange={(e) =>
+							e.currentTarget.value &&
+							app.updateVault({ workHours: { ...app.workHours, end: e.currentTarget.value } })}
+					/></label
+				>
+			</div>
+			<p class="hint">The day planner counts free time between these.</p>
+		</section>
 		<section class="panel stack" aria-labelledby="swipe-h">
 			<h2 id="swipe-h">Swipe actions</h2>
 			<p class="hint">
@@ -665,5 +735,23 @@
 	.swipe-preview .more {
 		background: var(--accent);
 		color: var(--on-accent);
+	}
+	.waiting {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem 1rem;
+		margin: 0;
+		padding: 0;
+		border: 0;
+	}
+	.waiting legend {
+		margin-bottom: 0.35rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+	.hours {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(9rem, 12rem));
+		gap: 0.75rem;
 	}
 </style>

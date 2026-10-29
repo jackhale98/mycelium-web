@@ -59,6 +59,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   priority and Effort. What it understood shows as chips (tap × to keep
   words as they are); it works in the agenda's "Add a task…" field and any
   capture template set to read it.
+- **Inbox triage and weekly review:** the inbox (a file, `inbox.org` by
+  default) is processed one card at a time: done, schedule, state, refile,
+  delete (with undo) or later, by tap, swipe or key. The weekly review walks
+  the inbox, overdue, the next 7 days, waiting tasks, stuck projects,
+  slipped habits and what got done; Home shows when you last did it.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
   phrases and snippets, tags, backlinks, dailies, contents for long notes,
   and an agenda (a list, org's week view, stuck projects, a month calendar,

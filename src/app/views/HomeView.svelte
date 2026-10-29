@@ -5,9 +5,12 @@
 	import { href } from '../router.svelte';
 	import { describeTarget, templatePrompts } from '$lib/org';
 	import { app, localNow } from '../state.svelte';
-	import { longDate } from '../util';
+	import { addDays } from '$lib/org';
+	import { longDate, relativeDay } from '../util';
 
 	const today = localNow().date;
+	/** A week since the last weekly review (or none yet, with tasks to review). */
+	const reviewDue = $derived(!app.lastReview || app.lastReview <= addDays(today, -7));
 	let draft = $state('');
 
 	const agenda = $derived.by(() => {
@@ -116,6 +119,17 @@
 			><Icon name="arrowRight" size={16} /></button
 		>
 	</form>
+
+	<nav class="plan" aria-label="Plan">
+		<a href={href.triage()}
+			><Icon name="feather" size={15} />Inbox<span class="n">{app.inbox.length}</span></a
+		>
+		<a href={href.review()} class:due={reviewDue}
+			><Icon name="check" size={15} />Weekly review<span class="when"
+				>{app.lastReview ? relativeDay(app.lastReview, today).toLowerCase() : 'not yet'}</span
+			></a
+		>
+	</nav>
 
 	<div class="grid">
 		<section class="card focus" aria-labelledby="focus-h">
@@ -463,5 +477,44 @@
 		.hint {
 			display: none;
 		}
+	}
+	.plan {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 0.25rem 0 1.5rem;
+	}
+	.plan a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		min-height: 2.5rem;
+		padding: 0 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: var(--surface);
+		color: var(--text);
+		font-size: 0.88rem;
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.plan a:hover {
+		border-color: var(--accent);
+	}
+	.plan .n {
+		padding: 0.05rem 0.5rem;
+		border-radius: 999px;
+		background: var(--surface-2);
+		font-size: 0.78rem;
+	}
+	.plan .when {
+		color: var(--text-muted);
+		font-weight: 500;
+	}
+	.plan a.due {
+		border-color: var(--warn);
+	}
+	.plan a.due .when {
+		color: var(--warn);
 	}
 </style>

@@ -14,6 +14,8 @@ export type Route =
 	| { name: 'settings'; tab: string | null }
 	| { name: 'changes' }
 	| { name: 'dailies' }
+	| { name: 'triage' }
+	| { name: 'review' }
 	| { name: 'search'; q: string }
 	| { name: 'graph'; id: string | null }
 	| { name: 'notfound'; path: string };
@@ -47,6 +49,10 @@ export function parseHash(hash: string): Route {
 			return { name: 'changes' };
 		case 'dailies':
 			return { name: 'dailies' };
+		case 'triage':
+			return { name: 'triage' };
+		case 'review':
+			return { name: 'review' };
 		case 'search':
 			return { name: 'search', q: tail };
 		case 'graph':
@@ -72,6 +78,8 @@ export const href = {
 	settings: (tab?: string) => (tab ? `#/settings/${tab}` : '#/settings'),
 	changes: () => '#/changes',
 	dailies: () => '#/dailies',
+	triage: () => '#/triage',
+	review: () => '#/review',
 	search: (q = '') => (q ? `#/search/${encodeURIComponent(q)}` : '#/search'),
 	graph: (id?: string) => (id ? `#/graph/${encodeURIComponent(id)}` : '#/graph'),
 };

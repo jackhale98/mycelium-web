@@ -20,8 +20,10 @@ import {
 	newNodeSource,
 	parseOrg,
 	parseTimestampInput,
+	deleteSubtree,
 	getPlanning,
 	parseQuickAdd,
+	type HeadlineEntry,
 	type QuickAdd,
 	roamFileName,
 	setHeadlineTags,
@@ -126,6 +128,18 @@ function readSwipeTray(): SwipeChoice[] {
 	);
 	return picks.length === 2 ? picks : [...DEFAULT_SWIPE_TRAY];
 }
+type UndoIcon = 'clock' | 'check' | 'calendar' | 'undo' | 'trash';
+
+/** Something in the inbox: a top-level heading not yet done, with a little of its text. */
+export interface InboxItem extends HeadlineEntry {
+	path: string;
+	excerpt: string;
+}
+
+/** Waiting states, unless Settings says otherwise: keywords like WAIT, HOLD, DELEGATED. */
+const WAITING = /WAIT|HOLD|DELEG|BLOCK|PEND/i;
+export const DEFAULT_WORK_HOURS = { start: '09:00', end: '18:00' };
+
 const ACTIVE_KEY = 'mycelium:active-vault';
 export const DEMO_ID = 'demo';
 const DEMO_KEYWORDS: KeywordConfig = { todoKeywords: ['TODO', 'NEXT'], doneKeywords: ['DONE'] };
@@ -1458,15 +1472,10 @@ class AppState {
 		before: string;
 		after: string;
 		text: string;
-		icon?: 'clock' | 'check' | 'calendar' | 'undo';
+		icon?: UndoIcon;
 	} | null>(null);
 
-	#undoable(
-		path: string,
-		text: string,
-		run: () => void,
-		icon?: 'clock' | 'check' | 'calendar' | 'undo',
-	) {
+	#undoable(path: string, text: string, run: () => void, icon?: UndoIcon) {
 		const before = this.vault.file(path)?.source;
 		run();
 		const after = this.vault.file(path)?.source;
@@ -1525,6 +1534,69 @@ class AppState {
 			() => this.setTodo(path, offset, keyword),
 			'check',
 		);
+	}
+
+	/** Delete a heading and everything under it, undoable for a few seconds. */
+	deleteHeading(path: string, offset: number) {
+		const title = this.#headingTitle(path, offset);
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#undoable(
+			path,
+			`Deleted: ${title}`,
+			() => this.#edit(path, (src) => deleteSubtree(src, offset, kw), `Delete ${title}`),
+			'trash',
+		);
+	}
+
+	/** The inbox file (Settings → Tasks, `inbox.org` by default), when it exists. */
+	get inboxPath(): string | null {
+		void this.rev;
+		const want = (this.activeVault?.inbox || 'inbox.org').replace(/^\/+/, '');
+		for (const p of [want, nodePath(this.layout, want)]) if (this.vault.file(p)) return p;
+		return null;
+	}
+
+	/** What's in the inbox: its top-level headings that aren't done, in file order. */
+	get inbox(): InboxItem[] {
+		const path = this.inboxPath;
+		const file = path ? this.vault.file(path) : null;
+		if (!path || !file) return [];
+		const heads = file.index.headlines;
+		const top = Math.min(...heads.map((h) => h.level));
+		const done = file.index.keywords.doneKeywords;
+		return heads
+			.filter((h) => h.level === top && !(h.todo && done.includes(h.todo)))
+			.map((h) => {
+				const next = heads.find((o) => o.pos > h.pos)?.pos ?? file.source.length;
+				const body = file.source
+					.slice(file.source.indexOf('\n', h.pos) + 1, next)
+					.split('\n')
+					.filter((l) => !/^\s*(?:(?:SCHEDULED|DEADLINE|CLOSED):|:[\w-]+:\s*$|:END:)/i.test(l))
+					.join('\n')
+					.trim();
+				return { ...h, path, excerpt: body.length > 280 ? `${body.slice(0, 280)}…` : body };
+			});
+	}
+
+	/** Keywords that mean "waiting" (Settings → Tasks, or ones named like WAIT). */
+	get waitKeywords(): string[] {
+		return (
+			this.activeVault?.waitKeywords ??
+			this.vault.keywords.todoKeywords.filter((k) => WAITING.test(k))
+		);
+	}
+
+	get lastReview(): string | null {
+		return this.activeVault?.lastReview ?? null;
+	}
+
+	/** A finished weekly review: remember the day. */
+	async finishReview() {
+		await this.updateVault({ lastReview: localNow().date });
+	}
+
+	get workHours(): { start: string; end: string } {
+		return this.activeVault?.workHours ?? DEFAULT_WORK_HOURS;
 	}
 
 	/** Put back the last undoable change (if the file hasn't changed since). */

@@ -32,6 +32,8 @@
 	const views = {
 		changes: lazy(() => import('../views/ChangesView.svelte')),
 		dailies: lazy(() => import('../views/DailiesView.svelte')),
+		triage: lazy(() => import('../views/TriageView.svelte')),
+		review: lazy(() => import('../views/ReviewView.svelte')),
 		graph: lazy(() => import('../views/GraphView.svelte')),
 		search: lazy(() => import('../views/SearchView.svelte')),
 		settings: lazy(() => import('../views/SettingsView.svelte')),
@@ -83,6 +85,14 @@
 		/>{:catch error}<LoadError {error} />{/await}
 {:else if route.name === 'dailies'}
 	{#await views.dailies() then { default: DailiesView }}<DailiesView />{:catch error}<LoadError
+			{error}
+		/>{/await}
+{:else if route.name === 'triage'}
+	{#await views.triage() then { default: TriageView }}<TriageView />{:catch error}<LoadError
+			{error}
+		/>{/await}
+{:else if route.name === 'review'}
+	{#await views.review() then { default: ReviewView }}<ReviewView />{:catch error}<LoadError
 			{error}
 		/>{/await}
 {:else if route.name === 'changes'}

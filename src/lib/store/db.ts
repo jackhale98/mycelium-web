@@ -32,6 +32,14 @@ export interface VaultRecord {
 	dirty?: string[];
 	/** The demo only: the day its notes were dated for when it was made. */
 	demoDay?: string;
+	/** The inbox file (relative to the vault): its top-level headings are undecided. */
+	inbox?: string;
+	/** Keywords that mean "waiting on someone" for the weekly review. */
+	waitKeywords?: string[];
+	/** The day of the last finished weekly review, `YYYY-MM-DD`. */
+	lastReview?: string;
+	/** Working hours for the day planner's free-time total, `HH:MM`. */
+	workHours?: { start: string; end: string };
 	/** Commit every edit immediately with a generated message (off: you write each commit). */
 	autoCommit?: boolean;
 	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */

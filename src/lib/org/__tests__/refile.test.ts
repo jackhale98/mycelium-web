@@ -3,6 +3,7 @@ import { applyChanges } from '../text';
 import {
 	archiveLocation,
 	archiveSubtree,
+	deleteSubtree,
 	refileAcross,
 	refileWithin,
 	shiftLevels,
@@ -129,5 +130,17 @@ describe('archive', () => {
 		expect(applyChanges(src, r.source)).toBe('* Parent [0/1]\n** TODO y\n');
 		const again = archiveSubtree('* z\n', 0, 'p/notes.org', ctx('p/notes.org'), r.archiveText)!;
 		expect(again.archiveText!.startsWith(r.archiveText! + '\n* z\n')).toBe(true);
+	});
+});
+
+describe('deleteSubtree', () => {
+	it('removes a heading with everything under it, and nothing else', () => {
+		const src = '#+title: Inbox\n\n* TODO a\nbody\n** sub\n\n* TODO b\n';
+		expect(applyChanges(src, deleteSubtree(src, src.indexOf('* TODO a')))).toBe(
+			'#+title: Inbox\n\n* TODO b\n',
+		);
+		expect(applyChanges(src, deleteSubtree(src, src.indexOf('* TODO b')))).toBe(
+			'#+title: Inbox\n\n* TODO a\nbody\n** sub\n\n',
+		);
 	});
 });

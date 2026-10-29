@@ -542,3 +542,70 @@ test('quick add on the agenda: plain language becomes an org task', async ({ pag
 	await expect(main).toContainText(/:Effort: +0:30/);
 	await expect(main).toContainText('* TODO Lunch with Friday team');
 });
+
+test('triage the inbox: done, schedule, delete (with undo), later', async ({ page }) => {
+	await open(page, 'app#/triage');
+	const card = page.locator('article.card');
+	const title = page.locator('#triage-title');
+	await expect(page.getByRole('status')).toContainText('4 to go');
+	await expect(title).toHaveText('Email Sam about the reading group');
+	await page.getByRole('button', { name: /^Done/ }).click();
+	await expect(title).toHaveText('Try org-cite for ROAM_REFS');
+	// Schedule moves on once it's set, leaving the card in the inbox.
+	await page.getByRole('button', { name: /^Schedule/ }).click();
+	await page
+		.getByRole('dialog', { name: 'Schedule' })
+		.getByRole('button', { name: /^Tomorrow/ })
+		.click();
+	await expect(title).toHaveText('Book a table for the reading group dinner');
+	await expect(card).toContainText('six people');
+	// Delete, undo, delete again (by key).
+	await page.getByRole('button', { name: /^Delete/ }).click();
+	await expect(title).toHaveText('Idea: a seasonal walk log');
+	await page
+		.getByRole('status')
+		.filter({ hasText: 'Deleted' })
+		.getByRole('button', { name: 'Undo' })
+		.click();
+	await expect(title).toHaveText('Book a table for the reading group dinner');
+	await page.keyboard.press('x');
+	await expect(title).toHaveText('Idea: a seasonal walk log');
+	await expect(card).toContainText('#forest');
+	await page.keyboard.press('Space');
+	await expect(page.getByText("You've been through everything.")).toBeVisible();
+	await expect(page.getByText('2 things stay in the inbox for later.')).toBeVisible();
+
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	const main = page.locator('main');
+	await expect(main).toContainText('* DONE Email Sam about the reading group');
+	await expect(main).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3}>/);
+	// Deleted: shown as a removed line.
+	await expect(main).toContainText('* Book a table for the reading group dinner');
+});
+
+test('the weekly review walks its steps and remembers the day', async ({ page }) => {
+	await open(page, 'app#/');
+	await expect(page.getByRole('link', { name: /Weekly review\s*not yet/ })).toBeVisible();
+	await page.getByRole('link', { name: /Weekly review/ }).click();
+	const steps = page.getByRole('list', { name: 'Steps' });
+	await expect(steps.getByRole('button')).toHaveCount(7);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Empty the inbox');
+	await expect(page.locator('main')).toContainText('4 things in the inbox.');
+	const next = page.getByRole('button', { name: /^Next/ });
+	for (const heading of [
+		'Overdue',
+		'Coming up',
+		'Waiting on others',
+		'Stuck projects',
+		'Habits',
+		'Done this week',
+	]) {
+		await next.click();
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+	}
+	await expect(page.locator('main')).toContainText('Read chapter 3');
+	await page.getByRole('button', { name: 'Finish review' }).click();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Review done');
+	await page.locator('.review').getByRole('link', { name: 'Home' }).click();
+	await expect(page.getByRole('link', { name: /Weekly review\s*today/ })).toBeVisible();
+});

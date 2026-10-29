@@ -37,6 +37,18 @@
 			run: () => router.go(href.dailies()),
 		},
 		{ key: 'cmd:home', label: 'Go home', icon: 'home', run: () => router.go(href.home()) },
+		{
+			key: 'cmd:triage',
+			label: 'Process inbox',
+			icon: 'feather',
+			run: () => router.go(href.triage()),
+		},
+		{
+			key: 'cmd:review',
+			label: 'Weekly review',
+			icon: 'check',
+			run: () => router.go(href.review()),
+		},
 		{ key: 'cmd:tags', label: 'Browse tags', icon: 'tag', run: () => router.go(href.tags()) },
 		{ key: 'cmd:new', label: 'New note', icon: 'plus', run: () => (app.newNote = { title: '' }) },
 		{ key: 'cmd:graph', label: 'Open graph', icon: 'graph', run: () => router.go(href.graph()) },

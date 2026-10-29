@@ -19,6 +19,7 @@
 		{ label: 'Today', icon: 'calendar', href: href.daily(today), match: (r) => r.name === 'daily' },
 		{ label: 'Dailies', icon: 'inbox', href: href.dailies(), match: (r) => r.name === 'dailies' },
 		{ label: 'Agenda', icon: 'agenda', href: href.agenda(), match: (r) => r.name === 'agenda' },
+		{ label: 'Inbox', icon: 'feather', href: href.triage(), match: (r) => r.name === 'triage' },
 		{ label: 'Search', icon: 'search', href: href.search(), match: (r) => r.name === 'search' },
 		{ label: 'Graph', icon: 'graph', href: href.graph(), match: (r) => r.name === 'graph' },
 		{ label: 'Tags', icon: 'tag', href: href.tags(), match: (r) => r.name === 'tags' },
@@ -92,6 +93,8 @@
 						<Icon name={item.icon} size={17} />{item.label}
 						{#if item.label === 'Changes' && app.git.changes.length}<span class="count"
 								>{app.git.changes.length}</span
+							>{:else if item.label === 'Inbox' && app.inbox.length}<span class="count"
+								>{app.inbox.length}</span
 							>{/if}
 					</a>
 				</li>

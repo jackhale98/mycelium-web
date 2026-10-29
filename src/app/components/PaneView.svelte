@@ -50,6 +50,10 @@
 				return 'Graph';
 			case 'dailies':
 				return 'Dailies';
+			case 'triage':
+				return 'Inbox';
+			case 'review':
+				return 'Weekly review';
 			case 'changes':
 				return 'Changes';
 			case 'settings':

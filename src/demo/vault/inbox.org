@@ -3,3 +3,7 @@
 
 * TODO Email Sam about the reading group
 * TODO Try org-cite for ROAM_REFS
+* Book a table for the reading group dinner
+Somewhere near the library; six people, maybe seven.
+* Idea: a seasonal walk log                                        :forest:
+One note per season, linking the species seen on each walk.
