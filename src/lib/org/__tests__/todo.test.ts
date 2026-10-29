@@ -138,6 +138,25 @@ describe('changeTodoState', () => {
 		);
 	});
 
+	it("always logs a habit's completion (its graph reads the log), even with logRepeat off", () => {
+		const src = [
+			'* TODO Walk',
+			'SCHEDULED: <2024-03-10 Sun .+1d>',
+			':PROPERTIES:',
+			':STYLE: habit',
+			':END:',
+			'',
+		].join('\n');
+		const out = changeTodoState(src, 0, 'DONE', {
+			config: { todoKeywords: ['TODO'], doneKeywords: ['DONE'] },
+			now,
+			log: { logRepeat: false },
+		}).text;
+		expect(out).toMatch(/:LAST_REPEAT: \[2024-03-10 Sun/);
+		expect(out).toMatch(/- State "DONE" +from "TODO" +\[2024-03-10 Sun/);
+		expect(out).toMatch(/^\* TODO Walk/);
+	});
+
 	it('logs state changes marked with ! in #+TODO', () => {
 		const src = '#+TODO: TODO WAIT(w!) | DONE(d!)\n* TODO Ask\n';
 		const cfg = fileTodoKeywords(src)!;

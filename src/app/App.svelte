@@ -7,6 +7,7 @@
 	import Icon from './components/Icon.svelte';
 	import MobileBar from './components/MobileBar.svelte';
 	import NewNoteDialog from './components/NewNoteDialog.svelte';
+	import HabitSheet from './org/HabitSheet.svelte';
 	import HeadingSheet from './org/HeadingSheet.svelte';
 	import NoteSheet from './components/NoteSheet.svelte';
 	import Sidebar from './components/Sidebar.svelte';
@@ -258,6 +259,7 @@
 <MathSheet />
 <ImageSheet />
 <HeadingSheet />
+<HabitSheet />
 <NoteSheet />
 <CaptureSheet />
 

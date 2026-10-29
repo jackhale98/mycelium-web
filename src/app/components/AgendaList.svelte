@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { AgendaItem } from '$lib/vault/vault';
 	import DateChip from '../org/DateChip.svelte';
+	import HabitGraph from '../org/HabitGraph.svelte';
 	import TodoChip from '../org/TodoChip.svelte';
 	import { href } from '../router.svelte';
 	import { app, localNow } from '../state.svelte';
@@ -161,23 +162,21 @@
 				{item.olp.length
 					? item.olp.join(' › ')
 					: (app.vault.fileNode(item.file)?.title ?? item.file)}
-				{#if habitCells(item)}
-					{@const cells = habitCells(item)!}
-					<span
-						class="habit"
-						role="img"
-						aria-label={`Habit: done ${cells.filter((c) => c.done).length} times in the last ${cells.length} days`}
-						>{#each cells as c (c.date)}<span
-								class={`cell ${c.face}`}
-								class:future={c.future}
-								title={`${c.date}${c.done ? ' DONE' : ''}`}>{c.glyph}</span
-							>{/each}</span
-					>
-				{/if}
 				{#each item.tags.filter((t) => item.id || !item.node?.tags.includes(t)) as tag (tag)}<span
 						class="tag">#{tag}</span
 					>{/each}
 			</span>
+			{#if habitCells(item)}
+				{@const cells = habitCells(item)!}
+				<button
+					type="button"
+					class="habit"
+					aria-haspopup="dialog"
+					aria-label={`Habit: done ${cells.filter((c) => c.done).length} of the last ${cells.length} days. Details`}
+					onclick={() => (app.habitSheet = { path: item.file, pos: item.pos })}
+					><HabitGraph {cells} {today} /></button
+				>
+			{/if}
 		</div>
 		<div class="end">
 			{#if due}
@@ -263,73 +262,20 @@
 		line-height: 0;
 		text-transform: lowercase;
 	}
-	/* org-habit's consistency graph, in org's colours (light and dark faces). */
+	/* The habit's graph: its own line under the title, the whole row a button. */
 	.habit {
-		display: inline-flex;
-		margin-left: 0.5rem;
-		vertical-align: middle;
+		display: flex;
+		width: 100%;
+		margin: 0.4rem 0 0.1rem;
+		padding: 0.2rem 0;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		cursor: pointer;
 	}
-	.cell {
-		display: inline-grid;
-		place-items: center;
-		width: 0.62rem;
-		height: 0.95rem;
-		font: 700 0.62rem/1 var(--font-mono);
-		color: #1a1a1a;
-	}
-	.cell.clear {
-		background: #8270f9;
-	}
-	.cell.clear.future {
-		background: #d6e4fc;
-	}
-	.cell.ready {
-		background: #4df946;
-	}
-	.cell.ready.future {
-		background: #acfca9;
-	}
-	.cell.alert {
-		background: #f5f946;
-	}
-	.cell.alert.future {
-		background: #fafca9;
-	}
-	.cell.overdue {
-		background: #f9372d;
-	}
-	.cell.overdue.future {
-		background: #fc9590;
-	}
-	:global([data-theme='dark']) .cell,
-	:global(:root:not([data-theme='light'])) .cell {
-		color: #fff;
-	}
-	@media (prefers-color-scheme: dark) {
-		:global(:root:not([data-theme='light'])) .cell.clear {
-			background: blue;
-		}
-		:global(:root:not([data-theme='light'])) .cell.clear.future {
-			background: midnightblue;
-		}
-		:global(:root:not([data-theme='light'])) .cell.ready {
-			background: forestgreen;
-		}
-		:global(:root:not([data-theme='light'])) .cell.ready.future {
-			background: darkgreen;
-		}
-		:global(:root:not([data-theme='light'])) .cell.alert {
-			background: gold;
-		}
-		:global(:root:not([data-theme='light'])) .cell.alert.future {
-			background: darkgoldenrod;
-		}
-		:global(:root:not([data-theme='light'])) .cell.overdue {
-			background: firebrick;
-		}
-		:global(:root:not([data-theme='light'])) .cell.overdue.future {
-			background: darkred;
-		}
+	.habit:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
 	}
 	.empty {
 		margin: 0;

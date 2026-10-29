@@ -107,8 +107,8 @@ function repeatingTimestamps(source: string, from: number, to: number) {
  * - leaving a done state removes `CLOSED:`;
  * - completing a repeating task instead shifts every repeating timestamp in
  *   the entry, drops a non-repeating SCHEDULED, returns the task to
- *   `REPEAT_TO_STATE` (or the first TODO keyword), and with `logRepeat` sets
- *   `LAST_REPEAT` and logs the transition;
+ *   `REPEAT_TO_STATE` (or the first TODO keyword), and with `logRepeat` (or
+ *   for a habit, always) sets `LAST_REPEAT` and logs the transition;
  * - `#+TODO:` markers such as `DONE(d!)` or `WAIT(w@/!)` log state notes.
  */
 export function changeTodoState(
@@ -137,7 +137,11 @@ export function changeTodoState(
 		const end = entryEnd(lines, h);
 		const repeats = repeatingTimestamps(source, h.line.end, end);
 		if (repeats.length > 0) {
-			const requested = getProperties(source, at, config)['REPEAT_TO_STATE'] ?? log.repeatToState;
+			const props = getProperties(source, at, config);
+			const requested = props['REPEAT_TO_STATE'] ?? log.repeatToState;
+			// A habit's history is its logged completions (org-habit needs them), so
+			// they're always logged, whatever the vault's style is otherwise.
+			const logRepeat = log.logRepeat || props['STYLE']?.trim() === 'habit';
 			const all = [...config.todoKeywords, ...config.doneKeywords];
 			const back =
 				requested && all.includes(requested) ? requested : (config.todoKeywords[0] ?? null);
@@ -152,8 +156,8 @@ export function changeTodoState(
 						? setPlanning(s, at, 'SCHEDULED', null, config)
 						: [],
 				(s) => setPlanning(s, at, 'CLOSED', null, config),
-				(s) => (log.logRepeat ? setProperty(s, at, 'LAST_REPEAT', stamp, config) : []),
-				(s) => (log.logRepeat || stateLogged(keyword) ? note(keyword)(s) : []),
+				(s) => (logRepeat ? setProperty(s, at, 'LAST_REPEAT', stamp, config) : []),
+				(s) => (logRepeat || stateLogged(keyword) ? note(keyword)(s) : []),
 				(s) => setTodoKeyword(s, at, back, config),
 			]);
 			return { ...result, repeated: true, keyword: back };

@@ -239,6 +239,8 @@ class AppState {
 	editAt = $state<number | null>(null);
 	/** The heading open in the heading sheet, if any. */
 	headingSheet = $state<{ path: string; pos: number } | null>(null);
+	/** The habit details sheet (its graph, streak and rate), for the heading at `pos`. */
+	habitSheet = $state<{ path: string; pos: number } | null>(null);
 	/** A note's details sheet: rename, aliases, refs, extract. */
 	noteSheet = $state<{ id: string } | null>(null);
 	/** The quick capture sheet: open with a template chosen, and text to start from. */

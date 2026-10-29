@@ -368,6 +368,8 @@ test('phones: a task sheet locks the page behind and a pull down closes it', asy
 	expect(await overflow()).toBe('hidden');
 	// A short pull springs back.
 	const cdp = await page.context().newCDPSession(page);
+	// Measure once it has finished sliding up.
+	await expect.poll(() => sheet.evaluate((el) => el.getAnimations().length)).toBe(0);
 	const box = (await sheet.boundingBox())!;
 	const x = box.x + box.width / 2;
 	const y = box.y + 12;
@@ -389,4 +391,37 @@ test('phones: a task sheet locks the page behind and a pull down closes it', asy
 	await pull(260);
 	await expect(sheet).toHaveCount(0);
 	expect(await overflow()).not.toBe('hidden');
+});
+
+test('a habit: its graph on the agenda, details with streak and rate, mark done today', async ({
+	page,
+}) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	// Make the daily flashcards task a habit, from its edit sheet.
+	await page.getByRole('button', { name: "Edit “Review this week's flashcards”" }).click();
+	const sheet = page.getByRole('dialog');
+	await sheet.getByText('Properties', { exact: true }).click();
+	await sheet.getByLabel('New property name').fill('STYLE');
+	await sheet.getByLabel('New property value').fill('habit');
+	await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(sheet.getByRole('textbox', { name: 'STYLE' })).toHaveValue('habit');
+	await sheet.getByRole('button', { name: 'Done', exact: true }).click();
+	// Its graph has its own line; it opens the details.
+	const graph = page.getByRole('button', { name: /^Habit: done 0 of the last 28 days/ });
+	await expect(graph).toBeVisible();
+	const box = (await graph.boundingBox())!;
+	expect(box.width).toBeGreaterThan(200);
+	await graph.click();
+	const habit = page.getByRole('dialog', { name: "Review this week's flashcards" });
+	await expect(habit).toContainText('Every day, counted from when it was last done');
+	await expect(habit.getByRole('definition').first()).toHaveText('0');
+	await habit.getByRole('button', { name: 'Mark done today' }).click();
+	await expect(habit.getByRole('button', { name: 'Done today', exact: true })).toBeDisabled();
+	await expect(habit.getByRole('definition').first()).toHaveText('1');
+	await expect(habit).toContainText('Today');
+	await habit.getByRole('button', { name: 'Close' }).click();
+	await expect(habit).toHaveCount(0);
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	await expect(page.locator('main')).toContainText(/- State "DONE" +from "TODO" +\[/);
 });

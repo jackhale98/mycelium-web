@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { habitGraph, parseHabit, type HabitCell } from '../habit';
+import { habitGraph, habitRhythm, habitStats, parseHabit, type HabitCell } from '../habit';
 
 // Org's graph string: one character per day, plus the untouched last cell.
 const graph = (cells: HabitCell[]) => cells.map((c) => c.glyph || ' ').join('') + ' ';
@@ -90,5 +90,50 @@ ${dates.map((d) => `- State "DONE"       from "TODO"       [${d} Tue]`).join('\n
 		expect(today.face).toBe('alert');
 		expect(cells.at(-1)!.future).toBe(true);
 		expect(cells.find((c) => c.date === '2009-10-15')!).toMatchObject({ done: true, glyph: '*' });
+	});
+});
+
+describe('habit stats', () => {
+	const habit = (repeater: string, days: string[]) =>
+		parseHabit(
+			`* TODO Walk\nSCHEDULED: <2026-10-29 Thu ${repeater}>\n:PROPERTIES:\n:STYLE: habit\n:END:\n${days
+				.map((d) => `- State "DONE"       from "TODO"       [${d} 08:00]`)
+				.join('\n')}\n`,
+			0,
+		)!;
+
+	it('counts the streak back from the last completion, while within the window', () => {
+		const h = habit('.+1d', ['2026-10-28', '2026-10-27', '2026-10-26', '2026-10-24']);
+		const s = habitStats(h, '2026-10-29');
+		expect(s.streak).toBe(3);
+		expect(s.lastDone).toBe('2026-10-28');
+		expect(s.done).toBe(4);
+		expect(s.expected).toBe(28);
+	});
+
+	it('a missed window breaks the streak', () => {
+		const h = habit('.+1d', ['2026-10-26', '2026-10-25']);
+		expect(habitStats(h, '2026-10-29').streak).toBe(0);
+	});
+
+	it('a deadline period widens the window', () => {
+		const h = habit('.+2d/4d', ['2026-10-26', '2026-10-22', '2026-10-19']);
+		const s = habitStats(h, '2026-10-29');
+		expect(s.window).toBe(4);
+		expect(s.streak).toBe(3);
+		expect(s.expected).toBe(14);
+	});
+
+	it('the rate is capped at 100%', () => {
+		const h = habit('.+1w', ['2026-10-28', '2026-10-27', '2026-10-26', '2026-10-25', '2026-10-24']);
+		expect(habitStats(h, '2026-10-29').rate).toBe(1);
+	});
+
+	it('says the rhythm in words', () => {
+		expect(habitRhythm(habit('.+1d', []))).toBe('Every day');
+		expect(habitRhythm(habit('++1w', []))).toBe('Every week');
+		expect(habitRhythm(habit('.+3d', []))).toBe('Every 3 days');
+		expect(habitRhythm(habit('.+2d/4d', []))).toBe('Every 2–4 days');
+		expect(habitRhythm(habit('.+1w/2w', []))).toBe('Every 1–2 weeks');
 	});
 });

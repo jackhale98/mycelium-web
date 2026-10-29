@@ -40,8 +40,9 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   or join into paragraphs if you prefer.
 - **Tasks the org way:** clock in and out with a running-clock bar and a
   clock report, refile and archive subtrees (to `%s_archive`, with org's
-  archive properties), habits with their consistency graph, and a time grid
-  on today's agenda.
+  archive properties), habits with their consistency graph (tap it for the
+  streak, completion rate and a 4-week view, and to mark today done), and a
+  time grid on today's agenda.
 - **Unlinked references:** notes that mention a note's title or aliases
   without linking it, one tap from becoming a link.
 - **org-roam's note tools:** rename a note (and the links that used its old

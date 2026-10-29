@@ -186,3 +186,59 @@ export function habitGraph(
 	}
 	return out;
 }
+
+export interface HabitStats {
+	/** Completions in a row, each within the habit's window of the one before, up to now. */
+	streak: number;
+	/** Completions in the last `days` days (today included). */
+	done: number;
+	/** How many the schedule asks for in that time. */
+	expected: number;
+	/** done / expected, at most 1. */
+	rate: number;
+	lastDone: string | null;
+	/** The longest gap allowed: the deadline period if there is one, else the repeat. */
+	window: number;
+}
+
+/** A habit's streak and completion rate, from its logged completions. */
+export function habitStats(
+	h: Habit,
+	today: string,
+	days = HABIT_PRECEDING_DAYS + HABIT_FOLLOWING_DAYS,
+): HabitStats {
+	const now = toDayNumber(today);
+	const window = h.deadlineRepeat ?? h.repeat;
+	const done = [...new Set(h.done)].filter((d) => d <= now).sort((a, b) => a - b);
+	const last = done.at(-1) ?? null;
+	let streak = 0;
+	if (last !== null && now - last <= window) {
+		streak = 1;
+		for (let i = done.length - 1; i > 0; i -= 1) {
+			if (done[i]! - done[i - 1]! > window) break;
+			streak += 1;
+		}
+	}
+	const recent = done.filter((d) => d > now - days).length;
+	const expected = Math.max(1, Math.floor(days / h.repeat));
+	return {
+		streak,
+		done: recent,
+		expected,
+		rate: Math.min(1, recent / expected),
+		lastDone: last === null ? null : fromDayNumber(last),
+		window,
+	};
+}
+
+/** The schedule in words: "Every day", "Every 2–4 days", "Every week". */
+export function habitRhythm(h: Habit): string {
+	const every = (n: number) =>
+		n === 1 ? 'day' : n === 7 ? 'week' : n % 7 === 0 ? `${n / 7} weeks` : `${n} days`;
+	if (h.deadlineRepeat) {
+		const unit = h.repeat % 7 === 0 && h.deadlineRepeat % 7 === 0 ? 7 : 1;
+		const word = unit === 7 ? 'weeks' : 'days';
+		return `Every ${h.repeat / unit}–${h.deadlineRepeat / unit} ${word}`;
+	}
+	return `Every ${every(h.repeat)}`;
+}
