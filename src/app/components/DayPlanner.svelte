@@ -15,9 +15,12 @@
 	import { untrack } from 'svelte';
 	import { addDays } from '$lib/org';
 	import type { AgendaItem } from '$lib/vault/vault';
+	import { sessionsOf } from '$lib/org';
 	import {
 		dayPlan,
 		DEFAULT_MINUTES,
+		fillSessions,
+		SESSION_MAX,
 		fromMinutes,
 		hours,
 		planTotals,
@@ -40,11 +43,27 @@
 	let date = $state(today);
 	const plan = $derived.by(() => {
 		void app.rev;
-		return dayPlan(app.vault, date, today, keep);
+		return dayPlan(app.vault, date, today, keep, { effortOf: (i) => app.effortOf(i) });
 	});
 	const totals = $derived(planTotals(plan.blocks, app.workHours));
 	const keyOf = (i: AgendaItem) => `${i.file}\u0000${i.pos}`;
-	const lengthOf = (i: AgendaItem) => (i.effort && i.effort > 0 ? i.effort : DEFAULT_MINUTES);
+	/** A task's Effort and how much of it is planned (any day). */
+	const progressOf = (i: AgendaItem) => plan.progress.get(keyOf(i)) ?? { effort: null, planned: 0 };
+	/** Effort still to plan, or null without an estimate. */
+	const remainingOf = (i: AgendaItem) => {
+		const p = progressOf(i);
+		return p.effort ? Math.max(0, p.effort - p.planned) : null;
+	};
+	/** How long a block placed now lasts: what's left of the estimate, two hours at most. */
+	const lengthOf = (i: AgendaItem) => {
+		const left = remainingOf(i);
+		return left ? Math.min(left, SESSION_MAX) : DEFAULT_MINUTES;
+	};
+	/** "5 h of 12 h", for a task with an estimate. */
+	const progressLabel = (i: AgendaItem) => {
+		const p = progressOf(i);
+		return p.effort ? `${hours(p.planned)} of ${hours(p.effort)}` : '';
+	};
 
 	/** What's picked: a task in the tray (to place), or a block (for its toolbar). */
 	let picked = $state<{ kind: 'tray' | 'block'; key: string } | null>(null);
@@ -66,26 +85,54 @@
 
 	// ---- writing ----
 	const kindOf = (b: PlanBlock) => (b.source === 'DEADLINE' ? 'DEADLINE' : 'SCHEDULED');
+	/**
+	 * Place a task at `start`. A task that fits one block, with no time yet,
+	 * gets its SCHEDULED time (org's own way); one that needs more, or already
+	 * has a time, gets a work session in its entry.
+	 */
 	function place(item: AgendaItem, start: number) {
 		const s = Math.max(FIRST_HOUR * 60, snap(start));
-		app.planTask(
-			item.file,
-			item.pos,
-			'SCHEDULED',
-			date,
-			s,
-			Math.min(s + lengthOf(item), 24 * 60 - 1),
-		);
-		picked = { kind: 'block', key: keyOf(item) };
+		const end = Math.min(s + lengthOf(item), 24 * 60 - 1);
+		const file = app.vault.file(item.file);
+		const sessions = file ? sessionsOf(file.source, item.pos, file.index.keywords).length : 0;
+		const left = remainingOf(item);
+		const onePiece = !item.scheduled?.time && !sessions && (left === null || left <= SESSION_MAX);
+		if (onePiece) app.planTask(item.file, item.pos, 'SCHEDULED', date, s, end);
+		else app.addSessions(item.file, item.pos, [{ date, start: s, end }]);
+		picked = null;
 	}
 	function move(b: PlanBlock, start: number, end: number) {
 		if (b.source === 'appointment') return;
 		if (start === b.start && end === b.end) return;
-		app.planTask(b.item.file, b.item.pos, kindOf(b), date, start, end);
+		if (b.source === 'session' && b.session)
+			app.moveSession(b.item.file, b.item.pos, b.session, { date, start, end });
+		else app.planTask(b.item.file, b.item.pos, kindOf(b), date, start, end);
 	}
 	function unplan(b: PlanBlock) {
 		if (b.source === 'appointment') return;
-		app.planTask(b.item.file, b.item.pos, kindOf(b), date, null);
+		if (b.source === 'session' && b.session)
+			app.removeSessionAt(b.item.file, b.item.pos, b.session);
+		else app.planTask(b.item.file, b.item.pos, kindOf(b), date, null);
+		picked = null;
+	}
+	/** Fill the rest of a task's estimate into free working time, from now (or this day) on. */
+	function planRest(item: AgendaItem) {
+		const left = remainingOf(item);
+		if (!left) return;
+		const from = date === today ? now : toMinutes(app.workHours.start);
+		const busyOn = (d: string) =>
+			(d === date ? plan : dayPlan(app.vault, d, today, keep, { effortOf: (i) => app.effortOf(i) }))
+				.blocks;
+		const sessions = fillSessions(left, date, from, busyOn, app.workHours);
+		if (!sessions.length) return;
+		const total = sessions.reduce((sum, x) => sum + x.end - x.start, 0);
+		const days = new Set(sessions.map((x) => x.date)).size;
+		app.addSessions(
+			item.file,
+			item.pos,
+			sessions,
+			`${hours(total)} planned over ${days} ${days === 1 ? 'day' : 'days'}: ${item.title}`,
+		);
 		picked = null;
 	}
 	const nudge = (b: PlanBlock, by: number) =>
@@ -454,7 +501,11 @@
 											: { kind: 'tray', key: keyOf(i) })}
 							>
 								<span class="t">{i.title}</span>
-								<span class="len">{hours(lengthOf(i))}</span>
+								<span class="len"
+									>{progressOf(i).planned && remainingOf(i)
+										? `${hours(remainingOf(i)!)} left`
+										: hours(lengthOf(i))}</span
+								>
 							</button>
 						</li>
 					{/each}
@@ -478,6 +529,11 @@
 					<label class="sr-only" for="dp-at">Start time</label>
 					<input id="dp-at" type="time" step="900" class="input" bind:value={placeAt} />
 					<button type="submit" class="btn small primary">Plan</button>
+					{#if remainingOf(pickedTray)}
+						<button type="button" class="btn small" onclick={() => planRest(pickedTray)}
+							>Plan the rest ({hours(remainingOf(pickedTray)!)})</button
+						>
+					{/if}
 					<button type="button" class="btn small" onclick={() => (picked = null)}>Cancel</button>
 				</form>
 			{:else if pickedBlock}
@@ -492,6 +548,11 @@
 						>
 						<button type="button" class="btn small" onclick={() => stretch(b, SNAP)}>Longer</button>
 						<button type="button" class="btn small" onclick={() => unplan(b)}>No time</button>
+						{#if remainingOf(b.item)}
+							<button type="button" class="btn small" onclick={() => planRest(b.item)}
+								>Plan the rest ({hours(remainingOf(b.item)!)})</button
+							>
+						{/if}
 					{/if}
 					<button
 						type="button"
@@ -549,7 +610,7 @@
 							class:active={picked?.kind === 'block' && picked.key === b.key}
 							role="button"
 							tabindex="0"
-							aria-label={`${b.item.title}, ${timeOf(s)}${b.source === 'appointment' ? ', appointment' : ''}`}
+							aria-label={`${b.item.title}, ${timeOf(s)}${b.source === 'appointment' ? ', appointment' : ''}${progressLabel(b.item) ? `, ${progressLabel(b.item)} planned` : ''}`}
 							style:top="{px(s.start)}px"
 							style:height="{Math.max(20, ((s.end - s.start) / 60) * HOUR_PX - 2)}px"
 							style:left="calc(3.5rem + (100% - 3.75rem) * {b.col / b.cols})"
@@ -563,7 +624,11 @@
 							onkeydown={(e) => onBlockKey(e, b)}
 						>
 							<span class="bt">{b.item.title}</span>
-							<span class="bm">{timeOf(s)}</span>
+							<span class="bm"
+								>{timeOf(s)}{#if progressLabel(b.item)}<span class="of"
+										>{` · ${progressLabel(b.item)}`}</span
+									>{/if}</span
+							>
 							{#if b.source !== 'appointment'}
 								<span
 									class="handle"
@@ -849,6 +914,9 @@
 		font-weight: 650;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.bm .of {
+		opacity: 0.85;
 	}
 	.bm {
 		color: var(--text-muted);

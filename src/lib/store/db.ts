@@ -40,6 +40,10 @@ export interface VaultRecord {
 	lastReview?: string;
 	/** Working hours for the day planner's free-time total, `HH:MM`. */
 	workHours?: { start: string; end: string };
+	/** How long a "day" of Effort is, in hours (org-duration-units' "d"; 24 by default). */
+	effortDayHours?: number;
+	/** How many such days make a "week" of Effort (7 by default). */
+	effortWeekDays?: number;
 	/** Commit every edit immediately with a generated message (off: you write each commit). */
 	autoCommit?: boolean;
 	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */

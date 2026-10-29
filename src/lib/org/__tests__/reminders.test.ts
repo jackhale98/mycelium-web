@@ -42,6 +42,24 @@ describe('upcomingReminders', () => {
 		]);
 	});
 
+	it('reminds ahead of each work session, unless scheduled reminders are off', () => {
+		const work = item({
+			title: 'Write the report',
+			key: 'r',
+			s: '<2026-10-29 Thu>',
+			sessions: [
+				parseTimestamp('<2026-10-29 Thu 09:00-12:00>')!,
+				parseTimestamp('<2026-10-30 Fri 13:00-15:00>')!,
+			],
+		});
+		const r = upcomingReminders([work], opts);
+		expect(r.map((x) => [x.body, x.at])).toEqual([
+			['Session at 09:00–12:00', localTime('2026-10-29', '08:50')],
+			['Session at 13:00–15:00', localTime('2026-10-30', '12:50')],
+		]);
+		expect(upcomingReminders([work], { ...opts, scheduled: false })).toEqual([]);
+	});
+
 	it('leaves out done items, untimed ones (unless asked), inactive stamps and turned-off kinds', () => {
 		expect(upcomingReminders([item({ s: '<2026-10-29 Thu 10:00>', done: true })], opts)).toEqual(
 			[],

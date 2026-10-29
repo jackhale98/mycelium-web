@@ -618,8 +618,9 @@ test('day planner: place, move, resize, take the time off, with undo', async ({
 	await page.getByRole('radio', { name: 'Day' }).click();
 	const block = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}, `) });
 	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:00–09:30');
+	// A timestamp alone on its line is a session: it moves like any block.
 	await expect(block('Reading group at the library')).toHaveAccessibleName(
-		'Reading group at the library, 18:30–20:00, appointment',
+		'Reading group at the library, 18:30–20:00',
 	);
 	await expect(page.getByRole('status').first()).toContainText('Planned 30 min');
 	const tray = page.getByRole('region', { name: /To plan/ });
@@ -752,4 +753,50 @@ test('day planner on a phone: hold and drag blocks and tasks; a quick swipe scro
 	await expect(block("Review this week's flashcards")).toHaveAccessibleName(
 		"Review this week's flashcards, 09:00–09:30",
 	);
+});
+
+test('day planner: a long task is planned in sessions, and the rest fills free time', async ({
+	page,
+}) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Day' }).click();
+	await page.getByRole('textbox', { name: 'Add a task' }).fill('Write the field guide today ~6h');
+	await page.getByRole('textbox', { name: 'Add a task' }).press('Enter');
+	const tray = page.getByRole('region', { name: /To plan/ });
+	const task = tray.getByRole('button', { name: /Write the field guide/ });
+	await expect(task).toContainText('2 h');
+	// The first session: two hours of the six.
+	await task.click();
+	await page.getByLabel('Start time').fill('14:00');
+	await page.getByRole('button', { name: 'Plan', exact: true }).click();
+	const block = page.getByRole('button', { name: /^Write the field guide, / });
+	await expect(block).toHaveAccessibleName(
+		'Write the field guide, 14:00–16:00, 2 h of 6 h planned',
+	);
+	await expect(task).toContainText('4 h left');
+	// Sessions move like any block.
+	await block.focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(block).toHaveAccessibleName(
+		'Write the field guide, 14:15–16:15, 2 h of 6 h planned',
+	);
+	// The rest goes into free working time, over as many days as it takes.
+	await task.click();
+	await page.getByRole('button', { name: 'Plan the rest (4 h)' }).click();
+	await expect(
+		page.getByRole('status').filter({ hasText: /4 h planned over \d days?/ }),
+	).toBeVisible();
+	await expect(task).toHaveCount(0);
+
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	const main = page.locator('main');
+	await expect(main).toContainText(/:Effort: +6:00/);
+	await expect(main).toContainText(/<\d{4}-\d\d-\d\d \w{3} 14:15-16:15>/);
+
+	// A working day of effort, and the matching Emacs setting.
+	await page.goto(page.url().replace(/#.*/, '#/settings/tasks'));
+	await page.getByLabel('A day of effort is').fill('8');
+	await page.getByLabel('A day of effort is').blur();
+	await expect(page.locator('main')).toContainText('So 2d is 16 hours of work.');
+	await expect(page.locator('.lisp')).toContainText('("d" . 480)');
 });

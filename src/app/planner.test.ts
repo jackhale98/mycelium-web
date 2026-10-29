@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { Vault } from '$lib/vault/vault';
-import { dayPlan, fromMinutes, hours, layoutBlocks, planTotals, snap, toMinutes } from './planner';
+import {
+	dayPlan,
+	fillSessions,
+	fromMinutes,
+	hours,
+	layoutBlocks,
+	planTotals,
+	snap,
+	taskKey,
+	toMinutes,
+} from './planner';
 
 const kw = { todoKeywords: ['TODO'], doneKeywords: ['DONE'] };
 
@@ -79,5 +89,63 @@ describe('day planner', () => {
 		expect(by['Dentist']).toMatchObject({ start: 660, end: 690, source: 'appointment' });
 		expect(plan.unplanned.map((i) => i.title)).toEqual(['Buy stamps']);
 		expect(plan.allDay.map((i) => i.title)).toEqual(['Conference']);
+	});
+
+	it('reads sessions on the day, and tracks Effort planned across days', () => {
+		const vault = Vault.fromSources(
+			{
+				'r.org': [
+					'* TODO Write the report',
+					'SCHEDULED: <2026-10-28 Wed>',
+					':PROPERTIES:',
+					':Effort:   12:00',
+					':END:',
+					'<2026-10-28 Wed 09:00-12:00>',
+					'<2026-10-29 Thu 13:00-15:00>',
+					'<2026-10-29 Thu 16:00-17:00>',
+					'Agreed with Sam <2026-10-29 Thu 10:00-10:30>.',
+					'',
+				].join('\n'),
+			},
+			kw,
+		);
+		const plan = dayPlan(vault, '2026-10-29', '2026-10-29');
+		const sessions = plan.blocks.filter((b) => b.source === 'session');
+		expect(sessions.map((b) => [b.start, b.end])).toEqual([
+			[780, 900],
+			[960, 1020],
+		]);
+		expect(plan.blocks.find((b) => b.source === 'appointment')).toMatchObject({
+			start: 600,
+			end: 630,
+		});
+		const item = plan.blocks[0]!.item;
+		// 3 h + 2 h + 1 h of 12 h planned: still in the tray.
+		expect(plan.progress.get(taskKey(item))).toEqual({ effort: 720, planned: 360 });
+		expect(plan.unplanned.map((i) => i.title)).toEqual(['Write the report']);
+		// A later day with no session still offers it, while Effort is left.
+		expect(dayPlan(vault, '2026-10-31', '2026-10-29').unplanned.map((i) => i.title)).toEqual([
+			'Write the report',
+		]);
+		// Effort in other units: 2d of an 8-hour day.
+		const twoDays = dayPlan(vault, '2026-10-29', '2026-10-29', undefined, { effortOf: () => 960 });
+		expect(twoDays.progress.get(taskKey(item))?.effort).toBe(960);
+	});
+
+	it('fills the rest of an estimate into free working time', () => {
+		const busy: Record<string, { start: number; end: number }[]> = {
+			'2026-10-29': [{ start: 600, end: 720 }], // 10:00-12:00 taken
+		};
+		const out = fillSessions(400, '2026-10-29', 9 * 60 + 5, (d) => busy[d] ?? [], {
+			start: '09:00',
+			end: '13:00',
+		});
+		expect(out).toEqual([
+			{ date: '2026-10-29', start: 555, end: 600 }, // 09:15, the next quarter hour, to 10:00
+			{ date: '2026-10-29', start: 720, end: 780 }, // after the busy stretch, to closing
+			{ date: '2026-10-30', start: 540, end: 660 }, // the next day, 2 h at most
+			{ date: '2026-10-30', start: 660, end: 780 },
+			{ date: '2026-10-31', start: 540, end: 595 }, // what's left: 55 min
+		]);
 	});
 });

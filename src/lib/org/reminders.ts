@@ -18,6 +18,8 @@ export interface ReminderSource {
 	url: string;
 	/** Something stable for this item across edits elsewhere in the file. */
 	key: string;
+	/** Work sessions planned for it (timestamps in its entry), which remind like a scheduled time. */
+	sessions?: OrgTimestamp[];
 }
 
 export interface ReminderOptions {
@@ -127,6 +129,22 @@ export function upcomingReminders(items: Iterable<ReminderSource>, o: ReminderOp
 					kind,
 					title: item.todo ? `${item.todo} ${item.title}` : item.title,
 					body: kind === 'deadline' ? `Due${when}` : `Scheduled${when}`,
+					url: item.url,
+				});
+			}
+		}
+		if (!o.scheduled) continue;
+		for (const ts of item.sessions ?? []) {
+			if (!ts.active || !ts.time) continue;
+			for (const date of occurrences(ts, ts.time, o.from + lead, o.to + lead)) {
+				const due = localTime(date, ts.time);
+				out.push({
+					id: `r${hash(`${item.key}|session|${date}|${ts.time}|${lead}`)}`,
+					at: due - lead,
+					due,
+					kind: 'scheduled',
+					title: item.todo ? `${item.todo} ${item.title}` : item.title,
+					body: `Session at ${ts.time}${ts.endTime ? `–${ts.endTime}` : ''}`,
 					url: item.url,
 				});
 			}

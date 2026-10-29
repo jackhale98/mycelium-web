@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { orgDurationUnitsLisp } from '$lib/org';
 	import { SWIPE_LABELS } from '../swipe';
 	const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 	import RemindersSettings from '../components/RemindersSettings.svelte';
@@ -263,6 +264,62 @@
 				>
 			</div>
 			<p class="hint">The day planner counts free time between these.</p>
+		</section>
+		<section class="panel stack" aria-labelledby="effort-h">
+			<h2 id="effort-h">Effort estimates</h2>
+			<p class="hint">
+				An <code>Effort</code> is a task's whole estimate (<code>0:30</code>, <code>3h</code>,
+				<code>2d</code>). The day planner plans it in sessions: timestamps in the task, one per
+				stretch of work. How long a “day” of effort is follows org's
+				<span class="var">org-duration-units</span>: 24 hours unless you count working days.
+			</p>
+			<div class="hours">
+				<label class="field"
+					><span>A day of effort is</span>
+					<span class="unit"
+						><input
+							type="number"
+							class="input"
+							min="1"
+							max="24"
+							step="0.5"
+							value={app.activeVault?.effortDayHours ?? 24}
+							onchange={(e) => {
+								const v = Number(e.currentTarget.value);
+								if (v >= 1 && v <= 24) app.updateVault({ effortDayHours: v });
+							}}
+						/> hours</span
+					></label
+				>
+				<label class="field"
+					><span>A week of effort is</span>
+					<span class="unit"
+						><input
+							type="number"
+							class="input"
+							min="1"
+							max="7"
+							step="1"
+							value={app.activeVault?.effortWeekDays ?? 7}
+							onchange={(e) => {
+								const v = Number(e.currentTarget.value);
+								if (v >= 1 && v <= 7) app.updateVault({ effortWeekDays: v });
+							}}
+						/> days</span
+					></label
+				>
+			</div>
+			<p class="hint">
+				So <code>2d</code> is {(app.effortUnits['d']! * 2) / 60} hours of work. For Emacs to read durations
+				the same way, add this to its configuration:
+			</p>
+			<pre class="lisp"><code>{orgDurationUnitsLisp(app.effortUnits)}</code></pre>
+			<button
+				type="button"
+				class="btn small"
+				onclick={() => navigator.clipboard?.writeText(orgDurationUnitsLisp(app.effortUnits))}
+				>Copy</button
+			>
 		</section>
 		<section class="panel stack" aria-labelledby="swipe-h">
 			<h2 id="swipe-h">Swipe actions</h2>
@@ -753,5 +810,21 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(9rem, 12rem));
 		gap: 0.75rem;
+	}
+	.unit {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.unit .input {
+		width: 5.5rem;
+	}
+	.lisp {
+		margin: 0;
+		padding: 0.6rem 0.75rem;
+		overflow-x: auto;
+		border-radius: 8px;
+		background: var(--code-bg);
+		font-size: 0.78rem;
 	}
 </style>

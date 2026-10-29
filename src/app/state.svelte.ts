@@ -20,8 +20,15 @@ import {
 	newNodeSource,
 	parseOrg,
 	parseTimestampInput,
+	addSession,
 	deleteSubtree,
+	durationToMinutes,
+	durationUnits,
 	getPlanning,
+	makeTimestamp,
+	removeSession,
+	setSession,
+	type DurationUnits,
 	parseQuickAdd,
 	type HeadlineEntry,
 	type QuickAdd,
@@ -1619,6 +1626,105 @@ class AppState {
 	/** A finished weekly review: remember the day. */
 	async finishReview() {
 		await this.updateVault({ lastReview: localNow().date });
+	}
+
+	/** Effort units (org-duration-units) for this vault: org's, or a working day. */
+	get effortUnits(): DurationUnits {
+		return durationUnits(
+			this.activeVault?.effortDayHours ?? 24,
+			this.activeVault?.effortWeekDays ?? 7,
+		);
+	}
+
+	/** A heading's Effort in minutes, read with this vault's units. */
+	effortOf(item: { file: string; pos: number; effort?: number | null }): number | null {
+		const file = this.vault.file(item.file);
+		const raw = file ? getProperty(file.source, item.pos, 'Effort', file.index.keywords) : null;
+		return raw === null ? (item.effort ?? null) : durationToMinutes(raw, this.effortUnits);
+	}
+
+	/**
+	 * Add work sessions (time blocks) to a task, as timestamps in its entry; a
+	 * task with no date yet is SCHEDULED for the first one's day. Undoable.
+	 */
+	addSessions(
+		path: string,
+		offset: number,
+		sessions: readonly { date: string; start: number; end: number }[],
+		label?: string,
+	) {
+		if (!sessions.length) return;
+		const file = this.vault.file(path);
+		if (!file) return;
+		const kw = file.index.keywords;
+		const title = this.#headingTitle(path, offset);
+		const stamp = (s: { date: string; start: number; end: number }) =>
+			makeTimestamp({
+				date: s.date,
+				time: fromMinutes(s.start),
+				endTime: fromMinutes(s.end),
+				active: true,
+			});
+		this.#undoable(
+			path,
+			label ?? `${fromMinutes(sessions[0]!.start)}–${fromMinutes(sessions[0]!.end)}: ${title}`,
+			() =>
+				this.#edit(
+					path,
+					(src) => {
+						let next = src;
+						if (!getPlanning(next, offset, kw).SCHEDULED)
+							next = applyChanges(
+								next,
+								setPlanning(
+									next,
+									offset,
+									'SCHEDULED',
+									makeTimestamp({ date: sessions[0]!.date, active: true }),
+									kw,
+								),
+							);
+						for (const s of sessions)
+							next = applyChanges(next, addSession(next, offset, stamp(s), kw));
+						return [{ from: 0, to: src.length, insert: next }];
+					},
+					`Plan ${title}`,
+				),
+			'calendar',
+		);
+	}
+
+	/** Move or resize a session (by where its timestamp is). Undoable. */
+	moveSession(
+		path: string,
+		offset: number,
+		session: { from: number; to: number },
+		next: { date: string; start: number; end: number },
+	) {
+		const title = this.#headingTitle(path, offset);
+		const ts = makeTimestamp({
+			date: next.date,
+			time: fromMinutes(next.start),
+			endTime: fromMinutes(next.end),
+			active: true,
+		});
+		this.#undoable(
+			path,
+			`${fromMinutes(next.start)}–${fromMinutes(next.end)}: ${title}`,
+			() => this.#edit(path, () => setSession(session, ts), `Move a session of ${title}`),
+			'calendar',
+		);
+	}
+
+	/** Remove a session. Undoable. */
+	removeSessionAt(path: string, offset: number, session: { from: number; to: number }) {
+		const title = this.#headingTitle(path, offset);
+		this.#undoable(
+			path,
+			`Session removed: ${title}`,
+			() => this.#edit(path, (src) => removeSession(src, session), `Remove a session of ${title}`),
+			'calendar',
+		);
 	}
 
 	get workHours(): { start: string; end: string } {

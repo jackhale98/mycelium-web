@@ -6,7 +6,7 @@
 /// "shown" list (CacheStorage, which the service worker can read too) keeps
 /// each one from showing twice.
 
-import { upcomingReminders, type Reminder, type ReminderSource } from '$lib/org';
+import { sessionsOf, upcomingReminders, type Reminder, type ReminderSource } from '$lib/org';
 import { groupAgenda } from './agenda';
 import { href } from './router.svelte';
 import { app, localNow } from './state.svelte';
@@ -73,6 +73,9 @@ export function reminderSources(): ReminderSource[] {
 					? href.node(item.node.id, at)
 					: href.file(item.file, at),
 			key: `${app.activeId}|${item.file}|${item.olp.join('/')}|${item.title}`,
+			sessions: sessionsOf(source, item.pos, vault.file(item.file)?.index.keywords).map(
+				(x) => x.timestamp,
+			),
 		};
 	});
 }

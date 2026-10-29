@@ -68,7 +68,12 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   timed tasks out as blocks; untimed ones wait in a tray. Pick a task and a
   time (or drag it with a mouse), move and resize blocks (drag, toolbar or
   arrow keys), all written back as org time ranges with Undo; planned and
-  free time are counted against your working hours.
+  free time are counted against your working hours. A task's `Effort` is its
+  whole estimate: longer work is planned in sessions (timestamps in the
+  task, one per stretch, which org's agenda shows on their days), with
+  "5 h of 12 h" progress and "Plan the rest" to fill free time over the
+  coming days. How long a "day" of effort is can match your
+  `org-duration-units`.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
   phrases and snippets, tags, backlinks, dailies, contents for long notes,
   and an agenda (a list, org's week view, stuck projects, a month calendar,
