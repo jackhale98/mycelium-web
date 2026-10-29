@@ -512,3 +512,33 @@ test('phones: swipe a task heading in a note; the tray is the one chosen in Sett
 		'Write the self-hosting guide',
 	);
 });
+
+test('quick add on the agenda: plain language becomes an org task', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	const field = page.getByRole('textbox', { name: 'Add a task' });
+	await field.fill('Call Sam tomorrow 3pm #work !A every week ~30m');
+	const chips = page.getByRole('list', { name: 'Understood' });
+	await expect(chips).toContainText('Tomorrow');
+	await expect(chips).toContainText('15:00');
+	await expect(chips).toContainText('#work');
+	await expect(chips).toContainText('Priority A');
+	await expect(chips).toContainText('Repeats every week');
+	await expect(chips).toContainText('30 min');
+	await field.press('Enter');
+	await expect(field).toHaveValue('');
+	await expect(page.locator('main')).toContainText('Call Sam');
+
+	// A chip's × keeps those words in the title.
+	await field.fill('Lunch with Friday team fri');
+	await chips.getByRole('button', { name: 'Keep “Friday” as words' }).click();
+	await expect(chips.locator('li')).toHaveCount(1);
+	await field.press('Enter');
+
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	const main = page.locator('main');
+	await expect(main).toContainText(/\* TODO \[#A\] Call Sam +:work:/);
+	await expect(main).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3} 15:00 \+1w>/);
+	await expect(main).toContainText(/:Effort: +0:30/);
+	await expect(main).toContainText('* TODO Lunch with Friday team');
+});

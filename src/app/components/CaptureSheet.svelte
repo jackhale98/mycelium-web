@@ -2,6 +2,7 @@
 	import { sheetGestures } from '../actions/sheet-gestures';
 	import { fitKeyboard } from '../actions/fit-keyboard';
 	import {
+		applyQuickAdd,
 		describeTarget,
 		expandTemplate,
 		shapeCapture,
@@ -12,6 +13,7 @@
 	import { router } from '../router.svelte';
 	import { app, localNow } from '../state.svelte';
 	import Icon from './Icon.svelte';
+	import QuickAddChips from './QuickAddChips.svelte';
 
 	let dialog: HTMLDialogElement | undefined = $state();
 	let textArea: HTMLTextAreaElement | undefined = $state();
@@ -21,6 +23,8 @@
 	let text = $state('');
 	let title = $state('');
 	let values = $state<Record<string, string>>({});
+	/** Quick-add parts to keep as words (their chips' ×). */
+	let keep = $state<string[]>([]);
 
 	const templates = $derived(app.captureTemplates);
 	const template = $derived<CaptureTemplate | undefined>(
@@ -41,19 +45,23 @@
 		return node ? `[[id:${node.id}][${node.title}]]` : undefined;
 	});
 
-	const preview = $derived(
-		template
-			? shapeCapture(
-					expandTemplate(template.template, {
-						now: localNow(),
-						text: text.trim(),
-						values,
-						link,
-					}),
-					template.type,
-				)
-			: '',
+	/** A template that reads the text as a quick add: what it understood. */
+	const quick = $derived(
+		template?.parse && template.type === 'entry' && text.trim() ? app.quickAdd(text, keep) : null,
 	);
+	const preview = $derived.by(() => {
+		if (!template) return '';
+		const shaped = shapeCapture(
+			expandTemplate(template.template, {
+				now: localNow(),
+				text: quick ? quick.title : text.trim(),
+				values,
+				link,
+			}),
+			template.type,
+		);
+		return quick ? applyQuickAdd(shaped, quick, app.vault.keywords) : shaped;
+	});
 	const canSave = $derived(
 		!!template && (isNode ? !!(title.trim() || text.trim()) : !!text.trim() || prompts.length > 0),
 	);
@@ -81,6 +89,7 @@
 			returnFocus = document.activeElement as HTMLElement | null;
 			text = open.text ?? '';
 			title = '';
+			keep = [];
 			choose(open.templateId ?? templates[0]?.id ?? '');
 			dialog.showModal();
 		} else if (!open && dialog.open) dialog.close();
@@ -97,6 +106,7 @@
 			text,
 			values: $state.snapshot(values),
 			title,
+			keep: [...keep],
 			...(link ? { link } : {}),
 		});
 		if (!result) return;
@@ -196,9 +206,20 @@
 					bind:this={textArea}
 					bind:value={text}
 					rows="3"
-					placeholder={isNode ? 'Body (optional)' : 'What do you want to capture?'}
+					placeholder={isNode
+						? 'Body (optional)'
+						: template.parse
+							? 'Call Sam tomorrow 3pm #work !A'
+							: 'What do you want to capture?'}
 					enterkeyhint="enter"></textarea>
 			</label>
+			{#if quick}
+				<QuickAddChips
+					q={quick}
+					today={localNow().date}
+					onkeep={(words) => (keep = [...keep, words])}
+				/>
+			{/if}
 
 			<details class="preview">
 				<summary>Preview</summary>

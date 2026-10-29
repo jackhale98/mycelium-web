@@ -36,6 +36,11 @@ export interface CaptureTemplate {
 	template: string;
 	/** Entries go first under the heading instead of last. */
 	prepend?: boolean;
+	/**
+	 * Read the typed text as a quick add (an `entry`): dates, times, repeats,
+	 * deadlines, #tags, !priority and ~effort become the task's own.
+	 */
+	parse?: boolean;
 }
 
 /** What Mycelium offers until a vault defines its own. */
@@ -55,6 +60,7 @@ export const DEFAULT_CAPTURE_TEMPLATES: CaptureTemplate[] = [
 		type: 'entry',
 		target: { kind: 'daily', heading: 'Tasks' },
 		template: '* TODO %?\nSCHEDULED: %t',
+		parse: true,
 	},
 	{
 		id: 'journal',
@@ -363,8 +369,11 @@ export function applyTemplate(
 	template: CaptureTemplate,
 	ctx: ExpandContext,
 	heading: string | null,
+	/** A last change to the shaped text (a quick add's dates and tags). */
+	transform?: (text: string) => string,
 ): Change[] {
-	const text = shapeCapture(expandTemplate(template.template, ctx), template.type);
+	const shaped = shapeCapture(expandTemplate(template.template, ctx), template.type);
+	const text = transform ? transform(shaped) : shaped;
 	return insertCapture(source, text, { type: template.type, heading, prepend: template.prepend });
 }
 

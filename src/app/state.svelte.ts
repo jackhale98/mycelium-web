@@ -9,6 +9,7 @@
 import { panes } from './panes.svelte';
 import {
 	applyChanges,
+	applyQuickAdd,
 	applyTemplate,
 	DEFAULT_CAPTURE_TEMPLATES,
 	expandTemplate,
@@ -20,6 +21,8 @@ import {
 	parseOrg,
 	parseTimestampInput,
 	getPlanning,
+	parseQuickAdd,
+	type QuickAdd,
 	roamFileName,
 	setHeadlineTags,
 	setHeadlineTitle,
@@ -1097,12 +1100,38 @@ class AppState {
 	 * Capture with a template: expand it, then add it to today's daily note, a
 	 * file under a heading (created if missing), or a new note.
 	 */
+	/**
+	 * Read a quick-add line. `keep` names parts (by their words, any case) to
+	 * leave in the title as written, as their chips' × does.
+	 */
+	quickAdd(text: string, keep: readonly string[] = []): QuickAdd {
+		const options = { today: localNow().date, keywords: this.vault.keywords };
+		const first = parseQuickAdd(text, options);
+		const kept = new Set(keep.map((k) => k.toLowerCase()));
+		const at = first.parts.filter((p) => kept.has(p.text.toLowerCase())).map((p) => p.from);
+		return at.length ? parseQuickAdd(text, { ...options, keep: at }) : first;
+	}
+
 	captureWith(
 		template: CaptureTemplate,
-		input: { text: string; values?: Record<string, string>; title?: string; link?: string },
+		input: {
+			text: string;
+			values?: Record<string, string>;
+			title?: string;
+			link?: string;
+			/** A quick add's parts to keep as words. */
+			keep?: readonly string[];
+		},
 	): CaptureResult | null {
 		const now = localNow();
-		const ctx = { now, text: input.text.trim(), values: input.values, link: input.link };
+		const quick =
+			template.parse && template.type === 'entry' ? this.quickAdd(input.text, input.keep) : null;
+		const ctx = {
+			now,
+			text: quick ? quick.title : input.text.trim(),
+			values: input.values,
+			link: input.link,
+		};
 		const target = template.target;
 		if (target.kind === 'node') {
 			const body = shapeCapture(expandTemplate(template.template, ctx), template.type);
@@ -1132,7 +1161,13 @@ class AppState {
 		if (!file) return null;
 		const next = applyChanges(
 			file.source,
-			applyTemplate(file.source, template, ctx, target.heading),
+			applyTemplate(
+				file.source,
+				template,
+				ctx,
+				target.heading,
+				quick ? (entry) => applyQuickAdd(entry, quick, file.index.keywords) : undefined,
+			),
 		);
 		if (next === file.source) return null;
 		const label = target.kind === 'daily' ? "today's note" : (file.index.title ?? path);

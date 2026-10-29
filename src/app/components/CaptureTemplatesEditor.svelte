@@ -214,6 +214,13 @@
 				<label class="check"
 					><input
 						type="checkbox"
+						checked={!!t.parse}
+						onchange={(e) => (t.parse = e.currentTarget.checked)}
+					/> Understand dates, times, repeats, #tags, !priority and ~effort in the text</label
+				>
+				<label class="check"
+					><input
+						type="checkbox"
 						checked={!!t.prepend}
 						onchange={(e) => (t.prepend = e.currentTarget.checked)}
 					/> Add as the first entry instead of the last</label

@@ -54,6 +54,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   org-capture-style templates: a note or task into today's daily, a journal
   entry, or a new note. On Android and desktop Chrome, Mycelium is in the
   share sheet: a shared page arrives as an org link, ready to capture.
+- **Quick add in plain language:** "Call Sam tomorrow 3pm #work !A every
+  week ~30m" becomes a TODO with its SCHEDULED time and repeater, tags,
+  priority and Effort. What it understood shows as chips (tap × to keep
+  words as they are); it works in the agenda's "Add a task…" field and any
+  capture template set to read it.
 - **Find things:** command palette (<kbd>⌘K</kbd>), full-text search with
   phrases and snippets, tags, backlinks, dailies, contents for long notes,
   and an agenda (a list, org's week view, stuck projects, a month calendar,

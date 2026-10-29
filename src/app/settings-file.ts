@@ -131,6 +131,7 @@ function template(v: unknown, i: number): CaptureTemplate {
 		target,
 		template: str(v.template, `${where}'s template`),
 		...(v.prepend === true ? { prepend: true } : {}),
+		...(v.parse === true ? { parse: true } : {}),
 	};
 }
 

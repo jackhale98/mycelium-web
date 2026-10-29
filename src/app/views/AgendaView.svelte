@@ -1,4 +1,5 @@
 <script lang="ts">
+	import QuickAddBar from '../components/QuickAddBar.svelte';
 	import { SWIPE_LABELS } from '../swipe';
 	import type { AgendaItem } from '$lib/vault/vault';
 	import AgendaFilters from '../components/AgendaFilters.svelte';
@@ -251,6 +252,7 @@
 			>
 		</p>
 	{/if}
+	{#if mode === 'list'}<QuickAddBar />{/if}
 	{#if mode === 'stuck'}
 		<section class="group" aria-labelledby="ag-stuck">
 			<h2 id="ag-stuck">Stuck projects<span class="count">{stuck.items.length}</span></h2>
