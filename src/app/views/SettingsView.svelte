@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SWIPE_LABELS } from '../swipe';
 	const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 	import RemindersSettings from '../components/RemindersSettings.svelte';
 	import StuckEditor from '../components/StuckEditor.svelte';
@@ -10,7 +11,14 @@
 	import KeywordEditor from '../components/KeywordEditor.svelte';
 	import SettingsTransfer from '../components/SettingsTransfer.svelte';
 	import { href, router } from '../router.svelte';
-	import { app, TEXT_SIZES, type ThemeChoice } from '../state.svelte';
+	import {
+		app,
+		DEFAULT_SWIPE_TRAY,
+		SWIPE_CHOICES,
+		TEXT_SIZES,
+		type SwipeChoice,
+		type ThemeChoice,
+	} from '../state.svelte';
 
 	let { tab = null }: { tab?: string | null } = $props();
 
@@ -185,6 +193,46 @@
 		<section class="panel stack" aria-labelledby="workflow-h">
 			<h2 id="workflow-h">Workflow: TODO keywords</h2>
 			{#key app.activeId}<KeywordEditor />{/key}
+		</section>
+		<section class="panel stack" aria-labelledby="swipe-h">
+			<h2 id="swipe-h">Swipe actions</h2>
+			<p class="hint">
+				On touch screens, swipe a task to the right to mark it done (or reopen it), or to the left
+				for buttons: the two you choose here, then More for everything else. Saved on this device.
+			</p>
+			<div class="swipe-picks">
+				{#each [0, 1] as slot (slot)}
+					<label class="field">
+						<span>{slot === 0 ? 'First button' : 'Second button'}</span>
+						<select
+							class="input"
+							value={app.swipeTray[slot]}
+							onchange={(e) => {
+								const picks = [...app.swipeTray];
+								const choice = e.currentTarget.value as SwipeChoice;
+								// Choosing what the other slot has swaps them.
+								const other = picks.indexOf(choice);
+								if (other !== -1 && other !== slot) picks[other] = picks[slot]!;
+								picks[slot] = choice;
+								app.setSwipeTray(picks);
+							}}
+						>
+							{#each SWIPE_CHOICES as c (c)}<option value={c}>{SWIPE_LABELS[c]}</option>{/each}
+						</select>
+					</label>
+				{/each}
+			</div>
+			<p class="swipe-preview" aria-label="Preview of the buttons a left swipe shows">
+				{#each app.swipeTray as c (c)}<span>{SWIPE_LABELS[c]}</span>{/each}<span class="more"
+					>More</span
+				>
+			</p>
+			<button
+				type="button"
+				class="btn small"
+				disabled={app.swipeTray.join() === DEFAULT_SWIPE_TRAY.join()}
+				onclick={() => app.setSwipeTray([...DEFAULT_SWIPE_TRAY])}>Use the defaults</button
+			>
 		</section>
 		<section class="panel stack" aria-labelledby="logging-h">
 			<h2 id="logging-h">Task logging</h2>
@@ -593,5 +641,29 @@
 		.two {
 			grid-template-columns: 1fr;
 		}
+	}
+	.swipe-picks {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+		gap: 0.75rem;
+	}
+	.swipe-preview {
+		display: flex;
+		max-width: 22rem;
+		margin: 0;
+		overflow: hidden;
+		border-radius: 10px;
+		font-size: 0.78rem;
+		font-weight: 650;
+	}
+	.swipe-preview span {
+		flex: 1;
+		padding: 0.6rem 0.4rem;
+		background: var(--surface-3);
+		text-align: center;
+	}
+	.swipe-preview .more {
+		background: var(--accent);
+		color: var(--on-accent);
 	}
 </style>

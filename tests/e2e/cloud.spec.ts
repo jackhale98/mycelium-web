@@ -190,7 +190,7 @@ test('a running clock survives closing and reopening the app (WebDAV)', async ({
 
 	await page.goto('app#/node/garden-1');
 	const section = page.locator('.org-section', { hasText: 'Plant tulips' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await page.getByRole('button', { name: 'Clock in' }).click();
 	await expect(page.locator('.clockbar')).toContainText('Plant tulips');
 

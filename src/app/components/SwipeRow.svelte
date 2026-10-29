@@ -1,7 +1,10 @@
 <script lang="ts" module>
+	import type { ComponentProps } from 'svelte';
+	import IconComponent from './Icon.svelte';
+
 	export interface SwipeAction {
 		label: string;
-		icon: 'check' | 'undo' | 'calendar' | 'clock' | 'settings';
+		icon: ComponentProps<typeof IconComponent>['name'];
 		run: () => void;
 		tone?: 'accent' | 'neutral' | 'warn';
 	}
@@ -21,6 +24,7 @@
 	// A swipe starting by the screen's left edge is the browser's (back), and
 	// one that's more up-and-down than sideways scrolls the page as usual.
 	import type { Snippet } from 'svelte';
+	import { app } from '../state.svelte';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -45,6 +49,8 @@
 	let animate = $state(false);
 	let open = $state(false);
 	let committing = $state(false);
+	/** A short row (a one-line heading) gets a compact tray; a very short one, icons only. */
+	let height = $state(80);
 
 	const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -58,12 +64,14 @@
 		if (closeOpen === close) closeOpen = null;
 	}
 	function openTray() {
+		app.dismissSwipeHint();
 		if (closeOpen && closeOpen !== close) closeOpen();
 		open = true;
 		closeOpen = close;
 		settle(-tray);
 	}
 	function commit(action: SwipeAction) {
+		app.dismissSwipeHint();
 		const width = root?.offsetWidth ?? 360;
 		committing = true;
 		settle(width);
@@ -111,6 +119,7 @@
 				return;
 			}
 			start = { x: t.clientX, y: t.clientY, base: open ? -tray : 0 };
+			height = el.offsetHeight;
 		};
 		const touchmove = (e: TouchEvent) => {
 			if (!start) return;
@@ -187,14 +196,20 @@
 	{#if actions.length}
 		<div
 			class="tray"
+			class:compact={height < 60}
+			class:tiny={height < 40}
 			style:width="{tray}px"
 			inert={!open}
 			aria-hidden={!open}
 			hidden={x >= 0 && !open}
 		>
 			{#each actions as a (a.label)}
-				<button type="button" class={a.tone ?? 'neutral'} onclick={() => run(a)}
-					><Icon name={a.icon} size={18} /><span>{a.label}</span></button
+				<button
+					type="button"
+					class={a.tone ?? 'neutral'}
+					aria-label={a.label}
+					title={a.label}
+					onclick={() => run(a)}><Icon name={a.icon} size={18} /><span>{a.label}</span></button
 				>
 			{/each}
 		</div>
@@ -270,6 +285,17 @@
 		font-family: var(--font-ui);
 		font-size: 0.72rem;
 		font-weight: 650;
+	}
+	.tray.compact button {
+		gap: 0.1rem;
+		font-size: 0.66rem;
+	}
+	.tray.compact button :global(svg) {
+		width: 15px;
+		height: 15px;
+	}
+	.tray.tiny button span {
+		display: none;
 	}
 	.tray .neutral {
 		background: var(--surface-3);

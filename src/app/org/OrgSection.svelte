@@ -3,7 +3,8 @@
 	import { parseTimestamp, startOf } from '$lib/org';
 	import { tsLabel } from '../util';
 	import Icon from '../components/Icon.svelte';
-	import SwipeRow, { type SwipeAction } from '../components/SwipeRow.svelte';
+	import SwipeRow from '../components/SwipeRow.svelte';
+	import { swipeFor } from '../swipe';
 	import { href } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import Blocks from './OrgBlocks.svelte';
@@ -46,33 +47,11 @@
 	});
 
 	// A task heading answers swipes on touch screens, as agenda rows do.
-	const swipeMain = $derived.by((): SwipeAction | null => {
-		if (!ctx.interactive || !headline?.todoKeyword) return null;
-		const at = offset;
-		return done
-			? { label: 'Reopen', icon: 'undo', tone: 'warn', run: () => app.reopenTask(ctx.path, at) }
-			: { label: 'Done', icon: 'check', run: () => app.completeTask(ctx.path, at) };
-	});
-	const swipeActions = $derived.by((): SwipeAction[] => {
-		if (!ctx.interactive || !headline?.todoKeyword) return [];
-		const at = offset;
-		const out: SwipeAction[] = [];
-		if (!done) {
-			out.push({ label: 'Tomorrow', icon: 'calendar', run: () => app.deferTask(ctx.path, at) });
-			const running = app.runningClocks.some((c) => c.path === ctx.path && c.heading === at);
-			out.push(
-				running
-					? { label: 'Stop', icon: 'clock', tone: 'warn', run: () => app.clockOut(ctx.path, at) }
-					: { label: 'Clock in', icon: 'clock', run: () => app.clockIn(ctx.path, at) },
-			);
-		}
-		out.push({
-			label: 'More',
-			icon: 'settings',
-			tone: 'accent',
-			run: () => (app.headingSheet = { path: ctx.path, pos: at }),
-		});
-		return out;
+	const swipe = $derived.by(() => {
+		void app.rev;
+		return ctx.interactive && headline?.todoKeyword
+			? swipeFor(ctx.path, offset, headline.todoKeyword)
+			: null;
 	});
 
 	const when = (raw: string) => {
@@ -83,8 +62,11 @@
 
 {#if headline && !headline.commented && !(done && ctx.interactive && app.hideDone)}
 	<section class="org-section" data-level={headline.level} data-pos={offset}>
-		{#if swipeMain}
-			<SwipeRow main={swipeMain} actions={swipeActions}>{@render headingRow(headline)}</SwipeRow>
+		{#if swipe}
+			<!-- The heading and its dates swipe together, as one task. -->
+			<SwipeRow main={swipe.main} actions={swipe.actions}
+				>{@render headingRow(headline)}{#if open}{@render planningRow()}{/if}</SwipeRow
+			>
 		{:else}
 			{@render headingRow(headline)}
 		{/if}
@@ -103,18 +85,7 @@
 			/>
 		{/if}
 		{#if open}
-			{#if planning}
-				<div class="planning">
-					{#each ['DEADLINE', 'SCHEDULED', 'CLOSED'] as const as kind (kind)}
-						{@const ts = dates[kind]}
-						{#if ts}
-							<DateChip path={ctx.path} {offset} {kind} {ts} editable={ctx.interactive} />
-						{:else if kind === 'DEADLINE' && planning.deadline}
-							<span class="plan">{when(planning.deadline.rawValue)}</span>
-						{/if}
-					{/each}
-				</div>
-			{/if}
+			{#if !swipe}{@render planningRow()}{/if}
 			<div class="section-body"><Blocks nodes={body} {ctx} /></div>
 		{/if}
 	</section>
@@ -154,6 +125,7 @@
 			<button
 				type="button"
 				class="more"
+				class:swiped={!!swipe}
 				class:on={editing}
 				aria-expanded={editing}
 				aria-label="Edit heading: state, priority, tags and dates"
@@ -172,4 +144,19 @@
 			>
 		{/if}
 	</div>
+{/snippet}
+
+{#snippet planningRow()}
+	{#if planning}
+		<div class="planning">
+			{#each ['DEADLINE', 'SCHEDULED', 'CLOSED'] as const as kind (kind)}
+				{@const ts = dates[kind]}
+				{#if ts}
+					<DateChip path={ctx.path} {offset} {kind} {ts} editable={ctx.interactive} />
+				{:else if kind === 'DEADLINE' && planning.deadline}
+					<span class="plan">{when(planning.deadline.rawValue)}</span>
+				{/if}
+			{/each}
+		</div>
+	{/if}
 {/snippet}

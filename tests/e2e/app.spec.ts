@@ -386,7 +386,7 @@ test('the editor saves edits and links to new notes', async ({ page }) => {
 test('heading actions set priority, tags and dates', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
 	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await page.getByRole('radio', { name: 'B', exact: true }).click();
 	await page.getByLabel('Tags', { exact: true }).fill('urgent');
 	await page.keyboard.press('Enter');
@@ -399,7 +399,7 @@ test('heading actions set priority, tags and dates', async ({ page }) => {
 test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
 	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await page.getByRole('button', { name: 'Clock in' }).click();
 	const bar = page.locator('.clockbar');
 	await expect(bar).toContainText('Ship the design system');
@@ -409,7 +409,7 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 	// Clocking in elsewhere stops (and records) the running clock.
 	await page.keyboard.press('Escape');
 	const other = page.locator('.org-section', { hasText: 'Write the self-hosting guide' }).first();
-	await other.getByRole('button', { name: /Edit heading/ }).click();
+	await other.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await expect(page.getByText('Stops and records “Ship the design system”')).toBeVisible();
 	await page.getByRole('button', { name: 'Clock in' }).click();
 	await expect(bar).toContainText('Write the self-hosting guide');
@@ -437,7 +437,7 @@ test('clocking in and out writes an org CLOCK line into the LOGBOOK', async ({ p
 test('archiving a heading moves it to the archive file', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
 	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await page.getByRole('button', { name: 'Archive', exact: true }).click();
 	await expect(page.locator('.org-section', { hasText: 'Ship the design system' })).toHaveCount(0);
 	await page.goto('app#/changes');
@@ -512,7 +512,7 @@ test('fields stay at 16px or more on touch screens (no zoom on focus)', async ({
 	test.skip(!isMobile, 'touch-only rule');
 	await open(page, `app#/node/${PROJECT}`);
 	const section = page.locator('.org-section', { hasText: 'Ship the design system' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	for (const field of [
 		page.getByRole('combobox', { name: 'Tags', exact: true }),
 		page.locator('.actions input[type="date"]').first(),
@@ -547,7 +547,7 @@ test('edit a heading from the agenda: date chip and heading sheet', async ({ pag
 	await row.locator('input[type="date"]').fill('2026-11-05');
 	await expect(row.getByRole('button', { name: /change due date/ })).toBeVisible();
 
-	await row.getByRole('button', { name: /Edit “Ship the design system”/ }).click();
+	await row.getByRole('button', { name: /Edit “Ship the design system”/ }).press('Enter');
 	const sheet = page.getByRole('dialog');
 	await expect(sheet).toBeVisible();
 	await sheet.getByRole('textbox', { name: 'Heading', exact: true }).fill('Ship the design tokens');

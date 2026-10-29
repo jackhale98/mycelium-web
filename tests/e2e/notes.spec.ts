@@ -77,7 +77,7 @@ test('renaming a note updates the links that used its old title', async ({ page 
 test('a heading is extracted into a note of its own, keeping its ID', async ({ page }) => {
 	await open(page, `app#/node/${ORG_MODE}`);
 	const section = page.locator('.org-section', { hasText: 'Markup cheat sheet' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await page.getByRole('button', { name: 'Extract to note' }).click();
 	// The same note (its ID), now a file of its own.
 	await expect(page).toHaveURL(new RegExp(`#/node/${CHEAT_SHEET}$`));
@@ -129,7 +129,7 @@ test('the agenda week view shows each day, and remembers it', async ({ page }) =
 test('refiling: the search box stays put as the results narrow', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
 	const section = page.locator('.org-section', { hasText: 'Write the self-hosting guide' }).first();
-	await section.getByRole('button', { name: /Edit heading/ }).click();
+	await section.getByRole('button', { name: /Edit heading/ }).press('Enter');
 	await page.getByRole('button', { name: 'Refile…' }).click();
 	const search = page.getByRole('searchbox', { name: 'Find a heading or file' });
 	await expect(search).toBeVisible();
@@ -336,7 +336,7 @@ test('board: a column per state, move by menu or drag, rows by tag', async ({ pa
 	}
 	const card = todo.locator('li', { hasText: 'How to Take Smart Notes' });
 	// Edit a card's heading from the board.
-	await card.getByRole('button', { name: 'Edit “How to Take Smart Notes”' }).click();
+	await card.getByRole('button', { name: 'Edit “How to Take Smart Notes”' }).press('Enter');
 	const sheet = page.getByRole('dialog');
 	await expect(sheet.getByLabel('Heading', { exact: true })).toHaveValue('How to Take Smart Notes');
 	await page.keyboard.press('Escape');
@@ -374,7 +374,7 @@ test('phones: a task sheet locks the page behind and a pull down closes it', asy
 	await page
 		.getByRole('button', { name: /^Edit “/ })
 		.first()
-		.click();
+		.press('Enter');
 	const sheet = page.getByRole('dialog');
 	await expect(sheet).toBeVisible();
 	const overflow = () => page.evaluate(() => getComputedStyle(document.documentElement).overflowY);
@@ -467,30 +467,47 @@ test('phones: swipe a task right to complete it (with undo), left for quick acti
 	await expect(toast).toBeVisible();
 	await toast.getByRole('button', { name: 'Undo' }).click();
 	await expect(row.getByRole('button', { name: /TODO/ }).first()).toBeVisible();
-	// Right to left: the tray, then Tomorrow.
+	// Right to left: the tray (Schedule, State, More by default), then a day.
 	await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
 	box = (await row.boundingBox())!;
 	await swipe(page, box.y + 20, box.x + box.width - 40, box.x + 60);
 	const tray = row.locator('.tray');
-	await expect(tray.getByRole('button', { name: 'Tomorrow' })).toBeVisible();
-	await expect(tray.getByRole('button', { name: 'Clock in' })).toBeVisible();
-	await tray.getByRole('button', { name: 'Tomorrow' }).click();
+	await expect(tray.getByRole('button')).toHaveText(['Schedule', 'State', 'More']);
+	await tray.getByRole('button', { name: 'Schedule' }).click();
+	const sheet = page.getByRole('dialog', { name: 'Schedule' });
+	await sheet.getByRole('button', { name: /^Tomorrow/ }).click();
 	await expect(
 		page.getByRole('status').filter({ hasText: 'Tomorrow: Write the self-hosting guide' }),
 	).toBeVisible();
+	// State: straight to another keyword.
+	await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+	box = (await row.boundingBox())!;
+	await swipe(page, box.y + 20, box.x + box.width - 40, box.x + 60);
+	await tray.getByRole('button', { name: 'State' }).click();
+	await page.getByRole('dialog', { name: 'State' }).getByRole('button', { name: 'NEXT' }).click();
+	await expect(row.getByRole('button', { name: /NEXT/ }).first()).toBeVisible();
 	await page.goto(page.url().replace(/#.*/, '#/changes'));
 	await expect(page.locator('main')).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3}>/);
 });
 
-test('phones: swipe a task heading in a note for its actions', async ({ page, isMobile }) => {
+test('phones: swipe a task heading in a note; the tray is the one chosen in Settings', async ({
+	page,
+	isMobile,
+}) => {
 	test.skip(!isMobile, 'swipes are for touch screens');
-	await open(page, 'app#/node/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c12');
+	await open(page, 'app#/settings/tasks');
+	await page.getByLabel('First button').selectOption('clock');
+	await expect(page.locator('.swipe-preview')).toHaveText(/Clock in\s*State\s*More/);
+	await page.goto(page.url().replace(/#.*/, '#/node/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c12'));
 	const heading = page.locator('.swipe', { hasText: 'Write the self-hosting guide' });
 	await heading.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+	// The gear is out of sight on touch screens; the swipe does its job.
+	await expect(heading.locator('.more')).toHaveCSS('position', 'absolute');
 	const box = (await heading.boundingBox())!;
-	await swipe(page, box.y + box.height / 2, box.x + box.width - 40, box.x + 60);
-	await heading.locator('.tray').getByRole('button', { name: 'More' }).click();
-	await expect(page.getByRole('dialog')).toBeVisible();
+	await swipe(page, box.y + 14, box.x + box.width - 40, box.x + 60);
+	const tray = heading.locator('.tray');
+	await expect(tray.getByRole('button')).toHaveText(['Clock in', 'State', 'More']);
+	await tray.getByRole('button', { name: 'More' }).click();
 	await expect(page.getByRole('dialog').getByLabel('Heading', { exact: true })).toHaveValue(
 		'Write the self-hosting guide',
 	);

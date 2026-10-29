@@ -9,6 +9,7 @@
 	import NewNoteDialog from './components/NewNoteDialog.svelte';
 	import HabitSheet from './org/HabitSheet.svelte';
 	import HeadingSheet from './org/HeadingSheet.svelte';
+	import QuickSheet from './org/QuickSheet.svelte';
 	import NoteSheet from './components/NoteSheet.svelte';
 	import Sidebar from './components/Sidebar.svelte';
 	import SyncDialog from './components/SyncDialog.svelte';
@@ -260,6 +261,7 @@
 <ImageSheet />
 <HeadingSheet />
 <HabitSheet />
+<QuickSheet />
 <NoteSheet />
 <CaptureSheet />
 

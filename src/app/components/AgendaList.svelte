@@ -8,7 +8,8 @@
 	import { habitGraph, parseHabit } from '$lib/org';
 	import { relativeDay, shortDate } from '../util';
 	import Icon from './Icon.svelte';
-	import SwipeRow, { type SwipeAction } from './SwipeRow.svelte';
+	import { swipeFor } from '../swipe';
+	import SwipeRow from './SwipeRow.svelte';
 
 	let {
 		items,
@@ -88,43 +89,6 @@
 
 	const edit = (item: AgendaItem) => (app.headingSheet = { path: item.file, pos: item.pos });
 
-	// Swipes on touch screens: left to right completes (or reopens) a task;
-	// right to left uncovers Tomorrow, Clock and More.
-	function swipeMain(item: AgendaItem): SwipeAction | null {
-		if (!item.todo) return null;
-		return app.vault.isDone(item.todo, item.file)
-			? {
-					label: 'Reopen',
-					icon: 'undo',
-					tone: 'warn',
-					run: () => app.reopenTask(item.file, item.pos),
-				}
-			: { label: 'Done', icon: 'check', run: () => app.completeTask(item.file, item.pos) };
-	}
-	function swipeActions(item: AgendaItem): SwipeAction[] {
-		const out: SwipeAction[] = [];
-		if (item.todo && !app.vault.isDone(item.todo, item.file)) {
-			out.push({
-				label: 'Tomorrow',
-				icon: 'calendar',
-				run: () => app.deferTask(item.file, item.pos),
-			});
-			const running = app.runningClocks.some((c) => c.path === item.file && c.heading === item.pos);
-			out.push(
-				running
-					? {
-							label: 'Stop',
-							icon: 'clock',
-							tone: 'warn',
-							run: () => app.clockOut(item.file, item.pos),
-						}
-					: { label: 'Clock in', icon: 'clock', run: () => app.clockIn(item.file, item.pos) },
-			);
-		}
-		out.push({ label: 'More', icon: 'settings', tone: 'accent', run: () => edit(item) });
-		return out;
-	}
-
 	// Touch: a long press on a row opens the heading sheet.
 	let press: ReturnType<typeof setTimeout> | null = null;
 	let pressed = false;
@@ -159,8 +123,9 @@
 {#snippet itemRow(item: AgendaItem, time: string | null)}
 	{@const due = item.deadline ?? item.scheduled}
 	{@const overdue = !!due && due.date < today && !app.vault.isDone(item.todo, item.file)}
+	{@const swipe = swipeFor(item.file, item.pos, item.todo)}
 	<li class="row">
-		<SwipeRow main={swipeMain(item)} actions={swipeActions(item)}>
+		<SwipeRow main={swipe.main} actions={swipe.actions}>
 			<!-- A long press is a touch shortcut for the row's Edit button. -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
@@ -411,6 +376,18 @@
 		border-radius: 7px;
 		background: none;
 		color: var(--text-faint);
+	}
+	/* Touch screens: swiping a row does what these do (More opens the sheet),
+	   so they stay only for screen readers and keyboards, out of sight. */
+	@media (pointer: coarse) {
+		.more:not(:focus-visible) {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
 	}
 	.more:hover,
 	.more:focus-visible {

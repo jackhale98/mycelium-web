@@ -8,7 +8,6 @@
 
 import { panes } from './panes.svelte';
 import {
-	addDays,
 	applyChanges,
 	applyTemplate,
 	DEFAULT_CAPTURE_TEMPLATES,
@@ -101,6 +100,28 @@ export const TEXT_SIZES = [
 function readTextSize(): number {
 	const n = Number(readLocal(TEXT_SIZE_KEY));
 	return TEXT_SIZES.some((s) => s.value === n) ? n : 100;
+}
+/** What a task's swipe tray can hold (before More, which always ends it). */
+export const SWIPE_CHOICES = [
+	'schedule',
+	'state',
+	'today',
+	'tomorrow',
+	'clock',
+	'priority',
+	'refile',
+	'archive',
+] as const;
+export type SwipeChoice = (typeof SWIPE_CHOICES)[number];
+export const DEFAULT_SWIPE_TRAY: SwipeChoice[] = ['schedule', 'state'];
+const SWIPE_TRAY_KEY = 'mycelium:swipe-tray';
+const SWIPE_HINT_KEY = 'mycelium:swipe-hint';
+function readSwipeTray(): SwipeChoice[] {
+	const saved = (readLocal(SWIPE_TRAY_KEY) ?? '').split(',');
+	const picks = saved.filter((c): c is SwipeChoice =>
+		(SWIPE_CHOICES as readonly string[]).includes(c),
+	);
+	return picks.length === 2 ? picks : [...DEFAULT_SWIPE_TRAY];
 }
 const ACTIVE_KEY = 'mycelium:active-vault';
 export const DEMO_ID = 'demo';
@@ -217,6 +238,26 @@ class AppState {
 	rev = $state(0);
 	theme = $state<ThemeChoice>(readTheme());
 	textSize = $state<number>(readTextSize());
+	/** The two buttons a task's swipe tray starts with (this device). */
+	swipeTray = $state<SwipeChoice[]>(readSwipeTray());
+	/** The one-time tip about swiping tasks has been seen (or a swipe made). */
+	swipeHintSeen = $state(readLocal(SWIPE_HINT_KEY) === '1');
+	/** A small sheet of quick choices for a heading: when, which state, which priority. */
+	quickSheet = $state<{
+		kind: 'schedule' | 'state' | 'priority';
+		path: string;
+		pos: number;
+	} | null>(null);
+
+	setSwipeTray(picks: SwipeChoice[]) {
+		this.swipeTray = picks.slice(0, 2);
+		writeLocal(SWIPE_TRAY_KEY, this.swipeTray.join(','));
+	}
+	dismissSwipeHint() {
+		if (this.swipeHintSeen) return;
+		this.swipeHintSeen = true;
+		writeLocal(SWIPE_HINT_KEY, '1');
+	}
 	/**
 	 * Show a paragraph's line breaks as written (as Emacs shows the buffer), or
 	 * join its lines into flowing text (as org's exporters do), which suits
@@ -1422,19 +1463,32 @@ class AppState {
 		this.#undoable(path, `Reopened: ${title}`, () => this.setTodo(path, offset, todo), 'undo');
 	}
 
-	/** Schedule a task for tomorrow (keeping its time and repeater), undoable for a few seconds. */
-	deferTask(path: string, offset: number) {
+	/**
+	 * Schedule a task for `date` (keeping its time and repeater), or remove its
+	 * schedule, undoable for a few seconds. `label` names the day for the bar.
+	 */
+	scheduleTask(path: string, offset: number, date: string | null, label: string) {
 		const file = this.vault.file(path);
 		if (!file) return;
 		const time = getPlanning(file.source, offset, file.index.keywords).SCHEDULED?.time;
-		const tomorrow = addDays(localNow().date, 1);
 		const title = this.#headingTitle(path, offset);
 		this.#undoable(
 			path,
-			`Tomorrow: ${title}`,
+			`${label}: ${title}`,
 			() =>
-				this.setPlanningDate(path, offset, 'SCHEDULED', time ? `${tomorrow}T${time}` : tomorrow),
+				this.setPlanningDate(path, offset, 'SCHEDULED', date && time ? `${date}T${time}` : date),
 			'calendar',
+		);
+	}
+
+	/** Set a task's TODO state, undoable for a few seconds. */
+	setTodoUndoable(path: string, offset: number, keyword: string | null) {
+		const title = this.#headingTitle(path, offset);
+		this.#undoable(
+			path,
+			`${keyword ?? 'No state'}: ${title}`,
+			() => this.setTodo(path, offset, keyword),
+			'check',
 		);
 	}
 

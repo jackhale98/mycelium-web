@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SWIPE_LABELS } from '../swipe';
 	import type { AgendaItem } from '$lib/vault/vault';
 	import AgendaFilters from '../components/AgendaFilters.svelte';
 	import AgendaList from '../components/AgendaList.svelte';
@@ -32,6 +33,8 @@
 	const pane = usePane();
 
 	const today = localNow().date;
+	/** Touch screens, where tasks swipe. */
+	const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 	const storeKey = `mycelium:agenda-filter:${app.activeId}`;
 
 	function initial(): AgendaFilter {
@@ -233,6 +236,21 @@
 		{categoryLabels}
 		error={compiled.error}
 	/>
+	{#if touch && !app.swipeHintSeen && (mode === 'list' || mode === 'week')}
+		<p class="swipe-tip" role="note">
+			<span
+				><strong>Tip:</strong> swipe a task right to mark it done, or left for {app.swipeTray
+					.map((c) => SWIPE_LABELS[c])
+					.join(', ')} and More.</span
+			>
+			<button
+				type="button"
+				class="x"
+				aria-label="Dismiss tip"
+				onclick={() => app.dismissSwipeHint()}><Icon name="close" size={14} /></button
+			>
+		</p>
+	{/if}
 	{#if mode === 'stuck'}
 		<section class="group" aria-labelledby="ag-stuck">
 			<h2 id="ag-stuck">Stuck projects<span class="count">{stuck.items.length}</span></h2>
@@ -445,5 +463,29 @@
 		.agenda-page.fit {
 			padding-bottom: 0;
 		}
+	}
+	.swipe-tip {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: -0.5rem 0 1rem;
+		padding: 0.6rem 0.5rem 0.6rem 0.85rem;
+		border-radius: 12px;
+		background: var(--accent-softer, var(--accent-soft));
+		color: var(--text-2);
+		font-size: 0.86rem;
+	}
+	.swipe-tip span {
+		flex: 1;
+	}
+	.swipe-tip .x {
+		display: grid;
+		place-items: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border: 0;
+		border-radius: 8px;
+		background: none;
+		color: var(--text-muted);
 	}
 </style>
