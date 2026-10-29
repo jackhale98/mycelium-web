@@ -610,12 +610,88 @@ test('the weekly review walks its steps and remembers the day', async ({ page })
 	await expect(page.getByRole('link', { name: /Weekly review\s*today/ })).toBeVisible();
 });
 
+/** The agenda's planner, a day at a time (wide panes open on the week). */
+async function planDay(page: Page) {
+	await page.evaluate(() => localStorage.setItem('mycelium:plan-view', 'day'));
+	await page.getByRole('radio', { name: 'Plan' }).click();
+}
+
+test('week planner: a week side by side; blocks move between days', async ({ page, isMobile }) => {
+	test.skip(isMobile, 'a phone plans a day at a time');
+	await page.setViewportSize({ width: 1600, height: 1000 });
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'Plan' }).click();
+	const by = page.getByRole('radiogroup', { name: 'Plan by' });
+	await expect(by.getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-checked', 'true');
+	// Today, tomorrow (or yesterday, on a Sunday), as the planner names them.
+	const { today, other, iso, dir } = await page.evaluate(() => {
+		const now = new Date();
+		const dir = now.getDay() === 0 ? -1 : 1;
+		const next = new Date(now.getTime() + dir * 86_400_000);
+		const name = (d: Date) => d.toLocaleDateString(undefined, { weekday: 'long' });
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return {
+			today: name(now),
+			other: name(next),
+			iso: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+			dir,
+		};
+	});
+	const block = page.getByRole('button', { name: /^Plan the week, / });
+	await expect(block).toHaveAccessibleName(new RegExp(`^Plan the week, 09:00–09:30, ${today}`));
+
+	// The keyboard moves it a day.
+	await block.focus();
+	await page.keyboard.press(dir === 1 ? 'ArrowRight' : 'ArrowLeft');
+	await expect(block).toHaveAccessibleName(new RegExp(`^Plan the week, 09:00–09:30, ${other}`));
+	await expect(block).toBeFocused();
+
+	// The mouse drags it back to today, an hour later.
+	const lanes = page.locator('.lane');
+	const at = await lanes.evaluateAll((els) => els.map((el) => el.classList.contains('today')));
+	const lane = (await lanes.nth(at.indexOf(true)).boundingBox())!;
+	const b = (await block.boundingBox())!;
+	await page.mouse.move(b.x + b.width / 2, b.y + 6);
+	await page.mouse.down();
+	await page.mouse.move(lane.x + lane.width / 2, b.y + 6 + 48, { steps: 10 });
+	await page.mouse.up();
+	await expect(block).toHaveAccessibleName(new RegExp(`^Plan the week, 10:00–10:30, ${today}`));
+
+	// From the tray, onto a chosen day.
+	const tray = page.getByRole('region', { name: /To plan/ });
+	await tray.getByRole('button', { name: /Sketch the graph view/ }).click();
+	const day = page.getByLabel('Day', { exact: true });
+	await day.selectOption({ index: at.indexOf(true) + dir });
+	await page.getByLabel('Start time').fill('11:00');
+	await page.getByRole('button', { name: 'Plan', exact: true }).click();
+	await expect(page.getByRole('button', { name: /^Sketch the graph view, / })).toHaveAccessibleName(
+		new RegExp(`^Sketch the graph view, 11:00–11:30, ${other}`),
+	);
+
+	// Early and late hours unfold.
+	await expect(page.locator('.hour').first()).toHaveText('09:00');
+	await page.getByRole('button', { name: 'Show early and late hours' }).click();
+	await expect(page.locator('.hour').first()).toHaveText('06:00');
+
+	// A day's header opens that day.
+	await page.getByRole('button', { name: new RegExp(`^Open ${today}`) }).click();
+	await expect(by.getByRole('radio', { name: 'Day' })).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByRole('button', { name: /^Plan the week, / })).toHaveAccessibleName(
+		'Plan the week, 10:00–10:30',
+	);
+
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	await expect(page.locator('main')).toContainText(
+		new RegExp(`SCHEDULED: <${iso} \\w{3} 10:00-10:30>`),
+	);
+});
+
 test('day planner: place, move, resize, take the time off, with undo', async ({
 	page,
 	isMobile,
 }) => {
 	await open(page, 'app#/agenda');
-	await page.getByRole('radio', { name: 'Day' }).click();
+	await planDay(page);
 	const block = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}, `) });
 	await expect(block('Plan the week')).toHaveAccessibleName('Plan the week, 09:00–09:30');
 	// A timestamp alone on its line is a session: it moves like any block.
@@ -685,7 +761,7 @@ test('day planner on a phone: hold and drag blocks and tasks; a quick swipe scro
 }) => {
 	test.skip(!isMobile, 'touch');
 	await open(page, 'app#/agenda');
-	await page.getByRole('radio', { name: 'Day' }).click();
+	await planDay(page);
 	const block = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}, `) });
 	const scroller = page.locator('.scroller');
 	await scroller.scrollIntoViewIfNeeded();
@@ -763,7 +839,7 @@ test('day planner: a long task is planned in sessions, and the rest fills free t
 	page,
 }) => {
 	await open(page, 'app#/agenda');
-	await page.getByRole('radio', { name: 'Day' }).click();
+	await planDay(page);
 	await page.getByRole('textbox', { name: 'Add a task' }).fill('Write the field guide today ~6h');
 	await page.getByRole('textbox', { name: 'Add a task' }).press('Enter');
 	const tray = page.getByRole('region', { name: /To plan/ });

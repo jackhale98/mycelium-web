@@ -64,11 +64,13 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   delete (with undo) or later, by tap, swipe or key. The weekly review walks
   the inbox, overdue, the next 7 days, waiting tasks, stuck projects,
   slipped habits and what got done; Home shows when you last did it.
-- **Day planner (time blocking):** the agenda's Day view lays the day's
-  timed tasks out as blocks; untimed ones wait in a tray. Pick a task and a
-  time (or drag it with a mouse), move and resize blocks (drag, toolbar or
-  arrow keys), all written back as org time ranges with Undo; planned and
-  free time are counted against your working hours. A task's `Effort` is its
+- **Planner (time blocking):** the agenda's Plan view lays timed tasks out
+  as blocks, a day at a time or (on a wide screen) a week side by side, with
+  early and late hours folded away until you want them; untimed ones wait in
+  a tray. Pick a task and a time (or drag it), move and resize blocks, to
+  another day too (drag, toolbar or arrow keys), all written back as org
+  time ranges with Undo; planned and free time are counted against your
+  working hours. A task's `Effort` is its
   whole estimate: longer work is planned in sessions (timestamps in the
   task, one per stretch, which org's agenda shows on their days), with
   "5 h of 12 h" progress and "Plan the rest" to fill free time over the

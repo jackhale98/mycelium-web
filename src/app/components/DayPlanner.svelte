@@ -1,21 +1,25 @@
 <script lang="ts">
-	// The day planner (time blocking): a day's timed tasks as blocks on a
-	// timeline, and its untimed ones in a tray to plan. Everything writes the
-	// task's SCHEDULED (or DEADLINE) time as an org range, repeater and all,
-	// with Undo in the bar; appointments written in an entry's text show but
-	// stay put.
-	// - Any screen: pick a task in the tray, then tap a time on the day (or
+	// The planner (time blocking): timed tasks as blocks on a timeline, one
+	// day or a week of them side by side, and untimed ones in a tray to plan.
+	// Everything writes the task's SCHEDULED (or DEADLINE) time as an org
+	// range, repeater and all, or a work session in its entry, with Undo in
+	// the bar; appointments written in an entry's text show but stay put.
+	// - Any screen: pick a task in the tray, then tap a time on a day (or
 	//   type a time and Plan); tap a block for a toolbar (earlier, later,
-	//   shorter, longer, no time, edit).
-	// - With a mouse: drag a task onto the day, drag a block to move it, drag
-	//   its bottom edge to change its end, drag it onto the tray to take its
-	//   time off.
+	//   shorter, longer, day before or after, no time, edit).
+	// - With a mouse: drag a task onto a day, drag a block to move it (to
+	//   another day too, in the week), drag its bottom edge to change its end,
+	//   drag it onto the tray to take its time off.
 	// - Keyboard, on a block: ↑/↓ move 15 minutes, Shift+↑/↓ change the end,
-	//   Enter edits, Delete takes the time off.
+	//   ←/→ move a day, Enter edits, Delete takes the time off.
+	// The week shows working hours, with early and late hours folded away
+	// until asked for; it's the default where the pane is wide, and a narrow
+	// pane (a phone) always shows a day.
 	import { untrack } from 'svelte';
 	import { addDays } from '$lib/org';
 	import type { AgendaItem } from '$lib/vault/vault';
 	import { sessionsOf } from '$lib/org';
+	import { weekStart } from '../agenda';
 	import {
 		dayPlan,
 		DEFAULT_MINUTES,
@@ -34,21 +38,75 @@
 
 	let { today, keep }: { today: string; keep: (item: AgendaItem) => boolean } = $props();
 
-	const FIRST_HOUR = 6;
-	const LAST_HOUR = 24;
-	const HOUR_PX = 64;
-	const px = (minutes: number) => ((minutes - FIRST_HOUR * 60) / 60) * HOUR_PX;
+	// ---- day or week ----
+	const VIEW_KEY = 'mycelium:plan-view';
+	type View = 'day' | 'week';
+	/** Narrower than this, the week doesn't fit: a day it is. */
+	const WEEK_MIN = 760;
+	/** Wider than this, the week is the default. */
+	const WEEK_DEFAULT = 1100;
+	let chosen = $state<View | null>(
+		(() => {
+			try {
+				const v = localStorage.getItem(VIEW_KEY);
+				return v === 'day' || v === 'week' ? v : null;
+			} catch {
+				return null;
+			}
+		})(),
+	);
+	let width = $state(0);
+	const canWeek = $derived(width >= WEEK_MIN);
+	const view = $derived<View>(
+		!canWeek ? 'day' : (chosen ?? (width >= WEEK_DEFAULT ? 'week' : 'day')),
+	);
+	function setView(v: View, remember = true) {
+		chosen = v;
+		if (!remember) return;
+		try {
+			localStorage.setItem(VIEW_KEY, v);
+		} catch {
+			// Not remembered: fine.
+		}
+	}
 
 	// svelte-ignore state_referenced_locally
 	let date = $state(today);
-	const plan = $derived.by(() => {
+	const dates = $derived(
+		view === 'week' ? Array.from({ length: 7 }, (_, n) => addDays(weekStart(date), n)) : [date],
+	);
+	const options = { effortOf: (i: AgendaItem) => app.effortOf(i) };
+	const days = $derived.by(() => {
 		void app.rev;
-		return dayPlan(app.vault, date, today, keep, { effortOf: (i) => app.effortOf(i) });
+		return dates.map((d) => {
+			const plan = dayPlan(app.vault, d, today, keep, options);
+			return { date: d, plan, totals: planTotals(plan.blocks, app.workHours) };
+		});
 	});
-	const totals = $derived(planTotals(plan.blocks, app.workHours));
+	/** A block on its day; `id` is unique across the days shown. */
+	type DayBlock = PlanBlock & { date: string; id: string };
+	const blocks = $derived<DayBlock[]>(
+		days.flatMap((d) =>
+			d.plan.blocks.map((b) => ({ ...b, date: d.date, id: `${d.date}\u0001${b.key}` })),
+		),
+	);
 	const keyOf = (i: AgendaItem) => `${i.file}\u0000${i.pos}`;
+	/** What's left to plan on the days shown, each task once. */
+	const unplanned = $derived.by(() => {
+		const seen = new Set<string>();
+		return days
+			.flatMap((d) => d.plan.unplanned)
+			.filter((i) => !seen.has(keyOf(i)) && !!seen.add(keyOf(i)));
+	});
+	const progress = $derived(new Map(days.flatMap((d) => [...d.plan.progress])));
+	const totals = $derived(
+		days.reduce(
+			(sum, d) => ({ planned: sum.planned + d.totals.planned, free: sum.free + d.totals.free }),
+			{ planned: 0, free: 0 },
+		),
+	);
 	/** A task's Effort and how much of it is planned (any day). */
-	const progressOf = (i: AgendaItem) => plan.progress.get(keyOf(i)) ?? { effort: null, planned: 0 };
+	const progressOf = (i: AgendaItem) => progress.get(keyOf(i)) ?? { effort: null, planned: 0 };
 	/** Effort still to plan, or null without an estimate. */
 	const remainingOf = (i: AgendaItem) => {
 		const p = progressOf(i);
@@ -68,98 +126,182 @@
 	/** What's picked: a task in the tray (to place), or a block (for its toolbar). */
 	let picked = $state<{ kind: 'tray' | 'block'; key: string } | null>(null);
 	const pickedTray = $derived(
-		picked?.kind === 'tray' ? (plan.unplanned.find((i) => keyOf(i) === picked!.key) ?? null) : null,
+		picked?.kind === 'tray' ? (unplanned.find((i) => keyOf(i) === picked!.key) ?? null) : null,
 	);
 	const pickedBlock = $derived(
-		picked?.kind === 'block' ? (plan.blocks.find((b) => b.key === picked!.key) ?? null) : null,
+		picked?.kind === 'block' ? (blocks.find((b) => b.id === picked!.key) ?? null) : null,
 	);
 	let placeAt = $state('09:00');
+	let placeOn = $state('');
 
+	const dayName = (d: string, opts: Intl.DateTimeFormatOptions) =>
+		new Date(`${d}T12:00`).toLocaleDateString(undefined, opts);
 	const label = $derived(
-		new Date(`${date}T12:00`).toLocaleDateString(undefined, {
-			weekday: 'long',
-			day: 'numeric',
-			month: 'long',
-		}),
+		view === 'week'
+			? `${dayName(dates[0]!, { day: 'numeric', month: 'short' })} – ${dayName(dates[6]!, { day: 'numeric', month: 'short', year: 'numeric' })}`
+			: dayName(date, { weekday: 'long', day: 'numeric', month: 'long' }),
 	);
+	const step = $derived(view === 'week' ? 7 : 1);
 
 	// ---- writing ----
 	const kindOf = (b: PlanBlock) => (b.source === 'DEADLINE' ? 'DEADLINE' : 'SCHEDULED');
+	/** A deadline stays on its day (only its time moves); appointments don't move at all. */
+	const movesDays = (b: PlanBlock) => b.source === 'SCHEDULED' || b.source === 'session';
 	/**
-	 * Place a task at `start`. A task that fits one block, with no time yet,
-	 * gets its SCHEDULED time (org's own way); one that needs more, or already
-	 * has a time, gets a work session in its entry.
+	 * Place a task on `on` at `start`. A task that fits one block, with no
+	 * time yet, gets its SCHEDULED time (org's own way); one that needs more,
+	 * or already has a time, gets a work session in its entry.
 	 */
-	function place(item: AgendaItem, start: number) {
-		const s = Math.max(FIRST_HOUR * 60, snap(start));
+	function place(item: AgendaItem, on: string, start: number) {
+		const s = Math.max(0, snap(start));
 		const end = Math.min(s + lengthOf(item), 24 * 60 - 1);
 		const file = app.vault.file(item.file);
 		const sessions = file ? sessionsOf(file.source, item.pos, file.index.keywords).length : 0;
 		const left = remainingOf(item);
 		const onePiece = !item.scheduled?.time && !sessions && (left === null || left <= SESSION_MAX);
-		if (onePiece) app.planTask(item.file, item.pos, 'SCHEDULED', date, s, end);
-		else app.addSessions(item.file, item.pos, [{ date, start: s, end }]);
+		if (onePiece) app.planTask(item.file, item.pos, 'SCHEDULED', on, s, end);
+		else app.addSessions(item.file, item.pos, [{ date: on, start: s, end }]);
 		picked = null;
 	}
-	function move(b: PlanBlock, start: number, end: number) {
+	function move(b: DayBlock, on: string, start: number, end: number) {
 		if (b.source === 'appointment') return;
-		if (start === b.start && end === b.end) return;
+		if (!movesDays(b)) on = b.date;
+		if (on === b.date && start === b.start && end === b.end) return;
 		if (b.source === 'session' && b.session)
-			app.moveSession(b.item.file, b.item.pos, b.session, { date, start, end });
-		else app.planTask(b.item.file, b.item.pos, kindOf(b), date, start, end);
+			app.moveSession(b.item.file, b.item.pos, b.session, { date: on, start, end });
+		else app.planTask(b.item.file, b.item.pos, kindOf(b), on, start, end);
 	}
-	function unplan(b: PlanBlock) {
+	function unplan(b: DayBlock) {
 		if (b.source === 'appointment') return;
 		if (b.source === 'session' && b.session)
 			app.removeSessionAt(b.item.file, b.item.pos, b.session);
-		else app.planTask(b.item.file, b.item.pos, kindOf(b), date, null);
+		else app.planTask(b.item.file, b.item.pos, kindOf(b), b.date, null);
 		picked = null;
 	}
-	/** Fill the rest of a task's estimate into free working time, from now (or this day) on. */
+	/**
+	 * Fill the rest of a task's estimate into free working time: from now (or
+	 * the day shown), or in the week from its first day still to come.
+	 */
 	function planRest(item: AgendaItem) {
 		const left = remainingOf(item);
 		if (!left) return;
-		const from = date === today ? now : toMinutes(app.workHours.start);
+		const first = view === 'week' ? (dates[0]! > today ? dates[0]! : today) : date;
+		const from = first === today ? now : toMinutes(app.workHours.start);
 		const busyOn = (d: string) =>
-			(d === date ? plan : dayPlan(app.vault, d, today, keep, { effortOf: (i) => app.effortOf(i) }))
-				.blocks;
-		const sessions = fillSessions(left, date, from, busyOn, app.workHours);
+			(days.find((x) => x.date === d)?.plan ?? dayPlan(app.vault, d, today, keep, options)).blocks;
+		const sessions = fillSessions(left, first, from, busyOn, app.workHours);
 		if (!sessions.length) return;
 		const total = sessions.reduce((sum, x) => sum + x.end - x.start, 0);
-		const days = new Set(sessions.map((x) => x.date)).size;
+		const count = new Set(sessions.map((x) => x.date)).size;
 		app.addSessions(
 			item.file,
 			item.pos,
 			sessions,
-			`${hours(total)} planned over ${days} ${days === 1 ? 'day' : 'days'}: ${item.title}`,
+			`${hours(total)} planned over ${count} ${count === 1 ? 'day' : 'days'}: ${item.title}`,
 		);
 		picked = null;
 	}
-	const nudge = (b: PlanBlock, by: number) =>
-		move(b, Math.max(0, b.start + by), Math.min(24 * 60 - 1, b.end + by));
-	const stretch = (b: PlanBlock, by: number) =>
-		move(b, b.start, Math.max(b.start + SNAP, Math.min(24 * 60 - 1, b.end + by)));
+	const nudge = (b: DayBlock, by: number) =>
+		move(b, b.date, Math.max(0, b.start + by), Math.min(24 * 60 - 1, b.end + by));
+	const stretch = (b: DayBlock, by: number) =>
+		move(b, b.date, b.start, Math.max(b.start + SNAP, Math.min(24 * 60 - 1, b.end + by)));
+	/** Move a block a day earlier or later, the day view following it. */
+	function shiftDay(b: DayBlock, by: number) {
+		if (!movesDays(b)) return;
+		const to = addDays(b.date, by);
+		move(b, to, b.start, b.end);
+		if (view === 'day') date = to;
+		// Keep the keyboard on it, under its new day.
+		const id = `${to}\u0001${b.key}`;
+		if (picked?.kind === 'block') picked = { kind: 'block', key: id };
+		refocus = id;
+	}
+	/** A block moved to another day, to focus once it's drawn there. */
+	let refocus: string | null = null;
+	$effect(() => {
+		void blocks;
+		if (!refocus) return;
+		// (Not a selector: keys hold NULs, which CSS.escape doesn't keep.)
+		const el = [...(root?.querySelectorAll<HTMLElement>('.block') ?? [])].find(
+			(x) => x.dataset.key === refocus,
+		);
+		if (!el) return;
+		refocus = null;
+		el.focus();
+	});
 
 	// ---- the timeline ----
+	const FULL_FIRST = 6;
+	/** Early and late hours shown in the week (always shown in a day). */
+	let expanded = $state(false);
+	const range = $derived.by(() => {
+		const open = Math.floor(toMinutes(app.workHours.start) / 60);
+		const close = Math.ceil(toMinutes(app.workHours.end) / 60);
+		const full = { first: Math.min(FULL_FIRST, open), last: 24 };
+		if (view === 'day' || expanded || close <= open) return full;
+		return { first: Math.max(full.first, open), last: Math.min(24, close) };
+	});
+	/** The earliest and latest minute a block can be dragged to. */
+	const lo = $derived(range.first * 60);
+	const hi = $derived(Math.min(range.last * 60, 24 * 60 - 1));
+	const fullFirst = $derived(Math.min(FULL_FIRST, Math.floor(toMinutes(app.workHours.start) / 60)));
+	const HOUR_PX = $derived(view === 'week' ? 48 : 64);
+	const px = (minutes: number) => ((minutes - range.first * 60) / 60) * HOUR_PX;
+	/** Blocks out of sight in the folded early and late hours. */
+	const folded = $derived({
+		early: blocks.filter((b) => b.start < lo).length,
+		late: blocks.filter((b) => b.end > hi).length,
+	});
+
 	let line = $state<HTMLElement>();
 	let scroller = $state<HTMLElement>();
 	let tray = $state<HTMLElement>();
+	const lanes: HTMLElement[] = $state([]);
 	const minutesAt = (clientY: number) => {
 		const r = line!.getBoundingClientRect();
-		return FIRST_HOUR * 60 + ((clientY - r.top) / HOUR_PX) * 60;
+		return range.first * 60 + ((clientY - r.top) / HOUR_PX) * 60;
 	};
+	/** The day under a point: its lane, or the nearest one. */
+	const dateAt = (clientX: number) => {
+		let best = dates[0]!;
+		let gap = Infinity;
+		dates.forEach((d, n) => {
+			const r = lanes[n]?.getBoundingClientRect();
+			if (!r) return;
+			const off = clientX < r.left ? r.left - clientX : clientX > r.right ? clientX - r.right : 0;
+			if (off < gap) {
+				gap = off;
+				best = d;
+			}
+		});
+		return best;
+	};
+	/** Where a lane is drawn: its share of the width after the hour labels. */
+	const laneLeft = (n: number, share = 0) =>
+		`calc(3.5rem + (100% - 3.75rem) * ${(n + share) / dates.length})`;
+	const laneWidth = (share = 1) => `calc((100% - 3.75rem) * ${share / dates.length})`;
 
-	/** A tap on the day (not on a block) places the picked task there. */
+	/** A tap on a day (not on a block) places the picked task there. */
 	function onTimelineClick(e: MouseEvent) {
 		if (justDragged || (e.target as Element).closest('.block')) return;
-		if (pickedTray) place(pickedTray, minutesAt(e.clientY));
+		if (pickedTray) place(pickedTray, dateAt(e.clientX), minutesAt(e.clientY));
 		else picked = null;
+	}
+	/** A day's header: open that day on its own. */
+	function openDay(d: string) {
+		date = d;
+		setView('day', false);
 	}
 
 	// ---- dragging: a mouse right away, a finger after a long press ----
 	type Drag = {
 		mode: 'move' | 'resize' | 'place';
 		key: string;
+		/** The day it started on, and the day it's over now. */
+		from: string;
+		date: string;
+		/** It can't change day (a resize, a deadline). */
+		pinned: boolean;
 		/** Where the pointer was within the block when it started (minutes). */
 		grip: number;
 		length: number;
@@ -182,6 +324,8 @@
 	function startDrag(
 		mode: Drag['mode'],
 		key: string,
+		on: string,
+		pinned: boolean,
 		start: number,
 		end: number,
 		x: number,
@@ -192,6 +336,9 @@
 		drag = {
 			mode,
 			key,
+			from: on,
+			date: on,
+			pinned,
 			grip: mode === 'move' ? at - start : 0,
 			length: end - start,
 			start,
@@ -207,9 +354,33 @@
 			touch,
 		};
 	}
-	function beginDrag(e: PointerEvent, mode: Drag['mode'], key: string, start: number, end: number) {
+	function beginDrag(e: PointerEvent, mode: Drag['mode'], b: DayBlock) {
 		if (e.pointerType !== 'mouse' || e.button !== 0) return;
-		startDrag(mode, key, start, end, e.clientX, e.clientY, false);
+		startDrag(
+			mode,
+			b.id,
+			b.date,
+			mode === 'resize' || !movesDays(b),
+			b.start,
+			b.end,
+			e.clientX,
+			e.clientY,
+			false,
+		);
+	}
+	function beginPlace(e: PointerEvent, item: AgendaItem) {
+		if (e.pointerType !== 'mouse' || e.button !== 0) return;
+		startDrag(
+			'place',
+			keyOf(item),
+			dates[0]!,
+			false,
+			0,
+			lengthOf(item),
+			e.clientX,
+			e.clientY,
+			false,
+		);
 	}
 	function dragTo(x: number, y: number) {
 		const d = drag;
@@ -222,10 +393,11 @@
 		d.overLine = x >= sr.left && x <= sr.right && y >= sr.top && y <= sr.bottom;
 		const tr = tray?.getBoundingClientRect();
 		d.overTray = !!tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
+		if (!d.pinned) d.date = dateAt(x);
 		const at = minutesAt(y);
-		if (d.mode === 'resize') d.end = Math.max(d.start + SNAP, Math.min(24 * 60 - 1, snap(at)));
+		if (d.mode === 'resize') d.end = Math.max(d.start + SNAP, Math.min(hi, snap(at)));
 		else {
-			d.start = Math.max(FIRST_HOUR * 60, Math.min(24 * 60 - 1 - d.length, snap(at - d.grip)));
+			d.start = Math.max(lo, Math.min(hi - d.length, snap(at - d.grip)));
 			d.end = d.start + d.length;
 		}
 		drag = { ...d };
@@ -237,14 +409,14 @@
 		justDragged = true;
 		setTimeout(() => (justDragged = false), 0);
 		if (d.mode === 'place') {
-			const item = plan.unplanned.find((i) => keyOf(i) === d.key);
-			if (item && d.overLine) place(item, d.start);
+			const item = unplanned.find((i) => keyOf(i) === d.key);
+			if (item && d.overLine) place(item, d.date, d.start);
 			return;
 		}
-		const b = plan.blocks.find((x) => x.key === d.key);
+		const b = blocks.find((x) => x.id === d.key);
 		if (!b) return;
 		if (d.mode === 'move' && d.overTray) return unplan(b);
-		if (d.overLine || d.mode === 'resize') move(b, d.start, d.end);
+		if (d.overLine || d.mode === 'resize') move(b, d.date, d.start, d.end);
 	}
 	const onPointerMove = (e: PointerEvent) => {
 		if (drag && !drag.touch) dragTo(e.clientX, e.clientY);
@@ -252,7 +424,6 @@
 	const onPointerUp = () => {
 		if (drag && !drag.touch) endDrag();
 	};
-
 	// Resting near the timeline's top or bottom edge (inside it), a drag
 	// scrolls it; passing through on the way in (from the tray) doesn't.
 	/** A drag is under way (changes only when one starts or ends, not as it moves). */
@@ -342,15 +513,16 @@
 				hold = null;
 				if (!from || pan?.moving) return;
 				if (target.dataset.drag === 'place') {
-					const item = plan.unplanned.find((i) => keyOf(i) === key);
+					const item = unplanned.find((i) => keyOf(i) === key);
 					if (!item) return;
-					startDrag('place', key, 0, lengthOf(item), from.x, from.y, true);
+					startDrag('place', key, dates[0]!, false, 0, lengthOf(item), from.x, from.y, true);
 				} else {
-					const b = plan.blocks.find((x) => x.key === key);
+					const b = blocks.find((x) => x.id === key);
 					if (!b || b.source === 'appointment') return;
 					const r = target.getBoundingClientRect();
 					const mode = from.y > r.bottom - 16 ? 'resize' : 'move';
-					startDrag(mode, key, b.start, b.end, from.x, from.y, true);
+					const pinned = mode === 'resize' || !movesDays(b);
+					startDrag(mode, key, b.date, pinned, b.start, b.end, from.x, from.y, true);
 				}
 				picked = null;
 				navigator.vibrate?.(12);
@@ -410,19 +582,31 @@
 		};
 	});
 
-	/** A block where it's drawn: being dragged, or as written. */
-	const shown = (b: PlanBlock) =>
-		drag && drag.moved && drag.key === b.key && drag.mode !== 'place'
-			? { start: drag.start, end: drag.end }
-			: b;
+	/** A block where it's drawn: being dragged (maybe to another day), or as written. */
+	const shown = (b: DayBlock) => {
+		const d = drag;
+		if (d && d.moved && d.key === b.id && d.mode !== 'place') {
+			const moved = d.date !== b.date;
+			return {
+				date: d.date,
+				start: d.start,
+				end: d.end,
+				col: moved ? 0 : b.col,
+				cols: moved ? 1 : b.cols,
+			};
+		}
+		return b;
+	};
 
-	function onBlockKey(e: KeyboardEvent, b: PlanBlock) {
-		const step = e.shiftKey ? 'stretch' : 'nudge';
+	function onBlockKey(e: KeyboardEvent, b: DayBlock) {
 		if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
 			e.preventDefault();
 			const by = e.key === 'ArrowUp' ? -SNAP : SNAP;
-			if (step === 'stretch') stretch(b, by);
+			if (e.shiftKey) stretch(b, by);
 			else nudge(b, by);
+		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+			e.preventDefault();
+			shiftDay(b, e.key === 'ArrowLeft' ? -1 : 1);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			app.headingSheet = { path: b.item.file, pos: b.item.pos };
@@ -438,48 +622,50 @@
 		const t = setInterval(() => (now = toMinutes(localNow().time)), 60_000);
 		return () => clearInterval(t);
 	});
+	const hasToday = $derived(dates.includes(today));
 	$effect(() => {
-		void date;
+		void dates[0];
+		void range.first;
 		const el = scroller;
 		if (!el) return;
-		const focus = date === today ? now - 60 : toMinutes(app.workHours.start) - 30;
+		const focus = untrack(() => (hasToday ? now - 60 : toMinutes(app.workHours.start) - 30));
 		// Open on a whole hour, so its label shows.
 		el.scrollTop = Math.max(0, px(Math.floor(focus / 60) * 60));
 	});
-	// A newly picked task offers the next quarter hour (or the start of the
-	// working day); only then, so a time being typed isn't overwritten.
+	// A newly picked task offers a day and the next quarter hour (or the
+	// start of the working day); only then, so a time being typed isn't
+	// overwritten.
 	let offeredFor: string | null = null;
 	$effect(() => {
 		const key = picked?.kind === 'tray' ? picked.key : null;
 		if (key === offeredFor) return;
 		offeredFor = key;
 		if (!key) return;
-		const start = toMinutes(app.workHours.start);
-		placeAt = fromMinutes(
-			snap(
-				date === today
-					? Math.max(
-							untrack(() => now),
-							start,
-						)
-					: start,
-			),
-		);
+		untrack(() => {
+			placeOn = hasToday ? today : dates[0]!;
+			const start = toMinutes(app.workHours.start);
+			placeAt = fromMinutes(snap(placeOn === today ? Math.max(now, start) : start));
+		});
 	});
 
-	const hoursList = Array.from({ length: LAST_HOUR - FIRST_HOUR }, (_, i) => FIRST_HOUR + i);
+	const hoursList = $derived(
+		Array.from({ length: range.last - range.first }, (_, i) => range.first + i),
+	);
 	const work = $derived({
-		top: px(toMinutes(app.workHours.start)),
-		bottom: px(toMinutes(app.workHours.end)),
+		top: px(Math.max(lo, toMinutes(app.workHours.start))),
+		bottom: px(Math.min(range.last * 60, toMinutes(app.workHours.end))),
 	});
 	const timeOf = (b: { start: number; end: number }) =>
 		`${fromMinutes(b.start)}–${fromMinutes(b.end)}`;
+	/** A block's day, said in its label when the week shows. */
+	const onDay = (d: string) =>
+		view === 'week' ? `, ${dayName(d, { weekday: 'long', day: 'numeric', month: 'long' })}` : '';
 </script>
 
 <svelte:window onpointermove={onPointerMove} onpointerup={onPointerUp} />
 
 {#if drag?.moved && drag.mode === 'place' && !drag.overLine}
-	{@const item = plan.unplanned.find((i) => keyOf(i) === drag!.key)}
+	{@const item = unplanned.find((i) => keyOf(i) === drag!.key)}
 	{#if item}
 		<div class="float" style:left="{drag.cx}px" style:top="{drag.cy}px" aria-hidden="true">
 			{item.title}
@@ -487,35 +673,68 @@
 	{/if}
 {/if}
 
-<div class="planner" class:dragging={drag?.moved} bind:this={root}>
-	<nav class="day-nav" aria-label="Day">
-		<button
-			type="button"
-			class="btn small icon-only"
-			aria-label="Previous day"
-			onclick={() => (date = addDays(date, -1))}><Icon name="chevronLeft" size={16} /></button
-		>
-		<span class="day-label" aria-live="polite">{label}</span>
-		<button
-			type="button"
-			class="btn small icon-only"
-			aria-label="Next day"
-			onclick={() => (date = addDays(date, 1))}><Icon name="chevronRight" size={16} /></button
-		>
-		{#if date !== today}<button type="button" class="btn small" onclick={() => (date = today)}
-				>Today</button
-			>{/if}
-	</nav>
+<div
+	class="planner"
+	class:week={view === 'week'}
+	class:dragging={drag?.moved}
+	bind:this={root}
+	bind:clientWidth={width}
+>
+	<div class="top">
+		<nav class="day-nav" aria-label={view === 'week' ? 'Week' : 'Day'}>
+			<button
+				type="button"
+				class="btn small icon-only"
+				aria-label={view === 'week' ? 'Previous week' : 'Previous day'}
+				onclick={() => (date = addDays(date, -step))}><Icon name="chevronLeft" size={16} /></button
+			>
+			<span class="day-label" aria-live="polite">{label}</span>
+			<button
+				type="button"
+				class="btn small icon-only"
+				aria-label={view === 'week' ? 'Next week' : 'Next day'}
+				onclick={() => (date = addDays(date, step))}><Icon name="chevronRight" size={16} /></button
+			>
+			{#if !hasToday}<button type="button" class="btn small" onclick={() => (date = today)}
+					>{view === 'week' ? 'This week' : 'Today'}</button
+				>{/if}
+		</nav>
+		{#if canWeek}
+			<div class="segmented view" role="radiogroup" aria-label="Plan by">
+				<button
+					type="button"
+					role="radio"
+					aria-checked={view === 'day'}
+					onclick={() => setView('day')}>Day</button
+				>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={view === 'week'}
+					onclick={() => setView('week')}>Week</button
+				>
+			</div>
+		{/if}
+	</div>
 	<p class="totals" role="status">
 		Planned <strong>{hours(totals.planned)}</strong> · free <strong>{hours(totals.free)}</strong>
 		between
-		{app.workHours.start} and {app.workHours.end}
+		{app.workHours.start} and {app.workHours.end}{view === 'week' ? ' this week' : ''}
+		{#if view === 'week'}
+			<button
+				type="button"
+				class="link fold"
+				aria-pressed={expanded}
+				onclick={() => (expanded = !expanded)}
+				>{expanded ? 'Fold early and late hours' : 'Show early and late hours'}</button
+			>
+		{/if}
 	</p>
 
-	{#if plan.allDay.length}
+	{#if view === 'day' && days[0]?.plan.allDay.length}
 		<ul class="all-day" aria-label="All day">
 			<li class="lbl" aria-hidden="true">All day</li>
-			{#each plan.allDay as i (keyOf(i))}<li>{i.title}</li>{/each}
+			{#each days[0].plan.allDay as i (keyOf(i))}<li>{i.title}</li>{/each}
 		</ul>
 	{/if}
 
@@ -526,10 +745,10 @@
 			bind:this={tray}
 			aria-labelledby="tray-h"
 		>
-			<h2 id="tray-h">To plan <span class="count">{plan.unplanned.length}</span></h2>
-			{#if plan.unplanned.length}
+			<h2 id="tray-h">To plan <span class="count">{unplanned.length}</span></h2>
+			{#if unplanned.length}
 				<ul>
-					{#each plan.unplanned as i (keyOf(i))}
+					{#each unplanned as i (keyOf(i))}
 						<li>
 							<button
 								type="button"
@@ -538,7 +757,7 @@
 								data-drag="place"
 								data-key={keyOf(i)}
 								class:lifted={drag?.moved && drag.key === keyOf(i)}
-								onpointerdown={(e) => beginDrag(e, 'place', keyOf(i), 0, lengthOf(i))}
+								onpointerdown={(e) => beginPlace(e, i)}
 								onclick={() =>
 									!justDragged &&
 									(picked =
@@ -556,9 +775,12 @@
 						</li>
 					{/each}
 				</ul>
-				<p class="hint">Hold a task and drag it onto the day, or pick it and tap a time.</p>
+				<p class="hint">
+					Hold a task and drag it onto {view === 'week' ? 'a day' : 'the day'}, or pick it and tap a
+					time.
+				</p>
 			{:else}
-				<p class="hint">Nothing left to plan on this day.</p>
+				<p class="hint">Nothing left to plan {view === 'week' ? 'this week' : 'on this day'}.</p>
 			{/if}
 		</section>
 
@@ -568,10 +790,19 @@
 					class="toolbar"
 					onsubmit={(e) => {
 						e.preventDefault();
-						place(pickedTray, toMinutes(placeAt));
+						place(pickedTray, view === 'week' ? placeOn : date, toMinutes(placeAt));
 					}}
 				>
-					<span class="what">Plan “{pickedTray.title}” at</span>
+					<span class="what">Plan “{pickedTray.title}”{view === 'week' ? ' on' : ' at'}</span>
+					{#if view === 'week'}
+						<label class="sr-only" for="dp-on">Day</label>
+						<select id="dp-on" class="input" bind:value={placeOn}>
+							{#each dates as d (d)}<option value={d}
+									>{dayName(d, { weekday: 'short', day: 'numeric' })}</option
+								>{/each}
+						</select>
+						<span class="at" aria-hidden="true">at</span>
+					{/if}
 					<label class="sr-only" for="dp-at">Start time</label>
 					<input id="dp-at" type="time" step="900" class="input" bind:value={placeAt} />
 					<button type="submit" class="btn small primary">Plan</button>
@@ -584,8 +815,16 @@
 				</form>
 			{:else if pickedBlock}
 				{@const b = pickedBlock}
-				<div class="toolbar" role="toolbar" aria-label={`“${b.item.title}”, ${timeOf(b)}`}>
-					<span class="what">{b.item.title} · {timeOf(b)}</span>
+				<div
+					class="toolbar"
+					role="toolbar"
+					aria-label={`“${b.item.title}”, ${timeOf(b)}${onDay(b.date)}`}
+				>
+					<span class="what"
+						>{b.item.title} · {view === 'week'
+							? `${dayName(b.date, { weekday: 'short' })} `
+							: ''}{timeOf(b)}</span
+					>
 					{#if b.source !== 'appointment'}
 						<button type="button" class="btn small" onclick={() => nudge(b, -SNAP)}>Earlier</button>
 						<button type="button" class="btn small" onclick={() => nudge(b, SNAP)}>Later</button>
@@ -593,6 +832,14 @@
 							>Shorter</button
 						>
 						<button type="button" class="btn small" onclick={() => stretch(b, SNAP)}>Longer</button>
+						{#if movesDays(b)}
+							<button type="button" class="btn small" onclick={() => shiftDay(b, -1)}
+								>Day before</button
+							>
+							<button type="button" class="btn small" onclick={() => shiftDay(b, 1)}
+								>Day after</button
+							>
+						{/if}
 						<button type="button" class="btn small" onclick={() => unplan(b)}>No time</button>
 						{#if remainingOf(b.item)}
 							<button type="button" class="btn small" onclick={() => planRest(b.item)}
@@ -614,13 +861,46 @@
 				</div>
 			{/if}
 
+			{#if view === 'week'}
+				<div class="week-head">
+					<span aria-hidden="true"></span>
+					{#each days as d (d.date)}
+						<div class="wd" class:today={d.date === today}>
+							<button
+								type="button"
+								class="wd-name"
+								aria-label={`Open ${dayName(d.date, { weekday: 'long', day: 'numeric', month: 'long' })}`}
+								onclick={() => openDay(d.date)}
+							>
+								<span class="dow">{dayName(d.date, { weekday: 'short' })}</span>
+								<span class="dom">{dayName(d.date, { day: 'numeric' })}</span>
+							</button>
+							<span class="wd-total">{d.totals.planned ? hours(d.totals.planned) : '—'}</span>
+							{#if d.plan.allDay.length}
+								<ul class="wd-all" aria-label={`All day, ${dayName(d.date, { weekday: 'long' })}`}>
+									{#each d.plan.allDay as i (keyOf(i))}<li title={i.title}>{i.title}</li>{/each}
+								</ul>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+
 			<div class="scroller" bind:this={scroller}>
+				{#if range.first > fullFirst}
+					<button type="button" class="band" onclick={() => (expanded = true)}
+						>{String(fullFirst).padStart(2, '0')}:00–{String(range.first).padStart(
+							2,
+							'0',
+						)}:00{folded.early ? ` · ${folded.early} more` : ''}</button
+					>
+				{/if}
 				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 				<div
 					class="line"
 					class:placing={!!pickedTray}
 					bind:this={line}
-					style:height="{(LAST_HOUR - FIRST_HOUR) * HOUR_PX}px"
+					style:height="{(range.last - range.first) * HOUR_PX}px"
 					onclick={onTimelineClick}
 				>
 					<div
@@ -629,65 +909,94 @@
 						style:height="{Math.max(0, work.bottom - work.top)}px"
 					></div>
 					{#each hoursList as h (h)}
-						<div class="hour" style:top="{(h - FIRST_HOUR) * HOUR_PX}px">
+						<div class="hour" style:top="{(h - range.first) * HOUR_PX}px">
 							<span>{String(h).padStart(2, '0')}:00</span>
 						</div>
 					{/each}
-					{#if date === today && now >= FIRST_HOUR * 60}
-						<div class="now" style:top="{px(now)}px" aria-hidden="true"></div>
+					{#each dates as d, n (d)}
+						<div
+							class="lane"
+							class:today={view === 'week' && d === today}
+							class:target={drag?.moved && view === 'week' && drag.date === d && drag.overLine}
+							style:left={laneLeft(n)}
+							style:width={laneWidth()}
+							bind:this={lanes[n]}
+						></div>
+					{/each}
+					{#if hasToday && now >= lo && now <= range.last * 60}
+						<div
+							class="now"
+							style:top="{px(now)}px"
+							style:left={view === 'week' ? laneLeft(dates.indexOf(today)) : '3rem'}
+							style:width={view === 'week' ? laneWidth() : null}
+							aria-hidden="true"
+						></div>
 					{/if}
 					{#if drag?.moved && drag.mode === 'place' && drag.overLine}
 						<div
 							class="block ghost"
 							style:top="{px(drag.start)}px"
 							style:height="{(drag.length / 60) * HOUR_PX}px"
+							style:left={laneLeft(dates.indexOf(drag.date))}
+							style:width="calc({laneWidth()} - 0.25rem)"
 						>
 							{fromMinutes(drag.start)}
 						</div>
 					{/if}
-					{#each plan.blocks as b (b.key)}
+					{#each blocks as b (b.id)}
 						{@const s = shown(b)}
-						<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-						<div
-							class="block"
-							class:fixed={b.source === 'appointment'}
-							class:short={s.end - s.start < 45}
-							class:deadline={b.source === 'DEADLINE'}
-							class:active={picked?.kind === 'block' && picked.key === b.key}
-							role="button"
-							tabindex="0"
-							aria-label={`${b.item.title}, ${timeOf(s)}${b.source === 'appointment' ? ', appointment' : ''}${progressLabel(b.item) ? `, ${progressLabel(b.item)} planned` : ''}`}
-							style:top="{px(s.start)}px"
-							style:height="{Math.max(20, ((s.end - s.start) / 60) * HOUR_PX - 2)}px"
-							style:left="calc(3.5rem + (100% - 3.75rem) * {b.col / b.cols})"
-							style:width="calc((100% - 3.75rem) / {b.cols} - 2px)"
-							onpointerdown={(e) =>
-								b.source !== 'appointment' && beginDrag(e, 'move', b.key, b.start, b.end)}
-							data-drag="move"
-							data-key={b.key}
-							class:lifted={drag?.moved && drag.key === b.key}
-							onclick={() => !justDragged && (picked = { kind: 'block', key: b.key })}
-							onkeydown={(e) => onBlockKey(e, b)}
-						>
-							<span class="bt">{b.item.title}</span>
-							<span class="bm"
-								>{timeOf(s)}{#if progressLabel(b.item)}<span class="of"
-										>{` · ${progressLabel(b.item)}`}</span
-									>{/if}</span
+						{@const n = dates.indexOf(s.date)}
+						{@const top = px(Math.max(lo, s.start))}
+						{@const bottom = px(Math.min(range.last * 60, s.end))}
+						{#if bottom > top}
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+							<div
+								class="block"
+								class:fixed={b.source === 'appointment'}
+								class:short={s.end - s.start < 45}
+								class:deadline={b.source === 'DEADLINE'}
+								class:active={picked?.kind === 'block' && picked.key === b.id}
+								role="button"
+								tabindex="0"
+								aria-label={`${b.item.title}, ${timeOf(s)}${onDay(b.date)}${b.source === 'appointment' ? ', appointment' : ''}${progressLabel(b.item) ? `, ${progressLabel(b.item)} planned` : ''}`}
+								style:top="{top}px"
+								style:height="{Math.max(20, bottom - top - 2)}px"
+								style:left={laneLeft(n, s.col / s.cols)}
+								style:width="calc({laneWidth(1 / s.cols)} - 2px)"
+								onpointerdown={(e) => b.source !== 'appointment' && beginDrag(e, 'move', b)}
+								data-drag="move"
+								data-key={b.id}
+								class:lifted={drag?.moved && drag.key === b.id}
+								onclick={() => !justDragged && (picked = { kind: 'block', key: b.id })}
+								onkeydown={(e) => onBlockKey(e, b)}
 							>
-							{#if b.source !== 'appointment'}
-								<span
-									class="handle"
-									aria-hidden="true"
-									onpointerdown={(e) => {
-										e.stopPropagation();
-										beginDrag(e, 'resize', b.key, b.start, b.end);
-									}}
-								></span>
-							{/if}
-						</div>
+								<span class="bt">{b.item.title}</span>
+								<span class="bm"
+									>{timeOf(s)}{#if progressLabel(b.item)}<span class="of"
+											>{` · ${progressLabel(b.item)}`}</span
+										>{/if}</span
+								>
+								{#if b.source !== 'appointment'}
+									<span
+										class="handle"
+										aria-hidden="true"
+										onpointerdown={(e) => {
+											e.stopPropagation();
+											beginDrag(e, 'resize', b);
+										}}
+									></span>
+								{/if}
+							</div>
+						{/if}
 					{/each}
 				</div>
+				{#if range.last < 24}
+					<button type="button" class="band" onclick={() => (expanded = true)}
+						>{String(range.last).padStart(2, '0')}:00–24:00{folded.late
+							? ` · ${folded.late} more`
+							: ''}</button
+					>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -702,6 +1011,13 @@
 	.planner.dragging {
 		user-select: none;
 		cursor: grabbing;
+	}
+	.top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
 	}
 	.day-nav {
 		display: flex;
@@ -718,6 +1034,139 @@
 		margin: 0;
 		color: var(--text-2);
 		font-size: 0.88rem;
+	}
+	.fold {
+		margin-left: 0.5rem;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--accent-text, var(--accent));
+		font: inherit;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+	/* The week's day headers, lined up with its lanes below. */
+	.week-head {
+		display: grid;
+		grid-template-columns: 3.5rem repeat(7, minmax(0, 1fr)) 0.25rem;
+		overflow: hidden;
+		scrollbar-gutter: stable;
+		border: 1px solid transparent;
+	}
+	.wd {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.15rem;
+		min-width: 0;
+		padding: 0 0.15rem;
+	}
+	.wd-name {
+		display: flex;
+		align-items: baseline;
+		justify-content: center;
+		gap: 0.3rem;
+		padding: 0.3rem 0.25rem;
+		border: 0;
+		border-radius: 8px;
+		background: none;
+		color: var(--text);
+		font: inherit;
+		cursor: pointer;
+	}
+	.wd-name:hover {
+		background: var(--surface-2);
+	}
+	.dow {
+		color: var(--text-muted);
+		font-size: 0.78rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.dom {
+		font-size: 1.05rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.wd.today .dom {
+		color: var(--accent-text, var(--accent));
+	}
+	.wd-total {
+		color: var(--text-faint);
+		font-size: 0.72rem;
+		text-align: center;
+	}
+	.wd-all {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.wd-all li {
+		overflow: hidden;
+		padding: 0.1rem 0.35rem;
+		border-radius: 6px;
+		background: var(--surface-2);
+		font-size: 0.72rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.lane {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		border-left: 1px solid var(--border);
+		pointer-events: none;
+	}
+	.lane.today {
+		background: color-mix(in oklab, var(--accent-soft) 30%, transparent);
+	}
+	.lane.target {
+		background: color-mix(in oklab, var(--accent-soft) 60%, transparent);
+	}
+	/* Folded early or late hours: a thin band that unfolds them. */
+	.band {
+		display: block;
+		width: 100%;
+		padding: 0.2rem 0.5rem 0.2rem 3.5rem;
+		border: 0;
+		border-bottom: 1px dashed var(--border-strong);
+		background: var(--surface-2);
+		color: var(--text-muted);
+		font: inherit;
+		font-size: 0.72rem;
+		text-align: left;
+		cursor: pointer;
+	}
+	.line + .band {
+		border-top: 1px dashed var(--border-strong);
+		border-bottom: 0;
+	}
+	.week .scroller {
+		height: auto;
+		max-height: min(75vh, 46rem);
+		scrollbar-gutter: stable;
+	}
+	.week .body {
+		grid-template-columns: minmax(0, 1fr) 14rem;
+	}
+	.week .now {
+		right: auto;
+	}
+	.week .block {
+		padding: 0.15rem 0.35rem;
+	}
+	.week .block.short {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0;
+	}
+	.week .block.short .bm {
+		display: none;
 	}
 	.all-day {
 		display: flex;

@@ -263,14 +263,14 @@
 					/></label
 				>
 			</div>
-			<p class="hint">The day planner counts free time between these.</p>
+			<p class="hint">The planner counts free time between these.</p>
 		</section>
 		<section class="panel stack" aria-labelledby="effort-h">
 			<h2 id="effort-h">Effort estimates</h2>
 			<p class="hint">
 				An <code>Effort</code> is a task's whole estimate (<code>0:30</code>, <code>3h</code>,
-				<code>2d</code>). The day planner plans it in sessions: timestamps in the task, one per
-				stretch of work. How long a “day” of effort is follows org's
+				<code>2d</code>). The planner plans it in sessions: timestamps in the task, one per stretch
+				of work. How long a “day” of effort is follows org's
 				<span class="var">org-duration-units</span>: 24 hours unless you count working days.
 			</p>
 			<div class="hours">

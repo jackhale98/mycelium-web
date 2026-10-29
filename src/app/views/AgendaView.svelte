@@ -159,7 +159,7 @@
 	const MODES: Mode[] = ['list', 'day', 'week', 'month', 'board', 'stuck'];
 	const MODE_LABELS: Record<Mode, string> = {
 		list: 'List',
-		day: 'Day',
+		day: 'Plan',
 		week: 'Week',
 		month: 'Month',
 		board: 'Board',
