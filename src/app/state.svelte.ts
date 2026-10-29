@@ -77,7 +77,7 @@ import {
 } from '$lib/vault/layout';
 import { buildSearch } from '$lib/vault/search';
 import { Vault } from '$lib/vault/vault';
-import { demoSources } from './demo';
+import { demoDay, demoSources } from './demo';
 import { href } from './router.svelte';
 import { slugify } from './util';
 
@@ -203,6 +203,7 @@ function demoRecord(): VaultRecord {
 		createdAt: Date.now(),
 		lastSync: null,
 		dirty: [],
+		demoDay,
 	};
 }
 
@@ -468,7 +469,16 @@ class AppState {
 	async openDemo(options: { quiet?: boolean } = {}) {
 		try {
 			const { Workspace } = await import('$lib/git/workspace');
-			const existing = this.vaults.find((v) => v.id === DEMO_ID);
+			let existing = this.vaults.find((v) => v.id === DEMO_ID);
+			// Dated for another day and never touched: make it afresh, dated for today.
+			if (existing && existing.demoDay !== demoDay) {
+				const old = Workspace.open($state.snapshot(existing) as VaultRecord);
+				const untouched = (await old.repo.log(2)).length <= 1 && (await old.status()).length === 0;
+				if (untouched) {
+					await this.removeVault(DEMO_ID, false);
+					existing = undefined;
+				}
+			}
 			const ws = existing
 				? Workspace.open($state.snapshot(existing) as VaultRecord)
 				: await Workspace.createLocal(demoRecord(), demoSources, 'Demo vault');

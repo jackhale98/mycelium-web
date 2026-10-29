@@ -127,7 +127,7 @@ Set `SITE_BASE=/` when building for a custom domain.
 | `worker`                                | Stateless Cloudflare Worker: git CORS proxy, WebDAV relay, OAuth   |
 | `src/app`                               | The Svelte app: views, components and the org renderer             |
 | `src/pages`                             | Astro pages: landing page and the app shell                        |
-| `src/demo/vault`                        | The demo org-roam vault                                            |
+| `src/demo/vault`                        | The demo org-roam vault (dated for 2026-10-20, moved to today)     |
 | `tests/fixtures`                        | Org files used by the fidelity suite                               |
 
 ## Licence

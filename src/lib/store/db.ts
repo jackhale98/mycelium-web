@@ -30,6 +30,8 @@ export interface VaultRecord {
 	lastSync: number | null;
 	/** Paths with uncommitted edits in the working tree. */
 	dirty?: string[];
+	/** The demo only: the day its notes were dated for when it was made. */
+	demoDay?: string;
 	/** Commit every edit immediately with a generated message (off: you write each commit). */
 	autoCommit?: boolean;
 	/** Chip colour per TODO keyword (defaults come from the keyword's name and kind). */

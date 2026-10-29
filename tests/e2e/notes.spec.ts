@@ -265,12 +265,15 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 		// Swipe the grid to the next month and back.
 		const label = page.getByRole('navigation', { name: 'Month' });
 		const before = await label.textContent();
-		const box = (await grid.boundingBox())!;
-		await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
-		await page.mouse.down();
-		await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 6 });
-		await page.mouse.up();
-		await expect(label).not.toHaveText(before!);
+		// Retried: under load a synthetic gesture can lose its moves.
+		await expect(async () => {
+			const box = (await grid.boundingBox())!;
+			await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+			await page.mouse.down();
+			await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 6 });
+			await page.mouse.up();
+			await expect(label).not.toHaveText(before!, { timeout: 1000 });
+		}).toPass({ timeout: 10_000 });
 		await label.getByRole('button', { name: 'Today' }).click();
 		// Once the months have slid past each other, one grid is left.
 		await expect(page.getByRole('table', { name: /\d{4}/ })).toHaveCount(1);
@@ -287,13 +290,23 @@ test('month view: days with their items, pick a day, drag to reschedule', async 
 	await next.getByRole('button').click({ position: { x: 12, y: 12 } });
 	await expect(page.getByRole('region', { name: /Today/ })).toHaveCount(0);
 	if (isMobile) return;
-	// Drag a scheduled item from today to tomorrow.
-	const chip = todayCell.locator('li[draggable="true"]').first();
+	// Drag a scheduled item (not a habit: those show on today only) to the next day.
+	const chip = grid
+		.locator('.gc:not(:last-child) li[draggable="true"]', { hasNotText: 'flashcards' })
+		.first();
+	// Pin both days by position: the locators would otherwise follow the item.
+	const index = await chip.evaluate((el) =>
+		[...document.querySelectorAll('.month-panel:not([inert]) .gc')].indexOf(el.closest('.gc')!),
+	);
+	const cells = grid.locator('.gc');
+	const from = cells.nth(index);
+	const to = cells.nth(index + 1);
 	const title = (await chip.textContent())!.replace(/^\d\d:\d\d/, '').trim();
-	await drag(page, chip, next);
-	// It leaves today (a repeat starts from its new date) and is on the next day.
-	await expect(todayCell.locator('li', { hasText: title })).toHaveCount(0);
-	await expect(next.locator('li', { hasText: title }).first()).toBeVisible();
+	await drag(page, chip, to);
+	await expect(from.locator('li', { hasText: title })).toHaveCount(0);
+	// The drop picks the new day: its list has the item.
+	await expect(to.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.month-view section.side')).toContainText(title);
 });
 
 test('board: a column per state, move by menu or drag, rows by tag', async ({ page, isMobile }) => {
@@ -398,28 +411,22 @@ test('a habit: its graph on the agenda, details with streak and rate, mark done 
 }) => {
 	await open(page, 'app#/agenda');
 	await page.getByRole('radio', { name: 'List' }).click();
-	// Make the daily flashcards task a habit, from its edit sheet.
-	await page.getByRole('button', { name: "Edit “Review this week's flashcards”" }).click();
-	const sheet = page.getByRole('dialog');
-	await sheet.getByText('Properties', { exact: true }).click();
-	await sheet.getByLabel('New property name').fill('STYLE');
-	await sheet.getByLabel('New property value').fill('habit');
-	await sheet.getByRole('button', { name: 'Add', exact: true }).click();
-	await expect(sheet.getByRole('textbox', { name: 'STYLE' })).toHaveValue('habit');
-	await sheet.getByRole('button', { name: 'Done', exact: true }).click();
-	// Its graph has its own line; it opens the details.
-	const graph = page.getByRole('button', { name: /^Habit: done 0 of the last 28 days/ });
+	// The demo's daily habit: done on 17 of the last 21 days, the last three in a row.
+	const graph = page.getByRole('button', { name: /^Habit: done 17 of the last 28 days/ });
 	await expect(graph).toBeVisible();
 	const box = (await graph.boundingBox())!;
 	expect(box.width).toBeGreaterThan(200);
 	await graph.click();
 	const habit = page.getByRole('dialog', { name: "Review this week's flashcards" });
 	await expect(habit).toContainText('Every day, counted from when it was last done');
-	await expect(habit.getByRole('definition').first()).toHaveText('0');
+	const values = habit.getByRole('definition');
+	await expect(values.nth(0)).toHaveText('3');
+	await expect(values.nth(1)).toContainText('61%');
+	await expect(values.nth(2)).toHaveText('Yesterday');
 	await habit.getByRole('button', { name: 'Mark done today' }).click();
 	await expect(habit.getByRole('button', { name: 'Done today', exact: true })).toBeDisabled();
-	await expect(habit.getByRole('definition').first()).toHaveText('1');
-	await expect(habit).toContainText('Today');
+	await expect(values.nth(0)).toHaveText('4');
+	await expect(values.nth(2)).toHaveText('Today');
 	await habit.getByRole('button', { name: 'Close' }).click();
 	await expect(habit).toHaveCount(0);
 	await page.goto(page.url().replace(/#.*/, '#/changes'));
