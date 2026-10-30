@@ -45,6 +45,16 @@
 		return (app.tree(path)?.children as OrgNode[] | undefined) ?? [];
 	});
 
+	/** Headings marked done, and ones that aren't (Hide done can leave the page empty). */
+	const tally = $derived.by(() => {
+		void app.rev;
+		const f = app.vault.file(path);
+		if (!f) return { done: 0, open: 0 };
+		const done = new Set(f.index.keywords.doneKeywords);
+		const n = f.index.headlines.filter((h) => h.todo && done.has(h.todo)).length;
+		return { done: n, open: f.index.headlines.length - n };
+	});
+
 	$effect(() => {
 		if (node) router.go(href.node(node.id));
 	});
@@ -84,6 +94,18 @@
 	<article class="file" aria-labelledby="file-title" bind:this={article}>
 		<header>
 			<div class="toolbar">
+				{#if !pane.editing && (tally.done > 0 || app.hideDone)}
+					<button
+						type="button"
+						class="btn small"
+						aria-pressed={app.hideDone}
+						title={app.hideDone ? 'Show items marked done' : 'Hide items marked done'}
+						onclick={() => app.setHideDone(!app.hideDone)}
+						><Icon name={app.hideDone ? 'eyeOff' : 'check'} size={14} />{app.hideDone
+							? `${tally.done} done hidden`
+							: 'Hide done'}</button
+					>
+				{/if}
 				<button
 					type="button"
 					class="btn small"
@@ -112,6 +134,14 @@
 		{#if pane.editing}
 			{#key path}<OrgEditor {path} focusAt={app.editAt} label={`Org source of ${title}`} />{/key}
 		{:else}
+			{#if app.hideDone && tally.done > 0 && tally.open === 0}
+				<p class="all-hidden" role="note">
+					Everything here is marked done, and done items are hidden.
+					<button type="button" class="btn small" onclick={() => app.setHideDone(false)}
+						>Show {tally.done} done {tally.done === 1 ? 'item' : 'items'}</button
+					>
+				</p>
+			{/if}
 			<div class="prose">
 				<Blocks nodes={body} ctx={{ path, levelOffset: 0, interactive: true }} />
 			</div>
@@ -167,6 +197,18 @@
 	code {
 		font-family: var(--font-mono);
 		font-size: 0.85em;
+	}
+	.all-hidden {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		margin: 0 0 1rem;
+		padding: 0.75rem 1rem;
+		border: 1px dashed var(--border-strong);
+		border-radius: var(--radius);
+		color: var(--text-muted);
+		font-size: 0.9rem;
 	}
 	.missing {
 		padding: 6rem 1rem;

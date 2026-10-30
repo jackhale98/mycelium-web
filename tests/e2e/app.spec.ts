@@ -1043,6 +1043,32 @@ test('reading view can hide items marked done', async ({ page }) => {
 	).toBeVisible();
 });
 
+test('a file of done tasks with Hide done on says so, instead of reading as blank', async ({
+	page,
+}) => {
+	await page.addInitScript(() => localStorage.setItem('mycelium:hide-done', '1'));
+	await open(page, 'app#/file/inbox.org');
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+a');
+	await page.keyboard.insertText('* DONE Email Sam\n* DONE Book a table\n');
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	await expect(page.locator('.org-section')).toHaveCount(0);
+	await expect(
+		page.getByRole('note').filter({ hasText: 'Everything here is marked done' }),
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: '2 done hidden' })).toHaveAttribute(
+		'aria-pressed',
+		'true',
+	);
+	await page.getByRole('button', { name: 'Show 2 done items' }).click();
+	await expect(page.locator('.org-section', { hasText: 'Email Sam' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Hide done' })).toHaveAttribute(
+		'aria-pressed',
+		'false',
+	);
+});
+
 test('adding a picture: offered smaller, saved to images/, linked and shown', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
 	// A big 3000×2000 picture with photo-like fine detail (noise), as a phone camera makes.
