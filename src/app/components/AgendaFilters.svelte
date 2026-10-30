@@ -100,7 +100,7 @@
 		{/if}
 	</div>
 
-	<div class="line">
+	<div class="filter-line">
 		{#if count}
 			<ul class="pills" aria-label="Active filters">
 				{#each Object.entries(filter.tags) as [tag, on] (tag)}
@@ -263,13 +263,13 @@
 		outline: none;
 	}
 	/* The active filters, then saved views and Save view…: one line while they fit. */
-	.line {
+	.filter-line {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.4rem 0.6rem;
 	}
-	.line:not(:has(*)) {
+	.filter-line:not(:has(*)) {
 		display: none;
 	}
 	.pills {
