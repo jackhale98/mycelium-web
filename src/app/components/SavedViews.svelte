@@ -101,7 +101,6 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.4rem;
-		margin-bottom: 0.75rem;
 	}
 	.list {
 		display: flex;

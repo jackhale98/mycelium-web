@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { activeFilters, emptyFilter, type AgendaFilter } from '../agenda';
 	import Icon from './Icon.svelte';
 
@@ -9,6 +10,7 @@
 		categories,
 		categoryLabels = {},
 		error,
+		children,
 	}: {
 		filter: AgendaFilter;
 		tags: string[];
@@ -17,6 +19,8 @@
 		categoryLabels?: Record<string, string>;
 		/** Problem with the text regexp or match string, if any. */
 		error: string | null;
+		/** Shown after the active filters, on the same line (saved views). */
+		children?: Snippet;
 	} = $props();
 
 	const PRIORITIES = ['A', 'B', 'C'];
@@ -96,38 +100,41 @@
 		{/if}
 	</div>
 
-	{#if count}
-		<ul class="pills" aria-label="Active filters">
-			{#each Object.entries(filter.tags) as [tag, on] (tag)}
-				<li>
-					<button type="button" class:neg={!on} onclick={() => cycleTag(tag)}
-						>{on ? '+' : '−'}#{tag}<span class="sr-only"> (change)</span></button
-					>
-				</li>
-			{/each}
-			{#each filter.states as s (s)}<li>
-					<button type="button" onclick={() => toggle('states', s)}>{s} ×</button>
-				</li>{/each}
-			{#each filter.priorities as p (p)}<li>
-					<button type="button" onclick={() => toggle('priorities', p)}>[#{p}] ×</button>
-				</li>{/each}
-			{#each filter.categories as c (c)}<li>
-					<button type="button" onclick={() => toggle('categories', c)}
-						>{categoryLabels[c] ?? c} ×</button
-					>
-				</li>{/each}
-			{#if filter.top}<li>
-					<button type="button" onclick={() => (filter = { ...filter, top: null })}
-						>Under “{filter.top.title}” ×</button
-					>
-				</li>{/if}
-			{#if filter.match.trim()}<li>
-					<button type="button" onclick={() => (filter = { ...filter, match: '' })}
-						><code>{filter.match}</code> ×</button
-					>
-				</li>{/if}
-		</ul>
-	{/if}
+	<div class="line">
+		{#if count}
+			<ul class="pills" aria-label="Active filters">
+				{#each Object.entries(filter.tags) as [tag, on] (tag)}
+					<li>
+						<button type="button" class:neg={!on} onclick={() => cycleTag(tag)}
+							>{on ? '+' : '−'}#{tag}<span class="sr-only"> (change)</span></button
+						>
+					</li>
+				{/each}
+				{#each filter.states as s (s)}<li>
+						<button type="button" onclick={() => toggle('states', s)}>{s} ×</button>
+					</li>{/each}
+				{#each filter.priorities as p (p)}<li>
+						<button type="button" onclick={() => toggle('priorities', p)}>[#{p}] ×</button>
+					</li>{/each}
+				{#each filter.categories as c (c)}<li>
+						<button type="button" onclick={() => toggle('categories', c)}
+							>{categoryLabels[c] ?? c} ×</button
+						>
+					</li>{/each}
+				{#if filter.top}<li>
+						<button type="button" onclick={() => (filter = { ...filter, top: null })}
+							>Under “{filter.top.title}” ×</button
+						>
+					</li>{/if}
+				{#if filter.match.trim()}<li>
+						<button type="button" onclick={() => (filter = { ...filter, match: '' })}
+							><code>{filter.match}</code> ×</button
+						>
+					</li>{/if}
+			</ul>
+		{/if}
+		{@render children?.()}
+	</div>
 
 	<div class="panel-body" id="agenda-filter-panel" hidden={!open}>
 		{#if tags.length}
@@ -254,6 +261,16 @@
 		color: var(--text);
 		font-size: 0.86rem;
 		outline: none;
+	}
+	/* The active filters, then saved views and Save view…: one line while they fit. */
+	.line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem 0.6rem;
+	}
+	.line:not(:has(*)) {
+		display: none;
 	}
 	.pills {
 		display: flex;

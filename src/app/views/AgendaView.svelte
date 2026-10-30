@@ -230,7 +230,6 @@
 			{/each}
 		</div>
 	</header>
-	<SavedViews query={encoded} onpick={(v) => (filter = decodeFilter(v.query, app.vault))} />
 	<AgendaFilters
 		bind:filter
 		tags={tagOptions}
@@ -238,7 +237,9 @@
 		categories={categoryOptions}
 		{categoryLabels}
 		error={compiled.error}
-	/>
+	>
+		<SavedViews query={encoded} onpick={(v) => (filter = decodeFilter(v.query, app.vault))} />
+	</AgendaFilters>
 	{#if touch && !app.swipeHintSeen && (mode === 'list' || mode === 'week')}
 		<p class="swipe-tip" role="note">
 			<span
