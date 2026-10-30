@@ -300,6 +300,8 @@
 		margin-top: 1.25rem;
 	}
 	.card {
+		/* Task rows (which cover their swipe buttons) take the card's colour, not the page's. */
+		--swipe-bg: var(--surface);
 		padding: 1.1rem 1.25rem 0.6rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
