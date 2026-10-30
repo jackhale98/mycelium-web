@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { habitGraph, habitRhythm, habitStats, parseHabit, type HabitCell } from '../habit';
+import {
+	habitGraph,
+	habitRhythm,
+	habitStats,
+	isHabit,
+	makeHabit,
+	parseHabit,
+	unmakeHabit,
+	type HabitCell,
+} from '../habit';
 
 // Org's graph string: one character per day, plus the untouched last cell.
 const graph = (cells: HabitCell[]) => cells.map((c) => c.glyph || ' ').join('') + ' ';
@@ -135,5 +144,26 @@ describe('habit stats', () => {
 		expect(habitRhythm(habit('.+3d', []))).toBe('Every 3 days');
 		expect(habitRhythm(habit('.+2d/4d', []))).toBe('Every 2–4 days');
 		expect(habitRhythm(habit('.+1w/2w', []))).toBe('Every 1–2 weeks');
+	});
+});
+
+describe('turning a task into a habit', () => {
+	const kw = { todoKeywords: ['TODO'], doneKeywords: ['DONE'] };
+	it('adds STYLE and a daily repeat to an unscheduled task, from today', () => {
+		expect(makeHabit('* TODO Stretch\n', 0, '2026-10-30', kw)).toBe(
+			'* TODO Stretch\nSCHEDULED: <2026-10-30 Fri .+1d>\n:PROPERTIES:\n:STYLE:    habit\n:END:\n',
+		);
+	});
+	it('adds a repeat to a schedule without one, and keeps one it has', () => {
+		expect(
+			makeHabit('* TODO Read\nSCHEDULED: <2026-11-02 Mon 07:30>\n', 0, '2026-10-30', kw),
+		).toContain('SCHEDULED: <2026-11-02 Mon 07:30 .+1d>');
+		const weekly = '* TODO Run\nSCHEDULED: <2026-11-02 Mon ++1w>\n';
+		expect(makeHabit(weekly, 0, '2026-10-30', kw)).toContain('SCHEDULED: <2026-11-02 Mon ++1w>');
+	});
+	it('makes one isHabit reads, and undoes', () => {
+		const h = makeHabit('* TODO Stretch\n', 0, '2026-10-30', kw);
+		expect(isHabit(h, 0, kw)).toBe(true);
+		expect(isHabit(unmakeHabit(h, 0, kw), 0, kw)).toBe(false);
 	});
 });

@@ -8,9 +8,10 @@
 
 import { toDayNumber, fromDayNumber } from './date';
 import { headlineLevel, owningHeadline } from './headline';
-import { getProperty } from './properties';
-import { splitLines } from './text';
-import { parseTimestamp } from './timestamp';
+import { getPlanning, setPlanning } from './planning';
+import { getProperty, setProperty } from './properties';
+import { applyChanges, splitLines } from './text';
+import { makeTimestamp, parseTimestamp, withTimestamp } from './timestamp';
 import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig } from './types';
 
 export const HABIT_PRECEDING_DAYS = 21;
@@ -241,4 +242,36 @@ export function habitRhythm(h: Habit): string {
 		return `Every ${h.repeat / unit}–${h.deadlineRepeat / unit} ${word}`;
 	}
 	return `Every ${every(h.repeat)}`;
+}
+
+/**
+ * Turn the entry at `offset` into a habit, as org-habit wants one: `:STYLE:
+ * habit`, and a repeating SCHEDULED date. A schedule without a repeat gets
+ * `.+1d` (every day, counted from when it's done); no schedule gets today,
+ * `.+1d`. A repeat it already has is kept. Returns the new source.
+ */
+export function makeHabit(
+	source: string,
+	offset: number,
+	today: string,
+	config: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+): string {
+	const scheduled = getPlanning(source, offset, config).SCHEDULED;
+	let s = source;
+	if (!scheduled?.repeater) {
+		const ts = scheduled
+			? withTimestamp(scheduled, { repeater: '.+1d' })
+			: makeTimestamp({ date: today, repeater: '.+1d', active: true });
+		s = applyChanges(s, setPlanning(s, offset, 'SCHEDULED', ts, config));
+	}
+	return applyChanges(s, setProperty(s, offset, 'STYLE', 'habit', config));
+}
+
+/** Stop the entry at `offset` being a habit: its `STYLE` goes; the schedule stays. */
+export function unmakeHabit(
+	source: string,
+	offset: number,
+	config: KeywordConfig = DEFAULT_KEYWORD_CONFIG,
+): string {
+	return applyChanges(source, setProperty(source, offset, 'STYLE', null, config));
 }

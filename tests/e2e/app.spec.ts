@@ -220,7 +220,10 @@ test('files without an ID open on their own page and can become notes', async ({
 
 	// Editing works as on a note.
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
-	await expect(page.locator('.cm-content')).toContainText('#+title: Inbox');
+	// It opens where you were reading (live preview hides #+title: away from the cursor).
+	await expect(page.locator('.cm-content')).toContainText(
+		'* TODO Email Sam about the reading group',
+	);
 	await page.getByRole('button', { name: 'Read', exact: true }).click();
 
 	// Make it a note: an :ID: drawer goes at the top, and its note page opens.
@@ -592,6 +595,48 @@ test('the edit sheet sets an effort, and goes to the task even in a file without
 
 	await open(page, 'app#/changes');
 	await expect(page.locator('main')).toContainText(/:Effort: +1:30/);
+});
+
+test('the Changes page reverts one block of a file, keeping the rest', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText('\nA line at the bottom.');
+	await page.keyboard.press('ControlOrMeta+Home');
+	await page.keyboard.insertText('# A comment at the top.\n');
+	await page.keyboard.press('Escape');
+	await expect(page.locator('.cm-content')).toHaveCount(0);
+
+	await open(page, 'app#/changes');
+	const diff = page.getByRole('region', { name: /Diff of .*mycelium_web\.org$/ });
+	await expect(diff).toContainText('A comment at the top.');
+	await expect(diff).toContainText('A line at the bottom.');
+	await diff
+		.getByRole('button', { name: /^Revert this change/ })
+		.first()
+		.click();
+	await expect(diff).not.toContainText('A comment at the top.');
+	await expect(diff).toContainText('A line at the bottom.');
+});
+
+test('the edit sheet turns a task into a habit, and back', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	const row = page.locator('.agenda .item', { hasText: 'Email Sam about the reading group' });
+	await row
+		.getByRole('button', { name: /Edit “Email Sam about the reading group”/ })
+		.press('Enter');
+	const sheet = page.getByRole('dialog');
+	await sheet.getByRole('button', { name: 'Turn into habit' }).click();
+	await expect(sheet.getByRole('button', { name: 'Not a habit' })).toHaveAttribute(
+		'aria-pressed',
+		'true',
+	);
+	await open(page, 'app#/changes');
+	const main = page.locator('main');
+	await expect(main).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3} \.\+1d>/);
+	await expect(main).toContainText(/:STYLE: +habit/);
 });
 
 test('the graph picks a random note to look at', async ({ page }) => {

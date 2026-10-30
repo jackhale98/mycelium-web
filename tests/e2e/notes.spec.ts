@@ -513,7 +513,25 @@ test('phones: swipe a task heading in a note; the tray is the one chosen in Sett
 	);
 });
 
-test('quick add on the agenda: plain language becomes an org task', async ({ page }) => {
+/** Add a task as a person would: the agenda's bar on wide screens, the capture sheet on phones. */
+async function addTask(page: Page, text: string) {
+	const field = page.getByRole('textbox', { name: 'Add a task' });
+	if (await field.isVisible()) {
+		await field.fill(text);
+		await field.press('Enter');
+		await expect(field).toHaveValue('');
+		return;
+	}
+	await page.keyboard.press('ControlOrMeta+Alt+KeyC');
+	const sheet = page.getByRole('dialog', { name: 'Capture' });
+	await sheet.getByRole('radio', { name: /Task/ }).click();
+	await sheet.getByRole('textbox', { name: 'Text' }).fill(text);
+	await page.keyboard.press('ControlOrMeta+Enter');
+	await expect(sheet).toBeHidden();
+}
+
+test('quick add on the agenda: plain language becomes an org task', async ({ page, isMobile }) => {
+	test.skip(isMobile, 'phones add tasks with the capture sheet, not the bar');
 	await open(page, 'app#/agenda');
 	await page.getByRole('radio', { name: 'List' }).click();
 	const field = page.getByRole('textbox', { name: 'Add a task' });
@@ -589,8 +607,7 @@ test('captured tasks go to the inbox; ones filed under a heading are the items, 
 	// A quick capture (the Task template) lands at the top of the inbox.
 	await open(page, 'app#/agenda');
 	await page.getByRole('radio', { name: 'List' }).click();
-	await page.getByRole('textbox', { name: 'Add a task' }).fill('Water the ferns');
-	await page.getByRole('textbox', { name: 'Add a task' }).press('Enter');
+	await addTask(page, 'Water the ferns');
 	// Tasks filed under a heading, as org-capture's file+headline does.
 	await open(page, 'app#/file/inbox.org');
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -873,8 +890,7 @@ test('day planner: a long task is planned in sessions, and the rest fills free t
 }) => {
 	await open(page, 'app#/agenda');
 	await planDay(page);
-	await page.getByRole('textbox', { name: 'Add a task' }).fill('Write the field guide today ~6h');
-	await page.getByRole('textbox', { name: 'Add a task' }).press('Enter');
+	await addTask(page, 'Write the field guide today ~6h');
 	const tray = page.getByRole('region', { name: /To plan/ });
 	const task = tray.getByRole('button', { name: /Write the field guide/ });
 	await expect(task).toContainText('2 h');

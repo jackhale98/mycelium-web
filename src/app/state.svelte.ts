@@ -10,6 +10,9 @@ import { panes } from './panes.svelte';
 import {
 	applyChanges,
 	applyQuickAdd,
+	isHabit,
+	makeHabit,
+	unmakeHabit,
 	applyTemplate,
 	DEFAULT_CAPTURE_TEMPLATES,
 	expandTemplate,
@@ -2117,6 +2120,29 @@ class AppState {
 	}
 
 	/** Set (or with `null` remove) a property of a heading, or of the file (`owner` null). */
+	/** Is the heading a habit (`:STYLE: habit`)? */
+	isHabitAt(path: string, pos: number): boolean {
+		const file = this.vault.file(path);
+		return !!file && isHabit(file.source, pos, file.index.keywords);
+	}
+
+	/**
+	 * Turn a task into a habit (STYLE habit, and a repeating schedule: from
+	 * today, every day, unless it has one), or stop it being one. Undoable.
+	 */
+	setHabit(path: string, pos: number, on: boolean) {
+		const file = this.vault.file(path);
+		if (!file) return;
+		const kw = file.index.keywords;
+		const next = on
+			? makeHabit(file.source, pos, localNow().date, kw)
+			: unmakeHabit(file.source, pos, kw);
+		if (next === file.source) return;
+		const title = this.#headingTitle(path, pos);
+		const label = on ? `Now a habit: ${title}` : `No longer a habit: ${title}`;
+		this.#undoable(path, label, () => this.#write(path, next, label), 'check');
+	}
+
 	/** A heading's Effort as written (`1:30`, `2d`), or ''. */
 	effortText(path: string, pos: number): string {
 		const file = this.vault.file(path);
@@ -2252,6 +2278,25 @@ class AppState {
 		await ws.cache([{ path, source: text, ...(file ? { file } : {}) }]);
 		this.rev += 1;
 		await this.refreshGit();
+	}
+
+	/**
+	 * Revert one block (hunk) of a changed file to its committed text, the
+	 * rest of the file's changes kept. Undoable, like any edit.
+	 */
+	async revertHunk(path: string, hunk: number) {
+		const ws = this.workspace;
+		if (!ws || !this.#leading()) return;
+		await this.flush();
+		const { before, after } = await ws.diff(path);
+		if (before === null || after === null) return;
+		const { revertHunk } = await import('$lib/git/diff');
+		const next = revertHunk(before, after, hunk);
+		if (next === after) return;
+		const label = `Reverted a change in ${this.#title(path)}`;
+		const inVault = !!this.vault.file(path);
+		if (inVault) this.#undoable(path, label, () => this.#write(path, next, label), 'undo');
+		else this.#write(path, next, label, { inVault: false });
 	}
 
 	async #run<T>(phase: string, task: (ws: Workspace) => Promise<T>): Promise<T | undefined> {

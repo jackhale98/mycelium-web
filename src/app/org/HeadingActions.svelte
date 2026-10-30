@@ -65,6 +65,10 @@
 		return app.effortText(path, offset);
 	});
 	let effortBad = $state(false);
+	const habit = $derived.by(() => {
+		void app.rev;
+		return app.isHabitAt(path, offset);
+	});
 	const today = localNow().date;
 
 	/** Where Archive sends the tree (org-archive-location). */
@@ -325,6 +329,18 @@
 	</div>
 
 	<div class="row move">
+		{#if todo}
+			<button
+				type="button"
+				class="btn small"
+				aria-pressed={habit}
+				title={habit
+					? 'Stop tracking it as a habit (the schedule stays)'
+					: 'Track it as a habit: a repeating schedule and a consistency graph'}
+				onclick={() => app.setHabit(path, offset, !habit)}
+				><Icon name="check" size={14} />{habit ? 'Not a habit' : 'Turn into habit'}</button
+			>
+		{/if}
 		<button
 			type="button"
 			class="btn small"

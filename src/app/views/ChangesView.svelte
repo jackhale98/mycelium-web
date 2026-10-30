@@ -411,6 +411,16 @@
 											<div class="hunk-head">
 												<span>@@ −{hunk.oldStart} +{hunk.newStart} @@</span>
 												{#if d.headings[i]}<span class="in">{d.headings[i]}</span>{/if}
+												{#if c.status === 'modified'}
+													<button
+														type="button"
+														class="btn small revert"
+														title="Put just this block back as it was committed"
+														aria-label={`Revert this change${d.headings[i] ? ` (${d.headings[i]})` : ''} in ${c.path}`}
+														onclick={() => app.revertHunk(c.path, i)}
+														><Icon name="undo" size={13} />Revert</button
+													>
+												{/if}
 											</div>
 											{#each hunk.lines as line, j (j)}
 												<div class={`ln ${line.kind}`}>
@@ -694,10 +704,18 @@
 	.hunk-head {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: center;
 		gap: 0.2rem 0.8rem;
 		padding: 0.25rem 0.6rem;
 		background: var(--surface-2);
 		color: var(--text-muted);
+	}
+	.hunk-head .revert {
+		height: 1.6rem;
+		margin-left: auto;
+		padding: 0 0.5rem;
+		font-family: var(--font-ui);
+		font-size: 0.75rem;
 	}
 	.hunk-head .in {
 		color: var(--text-2);

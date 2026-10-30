@@ -10,6 +10,7 @@
 	import { panes, usePane } from '../panes.svelte';
 	import { scrollToSearch } from '../org/scroll-to';
 	import { tick } from 'svelte';
+	import { readingAnchor, restoreReading, type Anchor } from '../anchor';
 
 	let { path, at = null }: { path: string; at?: string | null } = $props();
 
@@ -65,6 +66,25 @@
 		if (!pane.editing) app.editAt = null;
 	});
 
+	// Switching between reading and editing keeps the same part of the file at
+	// the same place on screen, as on a note's page. (Without a place to put the
+	// cursor, a phone's browser puts it at the end and scrolls down there.)
+	let editor: ReturnType<typeof OrgEditor> | undefined = $state();
+	let openAt = $state<Anchor | null>(null);
+	function setEditing(on: boolean) {
+		if (on === pane.editing) return;
+		const el = article;
+		if (on) {
+			openAt = el ? readingAnchor(el) : null;
+			pane.editing = true;
+			return;
+		}
+		const at = el && editor ? editor.topAnchor(el) : null;
+		openAt = null;
+		pane.editing = false;
+		if (at && el) void tick().then(() => restoreReading(el, at));
+	}
+
 	function makeNote() {
 		const id = app.makeFileNode(path);
 		if (id) router.go(href.node(id));
@@ -78,12 +98,12 @@
 			target instanceof HTMLElement &&
 			target.closest('input, textarea, select, [contenteditable="true"], dialog')
 		) {
-			if (e.key === 'Escape' && pane.editing && target.closest('.cm-editor')) pane.editing = false;
+			if (e.key === 'Escape' && pane.editing && target.closest('.cm-editor')) setEditing(false);
 			return;
 		}
 		if (e.key === 'e' && !e.metaKey && !e.ctrlKey && !e.altKey) {
 			e.preventDefault();
-			pane.editing = true;
+			setEditing(true);
 		}
 	}
 </script>
@@ -118,7 +138,7 @@
 					class:primary={pane.editing}
 					aria-pressed={pane.editing}
 					title={pane.editing ? 'Back to reading (Esc)' : 'Edit the org source (E)'}
-					onclick={() => (pane.editing = !pane.editing)}
+					onclick={() => setEditing(!pane.editing)}
 					><Icon name={pane.editing ? 'eye' : 'edit'} size={14} />{pane.editing
 						? 'Read'
 						: 'Edit'}</button
@@ -132,7 +152,13 @@
 			</p>
 		</header>
 		{#if pane.editing}
-			{#key path}<OrgEditor {path} focusAt={app.editAt} label={`Org source of ${title}`} />{/key}
+			{#key path}<OrgEditor
+					bind:this={editor}
+					{path}
+					anchor={app.editAt === null ? openAt : null}
+					focusAt={app.editAt}
+					label={`Org source of ${title}`}
+				/>{/key}
 		{:else}
 			{#if app.hideDone && tally.done > 0 && tally.open === 0}
 				<p class="all-hidden" role="note">

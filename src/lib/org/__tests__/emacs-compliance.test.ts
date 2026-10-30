@@ -17,6 +17,7 @@ import {
 	applyQuickAdd,
 	durationToMinutes,
 	durationUnits,
+	makeHabit,
 	makeTimestamp,
 	DEFAULT_CAPTURE_TEMPLATES,
 	expandTemplate,
@@ -84,6 +85,11 @@ const sessions = (() => {
 })();
 
 const CASES: { org: string; expect: string }[] = [
+	{
+		// "Turn into habit" on a plain task: a valid org-habit.
+		org: makeHabit('* TODO Stretch\n', 0, today, kw),
+		expect: 'Stretch|TODO|-|-|active 2026-10-29 .+1d|-|-|valid|t|-',
+	},
 	{
 		org: sessions,
 		expect:

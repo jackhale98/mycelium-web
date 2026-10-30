@@ -38,7 +38,9 @@ const add = async (page: Page, text: string) => {
 
 test('two tabs on one vault: one edits, the other follows and can take over', async ({
 	context,
+	isMobile,
 }) => {
+	test.skip(isMobile, 'tabs side by side are a desktop matter');
 	const a = await context.newPage();
 	await openAgenda(a);
 	await demoSaved(a);

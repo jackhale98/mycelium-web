@@ -367,6 +367,27 @@
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
+	/* Narrow phones: one row, the width shared out, so all six fit. */
+	@media (max-width: 560px) {
+		.mode {
+			flex-wrap: nowrap;
+			width: 100%;
+			margin-left: 0;
+		}
+		.mode button {
+			flex: 1 1 0;
+			justify-content: center;
+			min-width: 0;
+			padding: 0 0.25rem;
+			font-size: 0.8rem;
+		}
+	}
+	/* Phones add tasks with the capture sheet (swipe up), not this bar. */
+	@media (max-width: 720px) {
+		.agenda-page :global(.quick-add) {
+			display: none;
+		}
+	}
 	.stuck-hint {
 		margin: 0 0 0.5rem;
 		color: var(--text-muted);
