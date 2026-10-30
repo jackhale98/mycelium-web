@@ -30,6 +30,7 @@ import {
 	effortValue,
 	getPlanning,
 	makeTimestamp,
+	withTimestamp,
 	removeSession,
 	setSession,
 	type DurationUnits,
@@ -2056,6 +2057,32 @@ class AppState {
 				return ts ? setPlanning(s, offset, kind, ts, kw) : [];
 			},
 			`${input ? 'Set' : 'Clear'} ${kind.toLowerCase()} in ${this.#title(path)}`,
+		);
+	}
+
+	/**
+	 * Set or take off a heading's repeater (`+1w`, `.+2d`…). It goes on
+	 * SCHEDULED, or on DEADLINE when that's the only date; with neither, a
+	 * repeat starts today.
+	 */
+	setRepeater(path: string, offset: number, repeater: string | null) {
+		const kw = this.vault.file(path)?.index.keywords;
+		this.#edit(
+			path,
+			(s) => {
+				const planning = getPlanning(s, offset, kw);
+				const kind: PlanningKind =
+					!planning.SCHEDULED && planning.DEADLINE ? 'DEADLINE' : 'SCHEDULED';
+				const ts = planning[kind];
+				if (!ts) {
+					if (!repeater) return [];
+					const start = makeTimestamp({ date: localNow().date, repeater, active: true });
+					return setPlanning(s, offset, kind, start, kw);
+				}
+				if (ts.repeater === repeater) return [];
+				return setPlanning(s, offset, kind, withTimestamp(ts, { repeater }), kw);
+			},
+			`${repeater ? 'Repeat' : 'Stop repeating'} ${this.#title(path)}`,
 		);
 	}
 

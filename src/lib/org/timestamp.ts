@@ -205,3 +205,28 @@ export function nowTimestamp(
 ): OrgTimestamp {
 	return makeTimestamp({ date: now.date, time: now.time ?? null, active });
 }
+
+/** A repeater cookie in parts: `.+1w/2w` is `{ mark: '.+', n: 1, unit: 'w', habit: '/2w' }`. */
+export interface Repeat {
+	/** `+` keeps to the dates, `++` jumps to the next future one, `.+` counts from when it's done. */
+	mark: '+' | '++' | '.+';
+	n: number;
+	unit: 'h' | 'd' | 'w' | 'm' | 'y';
+	/** A habit's `/N` maximum interval, kept as written ('' when none). */
+	habit: string;
+}
+
+export function readRepeater(repeater: string | null): Repeat | null {
+	const m = /^(\+\+|\.\+|\+)(\d+)([hdwmy])(\/\d+[hdwmy])?$/.exec(repeater ?? '');
+	if (!m) return null;
+	return {
+		mark: m[1] as Repeat['mark'],
+		n: Number(m[2]),
+		unit: m[3] as Repeat['unit'],
+		habit: m[4] ?? '',
+	};
+}
+
+export function writeRepeater(r: Repeat): string {
+	return `${r.mark}${Math.max(1, Math.floor(r.n) || 1)}${r.unit}${r.habit}`;
+}

@@ -639,6 +639,32 @@ test('the edit sheet turns a task into a habit, and back', async ({ page }) => {
 	await expect(main).toContainText(/:STYLE: +habit/);
 });
 
+test('the edit sheet sets and changes a repeat, as an org repeater', async ({ page }) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	const row = page.locator('.agenda .item', { hasText: 'Email Sam about the reading group' });
+	await row
+		.getByRole('button', { name: /Edit “Email Sam about the reading group”/ })
+		.press('Enter');
+	const sheet = page.getByRole('dialog');
+	await sheet.getByRole('combobox', { name: 'Repeat' }).selectOption('w');
+	const count = sheet.getByRole('spinbutton', { name: 'How many' });
+	await expect(count).toHaveValue('1');
+	await count.fill('2');
+	await count.press('Enter');
+	await sheet.getByRole('combobox', { name: 'Next date counts' }).selectOption('.+');
+	await expect(sheet.getByRole('combobox', { name: 'Repeat unit' })).toHaveValue('w');
+	// Make it a node sits with the other actions, lined up with them.
+	const refile = sheet.getByRole('button', { name: 'Refile…' });
+	const node = sheet.getByRole('button', { name: 'Make it a node' });
+	const parent = (el: Element) => el.parentElement;
+	expect(await node.evaluate(parent)).toBe(await refile.evaluate(parent));
+	await sheet.getByRole('button', { name: 'Done' }).click();
+
+	await open(page, 'app#/changes');
+	await expect(page.locator('main')).toContainText(/SCHEDULED: <\d{4}-\d\d-\d\d \w{3} \.\+2w>/);
+});
+
 test('the graph picks a random note to look at', async ({ page }) => {
 	await open(page, 'app#/graph');
 	await page.getByRole('button', { name: 'Random note' }).click();

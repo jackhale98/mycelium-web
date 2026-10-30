@@ -3,7 +3,10 @@
 		archiveLocation,
 		formatDuration,
 		normaliseTag,
+		readRepeater,
+		writeRepeater,
 		type KeywordConfig,
+		type Repeat,
 		type OrgTimestamp,
 		type PlanningKind,
 	} from '$lib/org';
@@ -106,6 +109,15 @@
 
 	function setDate(kind: PlanningKind, value: string) {
 		app.setPlanningDate(path, offset, kind, value || null);
+	}
+
+	/** The repeat, on SCHEDULED (or DEADLINE when that's the only date), as org reads it. */
+	const repeat = $derived(readRepeater((scheduled ?? deadline)?.repeater ?? null));
+	const UNITS = { h: 'hour', d: 'day', w: 'week', m: 'month', y: 'year' } as const;
+
+	function setRepeat(patch: Partial<Repeat>) {
+		const base: Repeat = repeat ?? { mark: '+', n: 1, unit: 'w', habit: '' };
+		app.setRepeater(path, offset, writeRepeater({ ...base, ...patch }));
 	}
 
 	/** org-roam-extract-subtree: a note of its own, linked from where it was. */
@@ -264,6 +276,71 @@
 	</div>
 
 	<div class="row">
+		<label class="label" for={repeat ? `${uid}-every` : `${uid}-repeat`}>Repeat</label>
+		<div class="when">
+			{#if repeat}
+				<span class="every">Every</span>
+				<input
+					id={`${uid}-every`}
+					class="input num"
+					type="number"
+					min="1"
+					max="999"
+					inputmode="numeric"
+					value={repeat.n}
+					aria-label="How many"
+					onchange={(e) => setRepeat({ n: Number(e.currentTarget.value) || 1 })}
+				/>
+				<select
+					class="input unit"
+					aria-label="Repeat unit"
+					value={repeat.unit}
+					onchange={(e) => setRepeat({ unit: e.currentTarget.value as Repeat['unit'] })}
+				>
+					{#each Object.entries(UNITS) as [u, name] (u)}
+						<option value={u}>{name}{repeat.n === 1 ? '' : 's'}</option>
+					{/each}
+				</select>
+				<select
+					class="input mode"
+					aria-label="Next date counts"
+					title="+ keeps to its dates; ++ moves to the next date in the future; .+ counts from the day it's done"
+					value={repeat.mark}
+					onchange={(e) => setRepeat({ mark: e.currentTarget.value as Repeat['mark'] })}
+				>
+					<option value="+">from its date (+)</option>
+					<option value="++">to a future date (++)</option>
+					<option value=".+">from when done (.+)</option>
+				</select>
+				<button
+					type="button"
+					class="x"
+					aria-label="Stop repeating"
+					onclick={() => app.setRepeater(path, offset, null)}
+					><Icon name="close" size={12} /></button
+				>
+			{:else}
+				<select
+					id={`${uid}-repeat`}
+					class="input unit"
+					value=""
+					onchange={(e) => {
+						const unit = e.currentTarget.value as Repeat['unit'] | '';
+						if (unit) setRepeat({ unit });
+					}}
+				>
+					<option value="">Doesn’t repeat</option>
+					<option value="d">Every day</option>
+					<option value="w">Every week</option>
+					<option value="m">Every month</option>
+					<option value="y">Every year</option>
+				</select>
+				{#if !scheduled && !deadline}<span class="raw">Starts today</span>{/if}
+			{/if}
+		</div>
+	</div>
+
+	<div class="row">
 		<label class="label" for={`${uid}-effort`}>Effort</label>
 		<div class="when">
 			<input
@@ -358,23 +435,25 @@
 			title="Move it and everything under it into a note of its own, linked from here"
 			onclick={extract}><Icon name="file" size={14} />Extract to note</button
 		>
+		{#if !id}
+			<button
+				type="button"
+				class="btn small"
+				title="Give it an ID, so org-roam treats it as a note of its own"
+				onclick={makeNode}><Icon name="plus" size={14} />Make it a node</button
+			>
+		{/if}
 		{#if archiveNote}<span class="raw" role="status">{archiveNote}</span>{/if}
 	</div>
 
-	{#if variant === 'inline' || !id}
+	{#if variant === 'inline'}
 		<div class="row foot">
 			{#if id && nodeAction}
 				<a class="btn small" href={href.node(id)}
 					><Icon name="arrowRight" size={14} />Open as note</a
 				>
-			{:else if !id}
-				<button type="button" class="btn small" onclick={makeNode}
-					><Icon name="plus" size={14} />Make it a node</button
-				>
 			{/if}
-			{#if variant === 'inline'}
-				<button type="button" class="btn small" onclick={onclose}>Done</button>
-			{/if}
+			<button type="button" class="btn small" onclick={onclose}>Done</button>
 		</div>
 	{/if}
 </div>
@@ -514,6 +593,20 @@
 		gap: 0.5rem;
 	}
 	.date {
+		width: auto;
+		height: 2rem;
+		font-size: 0.82rem;
+	}
+	.every {
+		color: var(--text-2);
+	}
+	.num {
+		width: 4.2rem;
+		height: 2rem;
+		font-size: 0.82rem;
+	}
+	.unit,
+	.mode {
 		width: auto;
 		height: 2rem;
 		font-size: 0.82rem;
