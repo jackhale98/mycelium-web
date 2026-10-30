@@ -3,6 +3,7 @@
 	import { nextTodoKeyword } from '$lib/org';
 	import { editorAnchor, restoreEditor, type Anchor } from '../anchor';
 	import { href } from '../router.svelte';
+	import { flushSync } from 'svelte';
 	import { loadEditor } from './load';
 	import { app } from '../state.svelte';
 	import { panes, usePane } from '../panes.svelte';
@@ -14,8 +15,14 @@
 		focusAt = null,
 		anchor = null,
 		label = 'Org source',
+		onready,
 	}: {
 		path: string;
+		/**
+		 * The editor is up: the page can take away what it showed meanwhile (the
+		 * reading view), in the same frame as the editor scrolls to its place.
+		 */
+		onready?: () => void;
 		focusAt?: number | null;
 		/** Keep this part of the note where it was on screen (switching from reading). */
 		anchor?: Anchor | null;
@@ -179,17 +186,27 @@
 				);
 				ready = true;
 				const v = view;
-				if (anchor) {
-					// Same place on screen as in reading: no jump.
-					v.dispatch({ selection: { anchor: Math.min(anchor.pos, v.state.doc.length) } });
-					restoreEditor(v, anchor);
-					requestAnimationFrame(() => restoreEditor(v, anchor));
-				} else if (focusAt !== null) {
-					const at = Math.min(focusAt, v.state.doc.length);
-					const lineEnd = v.state.doc.lineAt(at).to;
-					v.dispatch({ selection: { anchor: lineEnd }, scrollIntoView: true });
-				}
-				v.focus();
+				// The editor measures its lines in the next frame; the swap waits for
+				// that, then happens before the browser paints: one move, no gap.
+				requestAnimationFrame(() => {
+					if (cancelled) return;
+					onready?.();
+					flushSync();
+					if (anchor) {
+						// Same place on screen as in reading: no jump.
+						v.dispatch({ selection: { anchor: Math.min(anchor.pos, v.state.doc.length) } });
+						restoreEditor(v, anchor);
+						// The cursor is already on screen: focusing mustn't scroll to it again.
+						v.contentDOM.focus({ preventScroll: true });
+					} else {
+						if (focusAt !== null) {
+							const at = Math.min(focusAt, v.state.doc.length);
+							const lineEnd = v.state.doc.lineAt(at).to;
+							v.dispatch({ selection: { anchor: lineEnd }, scrollIntoView: true });
+						}
+						v.focus();
+					}
+				});
 			},
 		);
 		return () => {

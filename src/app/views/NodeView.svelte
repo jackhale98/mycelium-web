@@ -127,6 +127,11 @@
 	// at the same place on screen.
 	let editor: ReturnType<typeof OrgEditor> | undefined = $state();
 	let openAt = $state<Anchor | null>(null);
+	/** The editor is up (until then the reading view stays on screen). */
+	let editorUp = $state(false);
+	$effect(() => {
+		if (!pane.editing) editorUp = false;
+	});
 	function setEditing(on: boolean) {
 		if (on === pane.editing) return;
 		const el = article;
@@ -337,39 +342,45 @@
 				</div>
 			</header>
 
-			{#if pane.editing}
-				{#key node.file}
-					<OrgEditor
-						bind:this={editor}
-						path={node.file}
-						anchor={app.editAt === null ? openAt : null}
-						focusAt={app.editAt ?? (node.level > 0 ? node.pos : null)}
-						label={`Org source of ${node.title}`}
-					/>
-				{/key}
-			{:else}
-				{#if contents.length}
-					<div class="toc-inline">
-						<Toc
-							entries={contents}
-							baseLevel={node.level}
-							container={() => article}
-							variant="inline"
+			<div class="swap">
+				{#if pane.editing}
+					<div class:pending={!editorUp}>
+						{#key node.file}
+							<OrgEditor
+								bind:this={editor}
+								path={node.file}
+								anchor={app.editAt === null ? openAt : null}
+								focusAt={app.editAt ?? (node.level > 0 ? node.pos : null)}
+								label={`Org source of ${node.title}`}
+								onready={() => (editorUp = true)}
+							/>
+						{/key}
+					</div>
+				{/if}
+				{#if !pane.editing || !editorUp}
+					{#if contents.length}
+						<div class="toc-inline">
+							<Toc
+								entries={contents}
+								baseLevel={node.level}
+								container={() => article}
+								variant="inline"
+							/>
+						</div>
+					{/if}
+					<div class="prose node-body">
+						<Blocks
+							nodes={body}
+							ctx={{
+								path: node.file,
+								levelOffset: node.level,
+								interactive: true,
+								mentions: range ? { range } : {},
+							}}
 						/>
 					</div>
 				{/if}
-				<div class="prose node-body">
-					<Blocks
-						nodes={body}
-						ctx={{
-							path: node.file,
-							levelOffset: node.level,
-							interactive: true,
-							mentions: range ? { range } : {},
-						}}
-					/>
-				</div>
-			{/if}
+			</div>
 
 			<div class="inline-links">
 				<Backlinks {id} />
@@ -401,6 +412,16 @@
 {/if}
 
 <style>
+	/* While the editor loads, the reading view stays; the editor gets ready unseen behind it. */
+	.swap {
+		position: relative;
+	}
+	.swap > .pending {
+		position: absolute;
+		inset: 0 0 auto;
+		visibility: hidden;
+		pointer-events: none;
+	}
 	.node-layout {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);

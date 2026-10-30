@@ -71,6 +71,11 @@
 	// cursor, a phone's browser puts it at the end and scrolls down there.)
 	let editor: ReturnType<typeof OrgEditor> | undefined = $state();
 	let openAt = $state<Anchor | null>(null);
+	/** The editor is up (until then the reading view stays on screen). */
+	let editorUp = $state(false);
+	$effect(() => {
+		if (!pane.editing) editorUp = false;
+	});
 	function setEditing(on: boolean) {
 		if (on === pane.editing) return;
 		const el = article;
@@ -151,27 +156,33 @@
 				backlinks. Its tasks still show on the agenda.
 			</p>
 		</header>
-		{#if pane.editing}
-			{#key path}<OrgEditor
-					bind:this={editor}
-					{path}
-					anchor={app.editAt === null ? openAt : null}
-					focusAt={app.editAt}
-					label={`Org source of ${title}`}
-				/>{/key}
-		{:else}
-			{#if app.hideDone && tally.done > 0 && tally.open === 0}
-				<p class="all-hidden" role="note">
-					Everything here is marked done, and done items are hidden.
-					<button type="button" class="btn small" onclick={() => app.setHideDone(false)}
-						>Show {tally.done} done {tally.done === 1 ? 'item' : 'items'}</button
-					>
-				</p>
+		<div class="swap">
+			{#if pane.editing}
+				<div class:pending={!editorUp}>
+					{#key path}<OrgEditor
+							bind:this={editor}
+							{path}
+							anchor={app.editAt === null ? openAt : null}
+							focusAt={app.editAt}
+							label={`Org source of ${title}`}
+							onready={() => (editorUp = true)}
+						/>{/key}
+				</div>
 			{/if}
-			<div class="prose">
-				<Blocks nodes={body} ctx={{ path, levelOffset: 0, interactive: true }} />
-			</div>
-		{/if}
+			{#if !pane.editing || !editorUp}
+				{#if app.hideDone && tally.done > 0 && tally.open === 0}
+					<p class="all-hidden" role="note">
+						Everything here is marked done, and done items are hidden.
+						<button type="button" class="btn small" onclick={() => app.setHideDone(false)}
+							>Show {tally.done} done {tally.done === 1 ? 'item' : 'items'}</button
+						>
+					</p>
+				{/if}
+				<div class="prose">
+					<Blocks nodes={body} ctx={{ path, levelOffset: 0, interactive: true }} />
+				</div>
+			{/if}
+		</div>
 	</article>
 {:else}
 	<div class="missing">
@@ -182,6 +193,16 @@
 {/if}
 
 <style>
+	/* While the editor loads, the reading view stays; the editor gets ready unseen behind it. */
+	.swap {
+		position: relative;
+	}
+	.swap > .pending {
+		position: absolute;
+		inset: 0 0 auto;
+		visibility: hidden;
+		pointer-events: none;
+	}
 	.file {
 		width: 100%;
 		max-width: calc(var(--read-w) + 6rem);

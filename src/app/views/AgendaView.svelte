@@ -370,6 +370,10 @@
 	}
 	/* Narrow phones: one row, the width shared out, so all six fit. */
 	@media (max-width: 560px) {
+		/* The switcher sits just under the title: more room for the agenda. */
+		header h1 {
+			margin-bottom: 0.25rem;
+		}
 		.mode {
 			flex-wrap: nowrap;
 			width: 100%;

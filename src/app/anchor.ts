@@ -10,6 +10,11 @@ export interface Anchor {
 	pos: number;
 	/** Its distance from the top of the viewport, in CSS pixels. */
 	y: number;
+	/**
+	 * The page was at its top: stay there (the editor shows lines reading
+	 * hides, like #+title, so lining the block up would scroll the title away).
+	 */
+	still?: boolean;
 }
 
 /** Where content starts below the sticky bars at the top (clock, daily nav). */
@@ -28,11 +33,17 @@ function topEdge(within: HTMLElement): number {
 const landmark = (el: Element) => el.querySelector(':scope > .heading-row') ?? el;
 
 /** What scrolls `within`: its pane on wide screens, the page itself on phones. */
-function scroller(within: Element): { by: (dy: number) => void } {
+function scroller(within: Element): { by: (dy: number) => void; top: () => number } {
 	const pane = within.closest('.pane-scroll');
 	if (pane && pane.scrollHeight > pane.clientHeight)
-		return { by: (dy) => pane.scrollBy({ top: dy, behavior: 'instant' }) };
-	return { by: (dy) => window.scrollBy({ top: dy, behavior: 'instant' }) };
+		return {
+			by: (dy) => pane.scrollBy({ top: dy, behavior: 'instant' }),
+			top: () => pane.scrollTop,
+		};
+	return {
+		by: (dy) => window.scrollBy({ top: dy, behavior: 'instant' }),
+		top: () => document.scrollingElement?.scrollTop ?? window.scrollY,
+	};
 }
 
 /**
@@ -54,8 +65,8 @@ export function readingAnchor(container: HTMLElement): Anchor | null {
 	}
 	// A block starting just below the edge is a better landmark than a long
 	// section that began far above it.
-	if (below && (!straddling || below.y - edge < 120)) return below;
-	return straddling ?? below;
+	const found = below && (!straddling || below.y - edge < 120) ? below : (straddling ?? below);
+	return found && scroller(container).top() < 4 ? { ...found, still: true } : found;
 }
 
 /** Scroll reading view so the block at (or just before) `a.pos` sits at `a.y`. */
@@ -92,6 +103,7 @@ export function editorAnchor(view: EditorView, container: HTMLElement): Anchor |
 
 /** Scroll the editor so the line holding `a.pos` sits at `a.y`. */
 export function restoreEditor(view: EditorView, a: Anchor) {
+	if (a.still) return;
 	const pos = Math.min(a.pos, view.state.doc.length);
 	const line = view.lineBlockAt(pos);
 	// (The editor lives in a shadow root: look up from its host.)
