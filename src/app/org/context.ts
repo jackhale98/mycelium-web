@@ -9,6 +9,11 @@ export interface RenderContext {
 	highlight?: string | undefined;
 	/** Transclusions being shown around this one (to stop loops). */
 	transcluding?: string[] | undefined;
+	/**
+	 * Underline other notes' titles in the text as link suggestions: in this
+	 * part of the file (a heading note's subtree), or the whole file.
+	 */
+	mentions?: { range?: [number, number] } | undefined;
 	/** `#+ATTR_ORG:` / `#+ATTR_HTML:` of the paragraph, for its inline images. */
 	image?: ImageAttrs | undefined;
 }

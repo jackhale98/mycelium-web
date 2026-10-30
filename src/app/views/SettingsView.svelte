@@ -190,6 +190,47 @@
 				</p>
 			</div>
 		</section>
+		<section class="panel stack" aria-labelledby="links-h">
+			<h2 id="links-h">Link suggestions</h2>
+			<p class="hint">
+				Other notes' titles and aliases written as plain text in a note are suggested as links:
+				underlined in the text, and listed under the note's backlinks. Linking writes an ordinary
+				<code>[[id:…][words]]</code> link, keeping your words.
+			</p>
+			<label class="check"
+				><input
+					type="checkbox"
+					checked={app.mentionMarks}
+					onchange={(e) => app.setMentionMarks(e.currentTarget.checked)}
+				/>
+				Underline suggestions in the text (reading and editing)</label
+			>
+			<label class="check"
+				><input
+					type="checkbox"
+					checked={app.mentionEvery}
+					onchange={(e) => app.setMentionEvery(e.currentTarget.checked)}
+				/>
+				Suggest every mention of a note, not just the first in each note</label
+			>
+			{#if app.mentionIgnore.length}
+				<div class="field">
+					<span class="label" id="ign-label">Never suggested</span>
+					<ul class="ignored" aria-labelledby="ign-label">
+						{#each app.mentionIgnore as id (id)}
+							<li>
+								<span>{app.vault.node(id)?.title ?? id}</span>
+								<button
+									type="button"
+									class="btn small"
+									onclick={() => void app.ignoreMention(id, false)}>Suggest again</button
+								>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+		</section>
 	{:else if current === 'tasks'}
 		<section class="panel stack" aria-labelledby="workflow-h">
 			<h2 id="workflow-h">Workflow: TODO keywords</h2>
@@ -826,5 +867,19 @@
 		border-radius: 8px;
 		background: var(--code-bg);
 		font-size: 0.78rem;
+	}
+	.ignored {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.ignored li {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
 	}
 </style>

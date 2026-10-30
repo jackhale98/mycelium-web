@@ -26,6 +26,7 @@ import {
 	setPlanning,
 	shapeCapture,
 } from '..';
+import { findMentions, linkMentionChanges, mentionMatcher } from '../../vault/mentions';
 
 const hasEmacs = (() => {
 	try {
@@ -207,6 +208,39 @@ describe.skipIf(!hasEmacs)("Emacs' org-mode reads what we write", () => {
 		);
 		const out = emacs(['-l', script]).trim().split('\n').map(Number);
 		expect(out).toEqual(values.map((v) => durationToMinutes(v, units)));
+	});
+
+	it('org reads the links that link suggestions write', () => {
+		const dir = mkdtempSync(join(tmpdir(), 'org-links-'));
+		const source = [
+			'#+title: Forest walk',
+			'',
+			'Suzanne Simard found that mycelial networks feed seedlings (see the Wood',
+			'Wide Web), as =Simard= wrote.',
+			'',
+		].join('\n');
+		const matcher = mentionMatcher([
+			{ id: 'aaa-1', file: 'simard.org', title: 'Suzanne Simard', aliases: [], level: 0 },
+			{ id: 'bbb-2', file: 'net.org', title: 'Mycelial network', aliases: [], level: 0 },
+		]);
+		const found = findMentions(source, matcher, { path: 'walk.org' });
+		const linked = applyChanges(source, linkMentionChanges(found));
+		const file = join(dir, 'walk.org');
+		writeFileSync(file, linked);
+		const script = join(dir, 'links.el');
+		writeFileSync(
+			script,
+			`(require 'org) (require 'org-element)
+(with-temp-buffer
+  (insert-file-contents (car command-line-args-left))
+  (org-mode)
+  (org-element-map (org-element-parse-buffer) 'link
+    (lambda (l)
+      (princ (format "%s|%s|%s\\n" (org-element-property :type l) (org-element-property :path l)
+        (buffer-substring-no-properties (org-element-property :contents-begin l) (org-element-property :contents-end l)))))))`,
+		);
+		const out = emacs(['-l', script, file]).trim().split('\n');
+		expect(out).toEqual(['id|aaa-1|Suzanne Simard', 'id|bbb-2|mycelial networks']);
 	});
 
 	it("org's agenda shows each session on its day", () => {

@@ -7,6 +7,7 @@
 	import { math, texOf } from './math';
 	import OrgImage from './OrgImage.svelte';
 	import { isImageFile, radioTargets, resolvePath, splitSearch, splitTargets } from '$lib/org';
+	import type { Mention } from '$lib/vault/mentions';
 
 	let { nodes, ctx }: { nodes: OrgNode[]; ctx: RenderContext } = $props();
 
@@ -89,13 +90,51 @@
 		);
 	});
 
+	/** Link suggestions in this file (sorted), when they're shown here. */
+	const mentions = $derived.by((): Mention[] => {
+		if (!ctx.mentions || !ctx.interactive || !app.mentionMarks) return [];
+		void app.rev;
+		return app.mentionsIn(ctx.path, ctx.mentions.range);
+	});
+
+	/** The suggestions inside a text node (checked against its text). */
+	function mentionsIn(node: OrgNode): Mention[] {
+		if (!mentions.length || node.type !== 'text') return [];
+		const start = node.position?.start.offset;
+		if (start === undefined) return [];
+		const end = start + node.value.length;
+		return mentions.filter(
+			(m) =>
+				m.from >= start && m.to <= end && node.value.slice(m.from - start, m.to - start) === m.text,
+		);
+	}
+
+	type Piece =
+		| { kind: 'text'; text: string }
+		| { kind: 'target'; name: string }
+		| { kind: 'radio'; name: string }
+		| { kind: 'radio-link'; text: string }
+		| { kind: 'mention'; mention: Mention };
+
+	/** A text node in pieces: link suggestions first, then targets and radio links. */
+	function pieces(node: OrgNode & { type: 'text' }): Piece[] {
+		const found = mentionsIn(node);
+		if (!found.length) return textPieces(node.value);
+		const start = node.position?.start.offset ?? 0;
+		const out: Piece[] = [];
+		let last = 0;
+		for (const m of found) {
+			out.push(...textPieces(node.value.slice(last, m.from - start)));
+			out.push({ kind: 'mention', mention: m });
+			last = m.to - start;
+		}
+		out.push(...textPieces(node.value.slice(last)));
+		return out;
+	}
+
 	function textPieces(value: string) {
-		const out: (
-			| { kind: 'text'; text: string }
-			| { kind: 'target'; name: string }
-			| { kind: 'radio'; name: string }
-			| { kind: 'radio-link'; text: string }
-		)[] = [];
+		const out: Piece[] = [];
+		if (!value) return out;
 		for (const piece of splitTargets(value)) {
 			if (piece.kind !== 'text' || !radios) {
 				out.push(piece);
@@ -115,7 +154,19 @@
 </script>
 
 {#each nodes as node, i (i)}
-	{#if node.type === 'text'}{#if !node.value.includes('<<') && !radios}{node.value}{:else}{#each textPieces(node.value) as piece, k (k)}{#if piece.kind === 'text'}{piece.text}{:else if piece.kind === 'target'}<span
+	{#if node.type === 'text'}{#if !node.value.includes('<<') && !radios && !mentionsIn(node).length}{node.value}{:else}{#each pieces(node) as piece, k (k)}{#if piece.kind === 'text'}{piece.text}{:else if piece.kind === 'mention'}{@const m =
+						piece.mention}<button
+						type="button"
+						class="mention"
+						aria-haspopup="menu"
+						aria-label={`${m.text}, a mention of ${m.title} (link suggestion)`}
+						onclick={(e) =>
+							(app.mentionMenu = {
+								path: ctx.path,
+								mention: m,
+								anchor: e.currentTarget as HTMLElement,
+							})}>{m.text}</button
+					>{:else if piece.kind === 'target'}<span
 						class="org-target"
 						data-target={piece.name.toLowerCase()}
 					></span>{:else if piece.kind === 'radio'}<span

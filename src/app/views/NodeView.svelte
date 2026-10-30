@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { OrgNode, Section } from 'uniorg';
-	import { startOf, type RoamNode } from '$lib/org';
+	import { headlineAt, splitLines, startOf, subtreeEnd, type RoamNode } from '$lib/org';
 	import Backlinks from '../components/Backlinks.svelte';
+	import Mentions from '../components/Mentions.svelte';
 	import OrgEditor from '../editor/OrgEditor.svelte';
 	import DateChip from '../org/DateChip.svelte';
 	import Icon from '../components/Icon.svelte';
@@ -49,6 +50,16 @@
 	const keywords = $derived.by(() => {
 		void app.rev;
 		return (node && app.vault.file(node.file)?.index.keywords) || app.vault.keywords;
+	});
+
+	/** The part of the file this node covers: its subtree (all of it for a file node). */
+	const range = $derived.by((): [number, number] | undefined => {
+		void app.rev;
+		const file = node && app.vault.file(node.file);
+		if (!node || !file || node.level === 0) return undefined;
+		const lines = splitLines(file.source);
+		const h = headlineAt(file.source, node.pos, file.index.keywords, lines);
+		return h ? [node.pos, subtreeEnd(lines, h)] : undefined;
 	});
 
 	/** The blocks that make up this node's body. */
@@ -350,13 +361,19 @@
 				<div class="prose node-body">
 					<Blocks
 						nodes={body}
-						ctx={{ path: node.file, levelOffset: node.level, interactive: true }}
+						ctx={{
+							path: node.file,
+							levelOffset: node.level,
+							interactive: true,
+							mentions: range ? { range } : {},
+						}}
 					/>
 				</div>
 			{/if}
 
 			<div class="inline-links">
 				<Backlinks {id} />
+				<Mentions path={node.file} {range} />
 			</div>
 		</article>
 
@@ -371,6 +388,7 @@
 					/>
 				{/if}
 				<Backlinks {id} />
+				<Mentions path={node.file} {range} />
 			</aside>
 		{/if}
 	</div>

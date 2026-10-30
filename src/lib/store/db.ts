@@ -54,6 +54,8 @@ export interface VaultRecord {
 	captureTemplates?: CaptureTemplate[] | undefined;
 	/** Named agenda filters (an encoded filter query each), shown as chips on the agenda. */
 	agendaViews?: SavedAgendaView[];
+	/** Notes never suggested as links (their ids). */
+	mentionIgnore?: string[];
 	/** org-stuck-projects: what a project is (a match string) and the keywords that keep it moving. */
 	stuckProjects?: { match: string; keywords: string[]; tags?: string[]; regexp?: string };
 	/**

@@ -88,6 +88,13 @@ import {
 	type VaultLayout,
 } from '$lib/vault/layout';
 import { buildSearch } from '$lib/vault/search';
+import {
+	findMentions,
+	linkMentionChanges,
+	mentionMatcher,
+	type Matcher,
+	type Mention,
+} from '$lib/vault/mentions';
 import { Vault } from '$lib/vault/vault';
 import { fromMinutes } from './planner';
 import { demoDay, demoSources } from './demo';
@@ -101,6 +108,8 @@ const THEME_KEY = 'mycelium:theme';
 const TEXT_SIZE_KEY = 'mycelium:text-size';
 const LINE_BREAKS_KEY = 'mycelium:line-breaks';
 const HIDE_DONE_KEY = 'mycelium:hide-done';
+const MENTION_MARKS_KEY = 'mycelium:mention-marks';
+const MENTION_EVERY_KEY = 'mycelium:mention-every';
 const EDITOR_MODE_KEY = 'mycelium:editor-mode';
 /** Text-size steps, in percent of the browser's default size. */
 export const TEXT_SIZES = [
@@ -137,7 +146,7 @@ function readSwipeTray(): SwipeChoice[] {
 	);
 	return picks.length === 2 ? picks : [...DEFAULT_SWIPE_TRAY];
 }
-type UndoIcon = 'clock' | 'check' | 'calendar' | 'undo' | 'trash';
+type UndoIcon = 'clock' | 'check' | 'calendar' | 'undo' | 'trash' | 'link';
 
 /** Something in the inbox: a top-level heading not yet done, with a little of its text. */
 export interface InboxItem extends HeadlineEntry {
@@ -292,6 +301,10 @@ class AppState {
 	joinLines = $state(readLocal(LINE_BREAKS_KEY) === 'join');
 	/** Reading view leaves out headings marked with a done keyword (and what's under them). */
 	hideDone = $state(readLocal(HIDE_DONE_KEY) === '1');
+	/** Underline other notes' titles in the text (link suggestions), reading and editing. */
+	mentionMarks = $state(readLocal(MENTION_MARKS_KEY) !== 'off');
+	/** Suggest every mention of a note, not just its first in each note. */
+	mentionEvery = $state(readLocal(MENTION_EVERY_KEY) === '1');
 	/** The editor hides markup away from the cursor (live preview), or shows plain source. */
 	livePreview = $state(readLocal(EDITOR_MODE_KEY) !== 'source');
 	paletteOpen = $state(false);
@@ -582,6 +595,16 @@ class AppState {
 	setLivePreview(live: boolean) {
 		this.livePreview = live;
 		writeLocal(EDITOR_MODE_KEY, live ? null : 'source');
+	}
+
+	setMentionMarks(on: boolean) {
+		this.mentionMarks = on;
+		writeLocal(MENTION_MARKS_KEY, on ? null : 'off');
+	}
+
+	setMentionEvery(every: boolean) {
+		this.mentionEvery = every;
+		writeLocal(MENTION_EVERY_KEY, every ? '1' : null);
 	}
 
 	setHideDone(hide: boolean) {
@@ -1332,17 +1355,104 @@ class AppState {
 		);
 	}
 
-	/** Turn an unlinked mention into a link to the node: `[[id:ID][mention]]`. */
+	/** Turn an unlinked mention into a link to the node: `[[id:ID][mention]]`. Undoable. */
 	linkMention(path: string, offset: number, text: string, id: string) {
+		this.linkMentions(path, [{ from: offset, to: offset + text.length, text, id }]);
+	}
+
+	/** Link several mentions in a file at once (one Undo). Ones that moved are skipped. */
+	linkMentions(path: string, mentions: { from: number; to: number; text: string; id: string }[]) {
 		const file = this.vault.file(path);
-		if (!file || file.source.slice(offset, offset + text.length) !== text) return;
-		this.#write(
+		if (!file) return;
+		const ok = mentions.filter((m) => file.source.slice(m.from, m.to) === m.text);
+		if (!ok.length) return;
+		const label = ok.length === 1 ? `Linked “${ok[0]!.text}”` : `Linked ${ok.length} mentions`;
+		this.#undoable(
 			path,
-			applyChanges(file.source, [
-				{ from: offset, to: offset + text.length, insert: `[[id:${id}][${text}]]` },
-			]),
-			`Link ${text}`,
+			label,
+			() => this.#write(path, applyChanges(file.source, linkMentionChanges(ok)), label),
+			'link',
 		);
+	}
+
+	// ------------------------------------------------------------------ link suggestions
+
+	#matcher: { rev: number; key: string; matcher: Matcher; gen: number } | null = null;
+	#mentionCache = new Map<string, { key: string; source: string; found: Mention[] }>();
+
+	/** Every note's title and aliases, ready to find in text (rebuilt when they change). */
+	get mentionMatcher(): Matcher {
+		const rev = this.rev;
+		if (this.#matcher?.rev === rev) return this.#matcher.matcher;
+		const nodes = [...this.vault.nodes.values()];
+		const key = nodes
+			.map((n) => [n.id, n.file, n.level, n.title, ...n.aliases].join('\u0001'))
+			.join('\u0000');
+		this.#matcher =
+			this.#matcher?.key === key
+				? { ...this.#matcher, rev }
+				: { rev, key, matcher: mentionMatcher(nodes), gen: (this.#matcher?.gen ?? 0) + 1 };
+		return this.#matcher.matcher;
+	}
+
+	/**
+	 * The Link to… picker: `words` being linked (shown, and the starting
+	 * search); `pick` gets the chosen (or new) note, `cancel` runs if closed.
+	 */
+	linkPicker = $state<{
+		query: string;
+		words: string | null;
+		pick: (id: string, title: string) => void;
+		cancel?: () => void;
+	} | null>(null);
+
+	/** The menu for a link suggestion tapped in the reading view. */
+	mentionMenu = $state<{ path: string; mention: Mention; anchor: HTMLElement } | null>(null);
+
+	/** Notes never suggested as links, in this vault. */
+	get mentionIgnore(): string[] {
+		return this.activeVault?.mentionIgnore ?? [];
+	}
+
+	/**
+	 * Other notes named in a file's text and not linked from it (link
+	 * suggestions): in `range` if given (a heading note's subtree).
+	 */
+	mentionsIn(path: string, range?: [number, number]): Mention[] {
+		const file = this.vault.file(path);
+		if (!file) return [];
+		const matcher = this.mentionMatcher;
+		const ignore = this.mentionIgnore;
+		// A new matcher (a title or alias changed) has a new generation.
+		const key = [this.#matcher!.gen, ignore.join(','), this.mentionEvery].join('|');
+		const slot = `${path}\u0000${range?.join('-') ?? ''}`;
+		const hit = this.#mentionCache.get(slot);
+		if (hit && hit.source === file.source && hit.key === key) return hit.found;
+		const linked = new Set<string>();
+		for (const link of file.index.links) {
+			if (link.type === 'id') linked.add(link.dest);
+			else {
+				const id = this.vault.resolve({ type: link.type, dest: link.dest });
+				if (id) linked.add(id);
+			}
+		}
+		const found = findMentions(file.source, matcher, {
+			path,
+			linked,
+			ignore: new Set(ignore),
+			every: this.mentionEvery,
+			...(range ? { range } : {}),
+		});
+		this.#mentionCache.set(slot, { key, source: file.source, found });
+		return found;
+	}
+
+	/** Stop (or start again) suggesting links to a note in this vault. */
+	async ignoreMention(id: string, ignore = true) {
+		const now = new Set(this.mentionIgnore);
+		if (ignore) now.add(id);
+		else now.delete(id);
+		await this.updateVault({ mentionIgnore: [...now] });
 	}
 
 	// ------------------------------------------------------------------ refile and archive

@@ -7,6 +7,7 @@
 	import { app } from '../state.svelte';
 	import { panes, usePane } from '../panes.svelte';
 	import FormatBar, { type FormatAction } from './FormatBar.svelte';
+	import { findMentions } from '$lib/vault/mentions';
 
 	let {
 		path,
@@ -34,6 +35,58 @@
 	let view: EditorView | null = null;
 	let sync: ((view: EditorView, text: string) => void) | null = null;
 	let refresh: ((view: EditorView) => void) | null = null;
+	let linkHere: ((view: EditorView) => boolean) | null = null;
+	/** A note's source URL was just pasted: offer the note's link instead. */
+	let refPaste = $state<{
+		from: number;
+		to: number;
+		url: string;
+		id: string;
+		title: string;
+	} | null>(null);
+	let refTimer: ReturnType<typeof setTimeout> | null = null;
+
+	/** Link suggestions in the text being edited (not ones already linked from it). */
+	function mentionsOf(text: string) {
+		if (!app.mentionMarks) return [];
+		const linked = new Set(
+			[...text.matchAll(/\[\[id:([^\]\[]+?)(?:::[^\]]*)?\]/g)].map((m) => m[1]!),
+		);
+		return findMentions(text, app.mentionMatcher, {
+			path,
+			linked,
+			ignore: new Set(app.mentionIgnore),
+			every: app.mentionEvery,
+		});
+	}
+
+	/** The note whose ROAM_REFS include this URL (as org-roam splits a ref: type and rest). */
+	function refFor(url: string) {
+		const m = /^([a-z][a-z0-9+.-]*):(.*)$/i.exec(url);
+		if (!m) return null;
+		const type = m[1]!.toLowerCase();
+		const rest = m[2]!.replace(/\/$/, '');
+		for (const node of app.vault.nodes.values())
+			if (
+				node.file !== path &&
+				node.refs.some((r) => r.type === type && r.ref.replace(/\/$/, '') === rest)
+			)
+				return { id: node.id, title: node.title };
+		return null;
+	}
+
+	function linkRef() {
+		const p = refPaste;
+		refPaste = null;
+		if (!p || !view || view.state.sliceDoc(p.from, p.to) !== p.url) return;
+		const insert = `[[id:${p.id}][${p.title}]]`;
+		view.dispatch({
+			changes: { from: p.from, to: p.to, insert },
+			selection: { anchor: p.from + insert.length },
+			userEvent: 'input',
+		});
+		view.focus();
+	}
 	let pending: string | null = null;
 	let focused = $state(false);
 	let level = $state(0);
@@ -68,8 +121,16 @@
 		if (!host) return;
 		let cancelled = false;
 		void loadEditor().then(
-			([{ createEditor, syncEditor, refreshPreview }, format, cm, list, table, tex]) => {
+			([
+				{ createEditor, syncEditor, refreshPreview, linkAtCursor },
+				format,
+				cm,
+				list,
+				table,
+				tex,
+			]) => {
 				if (cancelled || !host) return;
+				linkHere = linkAtCursor;
 				tables = table;
 				texTools = tex;
 				commands = format;
@@ -88,6 +149,21 @@
 						follow,
 						onImage(file, pos) {
 							if (view) addImage(view, file, pos);
+						},
+						mentions: mentionsOf,
+						linkTo(words, done) {
+							app.linkPicker = {
+								query: words ?? '',
+								words,
+								pick: done,
+								cancel: () => view?.focus(),
+							};
+						},
+						refFor,
+						onRefPaste(p) {
+							refPaste = p;
+							if (refTimer) clearTimeout(refTimer);
+							refTimer = setTimeout(() => (refPaste = null), 12_000);
 						},
 						onCursor(v) {
 							focused = v.hasFocus;
@@ -284,6 +360,8 @@
 				run(lists.outdentItem);
 				break;
 			case 'link':
+				// A suggestion under the cursor, or Link to… (keeping selected words).
+				if (linkHere?.(v)) return;
 				run(f.insertLink);
 				void import('@codemirror/autocomplete').then((a) => a.startCompletion(v));
 				break;
@@ -338,6 +416,18 @@
 {/if}
 <div class="editor" class:loading={!ready} bind:this={host}></div>
 <FormatBar {focused} {level} onaction={act} />
+{#if refPaste}
+	<div class="ref-paste" role="status">
+		<span>That's the source of <strong>{refPaste.title}</strong>.</span>
+		<button type="button" class="btn small primary" onclick={linkRef}>Link the note instead</button>
+		<button
+			type="button"
+			class="btn small icon-only"
+			aria-label="Keep the URL"
+			onclick={() => (refPaste = null)}>×</button
+		>
+	</div>
+{/if}
 <!-- The Picture button's file chooser: phones offer the camera and photo library. -->
 <input
 	bind:this={picker}
@@ -376,6 +466,33 @@
 	@media (pointer: coarse) {
 		.fallback {
 			font-size: max(16px, 1.08rem);
+		}
+	}
+	.ref-paste {
+		position: fixed;
+		left: 50%;
+		bottom: calc(1rem + env(safe-area-inset-bottom));
+		z-index: 40;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem 0.6rem;
+		width: max-content;
+		max-width: calc(100vw - 2rem);
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
+		font-size: 0.86rem;
+		transform: translateX(-50%);
+	}
+	@media (max-width: 960px) {
+		/* Above the formatting bar and the keyboard. */
+		.ref-paste {
+			top: calc(0.75rem + env(safe-area-inset-top));
+			bottom: auto;
 		}
 	}
 </style>

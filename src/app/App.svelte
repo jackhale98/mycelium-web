@@ -7,6 +7,8 @@
 	import Icon from './components/Icon.svelte';
 	import MobileBar from './components/MobileBar.svelte';
 	import NewNoteDialog from './components/NewNoteDialog.svelte';
+	import MentionMenu from './components/MentionMenu.svelte';
+	import LinkPicker from './components/LinkPicker.svelte';
 	import HabitSheet from './org/HabitSheet.svelte';
 	import HeadingSheet from './org/HeadingSheet.svelte';
 	import QuickSheet from './org/QuickSheet.svelte';
@@ -274,6 +276,8 @@
 <MathSheet />
 <ImageSheet />
 <HeadingSheet />
+<MentionMenu />
+<LinkPicker />
 <HabitSheet />
 <QuickSheet />
 <NoteSheet />

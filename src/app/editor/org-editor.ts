@@ -12,6 +12,7 @@ import {
 	type CompletionContext,
 	type CompletionResult,
 } from '@codemirror/autocomplete';
+import { matchRank } from './match';
 import {
 	checkboxToggle,
 	continueList,
@@ -63,6 +64,28 @@ export interface EditorHooks {
 	onImage?: (file: File, pos: number) => void;
 	/** Focus moved in or out, or the cursor moved (for the formatting bar). */
 	onCursor?: (view: EditorView) => void;
+	/** Link suggestions in this text: other notes' titles written as plain words. */
+	mentions?: (text: string) => EditorMention[];
+	/** Choose a note to link `words` (or the cursor) to: the Link to… picker. */
+	linkTo?: (words: string | null, done: (id: string, title: string) => void) => void;
+	/** The note whose `ROAM_REFS` include this URL, if any. */
+	refFor?: (url: string) => { id: string; title: string } | null;
+	/** A note's source URL was pasted at `from`–`to`: offer to link the note instead. */
+	onRefPaste?: (paste: {
+		from: number;
+		to: number;
+		url: string;
+		id: string;
+		title: string;
+	}) => void;
+}
+
+export interface EditorMention {
+	from: number;
+	to: number;
+	text: string;
+	id: string;
+	title: string;
 }
 
 /** Marks changes that came from outside the editor (so they aren't echoed back). */
@@ -268,21 +291,6 @@ function orgHighlight(hooks: EditorHooks): Extension {
 	);
 }
 
-/** How well `label` matches `query` (lower is better), or null for no match. */
-export function matchRank(label: string, query: string): number | null {
-	const l = label.toLowerCase();
-	const q = query.toLowerCase();
-	if (!q) return 4;
-	if (l === q) return 0;
-	if (l.startsWith(q)) return 1;
-	const at = l.indexOf(q);
-	if (at > 0 && /[\s\-_/(]/.test(l[at - 1]!)) return 2;
-	if (at > 0) return 3;
-	let i = 0;
-	for (const ch of l) if (ch === q[i]) i++;
-	return i === q.length ? 5 : null;
-}
-
 /** Offer nodes after `[[`; the last option creates a new node with the typed title. */
 function linkCompletion(hooks: EditorHooks) {
 	return (ctx: CompletionContext): CompletionResult | null => {
@@ -460,6 +468,12 @@ const theme = EditorView.theme({
 	'.cm-org-l-drawer, .cm-org-l-planning': { fontSize: '0.85em' },
 	'.cm-org-comment': { color: 'var(--text-muted)', fontStyle: 'italic' },
 	'.cm-org-timestamp': { color: 'var(--next)' },
+	'.cm-mention': {
+		textDecoration: 'underline dotted',
+		textDecorationColor: 'color-mix(in oklab, var(--link) 45%, transparent)',
+		textDecorationThickness: '1.5px',
+		textUnderlineOffset: '0.22em',
+	},
 	'.cm-org-link': {
 		color: 'var(--link)',
 		textDecoration: 'underline',
@@ -492,6 +506,69 @@ const theme = EditorView.theme({
 	'.cm-org-cookie': { color: 'var(--text-muted)', fontSize: '0.85em' },
 });
 
+/** Link suggestions underlined in the text (faint), kept up to date as it changes. */
+function mentionMarks(hooks: EditorHooks) {
+	return ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet;
+			found: EditorMention[] = [];
+			constructor(view: EditorView) {
+				this.decorations = this.build(view);
+			}
+			update(u: ViewUpdate) {
+				if (u.docChanged) this.decorations = this.build(u.view);
+			}
+			build(view: EditorView): DecorationSet {
+				this.found = hooks.mentions?.(view.state.doc.toString()) ?? [];
+				const builder = new RangeSetBuilder<Decoration>();
+				for (const m of this.found)
+					builder.add(
+						m.from,
+						m.to,
+						Decoration.mark({
+							class: 'cm-mention',
+							attributes: { title: `${m.title}: Ctrl/⌘-. to link` },
+						}),
+					);
+				return builder.finish();
+			}
+		},
+		{ decorations: (v) => v.decorations },
+	);
+}
+
+/**
+ * Link here (Mod-.): the suggestion under the cursor becomes a link; selected
+ * words open Link to… and keep their wording; otherwise Link to… inserts a
+ * link to the chosen note at the cursor.
+ */
+export function linkHere(hooks: EditorHooks, plugin: ReturnType<typeof mentionMarks>) {
+	return (view: EditorView): boolean => {
+		const sel = view.state.selection.main;
+		const replace = (from: number, to: number, insert: string) => {
+			view.dispatch({
+				changes: { from, to, insert },
+				selection: { anchor: from + insert.length },
+				scrollIntoView: true,
+				userEvent: 'input',
+			});
+			view.focus();
+		};
+		if (sel.empty) {
+			const m = view.plugin(plugin)?.found.find((x) => x.from <= sel.head && sel.head <= x.to);
+			if (m) {
+				replace(m.from, m.to, `[[id:${m.id}][${m.text}]]`);
+				return true;
+			}
+		}
+		if (!hooks.linkTo) return false;
+		const words = sel.empty ? null : view.state.sliceDoc(sel.from, sel.to).replace(/\s+/g, ' ');
+		const { from, to } = sel;
+		hooks.linkTo(words, (id, title) => replace(from, to, `[[id:${id}][${words ?? title}]]`));
+		return true;
+	};
+}
+
 /**
  * Create the editor. Mount it in a shadow root: CodeMirror then styles itself
  * with constructable stylesheets, which the site's CSP allows, instead of
@@ -505,7 +582,9 @@ export function createEditor(
 ): EditorView {
 	const parent = document.createElement('div');
 	root.append(parent);
-	return new EditorView({
+	const mentions = mentionMarks(hooks);
+	const link = linkHere(hooks, mentions);
+	const view = new EditorView({
 		parent,
 		root,
 		state: EditorState.create({
@@ -526,6 +605,7 @@ export function createEditor(
 				texSupport(() => hooks.livePreview?.() ?? true),
 				keymap.of([
 					{ key: 'Alt-Enter', run: newHeading },
+					{ key: 'Mod-.', run: link },
 					// Inside a table, org's table keys come first.
 					{ key: 'Enter', run: (v) => table.nextRow(v) || continueList(v) },
 					{ key: 'Tab', run: (v) => table.nextField(v) || indentItem(v) },
@@ -547,16 +627,31 @@ export function createEditor(
 					indentWithTab,
 				]),
 				orgHighlight(hooks),
+				mentions,
 				EditorView.domEventHandlers({
 					// Pictures pasted or dropped into a note are saved to the vault (via the picture sheet).
 					paste(e, view) {
 						const file = [...(e.clipboardData?.files ?? [])].find((f) =>
 							f.type.startsWith('image/'),
 						);
-						if (!file || !hooks.onImage) return false;
-						e.preventDefault();
-						hooks.onImage(file, view.state.selection.main.head);
-						return true;
+						if (file && hooks.onImage) {
+							e.preventDefault();
+							hooks.onImage(file, view.state.selection.main.head);
+							return true;
+						}
+						// A note's source URL: pasted as is, then the note's link is offered.
+						const raw = e.clipboardData?.getData('text/plain') ?? '';
+						const url = raw.trim();
+						const note = /^[a-z][a-z0-9+.-]*:\S+$/i.test(url) ? hooks.refFor?.(url) : null;
+						if (note && hooks.onRefPaste) {
+							const from = view.state.selection.main.from + raw.indexOf(url);
+							queueMicrotask(() => {
+								const to = from + url.length;
+								if (view.state.sliceDoc(from, to) === url)
+									hooks.onRefPaste!({ from, to, url, ...note });
+							});
+						}
+						return false;
 					},
 					drop(e, view) {
 						const file = [...(e.dataTransfer?.files ?? [])].find((f) =>
@@ -590,6 +685,15 @@ export function createEditor(
 			],
 		}),
 	});
+	linkCommands.set(view, link);
+	return view;
+}
+
+const linkCommands = new WeakMap<EditorView, (view: EditorView) => boolean>();
+
+/** Link here, as Ctrl/⌘-. does (the formatting bar's link button). */
+export function linkAtCursor(view: EditorView): boolean {
+	return linkCommands.get(view)?.(view) ?? false;
 }
 
 /** Replace the editor's text with `text`, touching only the changed middle so the cursor stays put. */

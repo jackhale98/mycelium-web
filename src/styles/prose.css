@@ -66,6 +66,31 @@
 	background: var(--accent-softer);
 }
 
+/* A link suggestion: another note's title in plain text. Faint until hovered. */
+.prose .mention {
+	display: inline;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: none;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-align: inherit;
+	text-decoration: underline dotted;
+	text-decoration-color: color-mix(in oklab, var(--link) 45%, transparent);
+	text-decoration-thickness: 1.5px;
+	text-underline-offset: 0.22em;
+	cursor: pointer;
+}
+.prose .mention:hover,
+.prose .mention:focus-visible,
+.prose .mention[aria-expanded='true'] {
+	text-decoration-color: var(--link);
+	background: var(--accent-softer);
+}
+
 .prose a.xlink::after {
 	content: '↗';
 	display: inline-block;

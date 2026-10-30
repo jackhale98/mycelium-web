@@ -18,3 +18,6 @@ contribute across projects. They're the long-lived descendants of the
 Like a [[id:8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01][fungal network]], the payoff is superlinear: each new note can connect
 to every note before it. Pair this with [[id:4f5a6b70-8c9d-4e0f-a1b2-c3d4e5f6a707][Spaced repetition]] so the network
 stays alive in your head, not just on disk.
+
+Writing them in Org mode inside Emacs makes linking nearly free: a link is
+just the note's ID, so renaming a note never breaks one.

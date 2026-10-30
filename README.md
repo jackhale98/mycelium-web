@@ -45,6 +45,13 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   time grid on today's agenda.
 - **Unlinked references:** notes that mention a note's title or aliases
   without linking it, one tap from becoming a link.
+- **Link suggestions:** in the note you're reading or writing, other notes'
+  titles and aliases written as plain words are faintly underlined and
+  listed under its backlinks: link one (tap it, or <kbd>Ctrl/⌘ .</kbd> in the
+  editor), link them all with one Undo, or stop suggesting a note. Select
+  words and press <kbd>Ctrl/⌘ .</kbd> (or the Link button) to link them to any
+  note, or a new one, keeping your wording; pasting a note's `ROAM_REFS` URL
+  offers that note's link instead. Links are plain `[[id:…][words]]`.
 - **org-roam's note tools:** rename a note (and the links that used its old
   title), add and remove aliases and refs, edit any property, and extract a
   heading into a note of its own (`org-roam-extract-subtree`), keeping its ID.

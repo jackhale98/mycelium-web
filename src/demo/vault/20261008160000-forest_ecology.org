@@ -10,7 +10,8 @@ through [[id:8f3a2c1e-6b4d-4e2a-9c7f-1a2b3c4d5e01][mycelial networks]].
 
 * Succession
 Disturbance → pioneer species → mixed forest → old growth. Each stage
-changes the soil chemistry for the next.
+changes the soil chemistry for the next. Suzanne Simard found that the
+oldest trees feed seedlings growing in their shade through the network.
 
 * Further reading
 - [[id:5e1f9a20-7c3d-4b9e-8a2f-0c1d2e3f4a03][The wood wide web]]
