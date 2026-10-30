@@ -1070,6 +1070,20 @@ test('a file of done tasks with Hide done on says so, instead of reading as blan
 	);
 });
 
+test('Hide done keeps a done heading that still has open tasks under it', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('mycelium:hide-done', '1'));
+	await open(page, 'app#/file/inbox.org');
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+a');
+	await page.keyboard.insertText(
+		'#+title: inbox\n* DONE Tasks\n** TODO Test task\n* DONE Paid the rent\n** DONE Sent it\n',
+	);
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	await expect(page.locator('.org-section', { hasText: 'Test task' }).first()).toBeVisible();
+	await expect(page.locator('.org-section', { hasText: 'Paid the rent' })).toHaveCount(0);
+});
+
 test('adding a picture: offered smaller, saved to images/, linked and shown', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
 	// A big 3000×2000 picture with photo-like fine detail (noise), as a phone camera makes.

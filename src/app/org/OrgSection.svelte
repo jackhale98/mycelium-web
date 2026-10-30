@@ -36,6 +36,21 @@
 		!!headline?.todoKeyword && keywords.doneKeywords.includes(headline.todoKeyword),
 	);
 
+	/** An open task somewhere under this heading (Hide done keeps the heading then). */
+	const openInside = $derived.by(() => {
+		const look = (nodes: readonly OrgNode[]): boolean =>
+			nodes.some((n) => {
+				if (n.type !== 'section') return false;
+				const h = n.children.find((c) => c.type === 'headline') as Headline | undefined;
+				const kw = h?.todoKeyword;
+				if (kw && !keywords.doneKeywords.includes(kw)) return true;
+				return look(n.children as OrgNode[]);
+			});
+		return look(section.children as OrgNode[]);
+	});
+	/** Hidden by Hide done: done, with nothing still open under it. */
+	const hidden = $derived(done && ctx.interactive && app.hideDone && !openInside);
+
 	let open = $state(true);
 	let editing = $state(false);
 
@@ -60,7 +75,7 @@
 	};
 </script>
 
-{#if headline && !headline.commented && !(done && ctx.interactive && app.hideDone)}
+{#if headline && !headline.commented && !hidden}
 	<section class="org-section" data-level={headline.level} data-pos={offset}>
 		{#if swipe}
 			<!-- The heading and its dates swipe together, as one task. -->
