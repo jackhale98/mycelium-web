@@ -21,12 +21,12 @@
 	import { sessionsOf } from '$lib/org';
 	import { weekStart } from '../agenda';
 	import {
-		dayPlan,
 		DEFAULT_MINUTES,
 		fillSessions,
 		SESSION_MAX,
 		fromMinutes,
 		hours,
+		planDays,
 		planTotals,
 		snap,
 		SNAP,
@@ -78,10 +78,11 @@
 	const options = { effortOf: (i: AgendaItem) => app.effortOf(i) };
 	const days = $derived.by(() => {
 		void app.rev;
-		return dates.map((d) => {
-			const plan = dayPlan(app.vault, d, today, keep, options);
-			return { date: d, plan, totals: planTotals(plan.blocks, app.workHours) };
-		});
+		return planDays(app.vault, dates, today, keep, options).map((plan, n) => ({
+			date: dates[n]!,
+			plan,
+			totals: planTotals(plan.blocks, app.workHours),
+		}));
 	});
 	/** A block on its day; `id` is unique across the days shown. */
 	type DayBlock = PlanBlock & { date: string; id: string };
@@ -187,9 +188,11 @@
 		if (!left) return;
 		const first = view === 'week' ? (dates[0]! > today ? dates[0]! : today) : date;
 		const from = first === today ? now : toMinutes(app.workHours.start);
-		const busyOn = (d: string) =>
-			(days.find((x) => x.date === d)?.plan ?? dayPlan(app.vault, d, today, keep, options)).blocks;
-		const sessions = fillSessions(left, first, from, busyOn, app.workHours);
+		// The two weeks it may fill, planned at once.
+		const ahead = Array.from({ length: 14 }, (_, n) => addDays(first, n));
+		const plans = planDays(app.vault, ahead, today, keep, options);
+		const busyOn = (d: string) => plans[ahead.indexOf(d)]?.blocks ?? [];
+		const sessions = fillSessions(left, first, from, busyOn, app.workHours, { horizon: 14 });
 		if (!sessions.length) return;
 		const total = sessions.reduce((sum, x) => sum + x.end - x.start, 0);
 		const count = new Set(sessions.map((x) => x.date)).size;

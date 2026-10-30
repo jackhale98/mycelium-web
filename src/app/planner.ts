@@ -3,9 +3,16 @@
 /// the width, snapping to a quarter hour, and planned versus free time in
 /// working hours. Pure, so it's tested on its own.
 
-import { addDays, appointmentsIn, sessionsOf, timestampDates, type OrgTimestamp } from '$lib/org';
+import {
+	addDays,
+	sessionsOf,
+	timestampDates,
+	type KeywordConfig,
+	type OrgTimestamp,
+	type Session,
+} from '$lib/org';
 import type { AgendaItem, Vault } from '$lib/vault/vault';
-import { agendaDays } from './agenda';
+import { agendaDays, appointmentsOf } from './agenda';
 
 export const SNAP = 15;
 /** A time with no end and no Effort lasts this long. */
@@ -70,14 +77,31 @@ export const taskKey = (i: AgendaItem) => `${i.file}\u0000${i.pos}`;
 const spanOf = (ts: { time: string | null; endTime: string | null }) =>
 	ts.time && ts.endTime ? Math.max(0, toMinutes(ts.endTime) - toMinutes(ts.time)) : 0;
 
+/** Sessions per file, re-read only when the file (or its keywords) change. */
+const sessionCache = new Map<
+	string,
+	{ source: string; keywords: KeywordConfig; byPos: Map<number, Session[]> }
+>();
+function sessionsAt(path: string, source: string, pos: number, keywords: KeywordConfig) {
+	let hit = sessionCache.get(path);
+	if (!hit || hit.source !== source || hit.keywords !== keywords) {
+		hit = { source, keywords, byPos: new Map() };
+		sessionCache.set(path, hit);
+	}
+	let found = hit.byPos.get(pos);
+	if (!found) {
+		found = sessionsOf(source, pos, keywords);
+		hit.byPos.set(pos, found);
+	}
+	return found;
+}
+
 /**
  * Planned minutes for a task: its timed SCHEDULED plus all its sessions, any
  * day. A time with no end counts for what the planner draws: its Effort (for
  * SCHEDULED), else the default length.
  */
-function plannedOf(vault: Vault, item: AgendaItem, effort: number | null): number {
-	const file = vault.file(item.file);
-	const own = file ? sessionsOf(file.source, item.pos, file.index.keywords) : [];
+function plannedOf(item: AgendaItem, own: Session[], effort: number | null): number {
 	const length = (ts: { time: string | null; endTime: string | null }, lone: number) =>
 		ts.time ? (ts.endTime ? spanOf(ts) : lone) : 0;
 	const sessions = own.reduce((sum, s) => sum + length(s.timestamp, DEFAULT_MINUTES), 0);
@@ -125,108 +149,142 @@ export function dayPlan(
 	keep: (item: AgendaItem) => boolean = () => true,
 	options: PlanOptions = {},
 ): DayPlan {
+	return planDays(vault, [date], today, keep, options)[0]!;
+}
+
+/**
+ * Plans for several days at once (a week): the agenda is read once for the
+ * run of days, and each task's sessions and progress once for them all.
+ * `dates` are in order; the plans come back in the same order.
+ */
+export function planDays(
+	vault: Vault,
+	dates: string[],
+	today: string,
+	keep: (item: AgendaItem) => boolean = () => true,
+	options: PlanOptions = {},
+): DayPlan[] {
+	if (!dates.length) return [];
 	const effortOf = options.effortOf ?? ((i: AgendaItem) => i.effort);
-	const items = agendaDays(vault, date, date, today, keep)[0]?.items ?? [];
-	const raw: Omit<PlanBlock, 'col' | 'cols'>[] = [];
-	const unplanned: AgendaItem[] = [];
-	const allDay: AgendaItem[] = [];
+	const agenda = new Map(
+		agendaDays(vault, dates[0]!, dates[dates.length - 1]!, today, keep).map((d) => [
+			d.date,
+			d.items,
+		]),
+	);
+	const sessionsFor = (item: AgendaItem) => {
+		const file = vault.file(item.file);
+		return file ? sessionsAt(file.path, file.source, item.pos, file.index.keywords) : [];
+	};
+	// Progress is the same on every day: worked out once per task.
 	const progress = new Map<string, Progress>();
 	const track = (item: AgendaItem) => {
 		const key = taskKey(item);
-		if (!progress.has(key)) {
+		let p = progress.get(key);
+		if (!p) {
 			const effort = effortOf(item);
-			progress.set(key, { effort, planned: plannedOf(vault, item, effort) });
+			p = { effort, planned: plannedOf(item, sessionsFor(item), effort) };
+			progress.set(key, p);
 		}
-		return progress.get(key)!;
+		return p;
 	};
-	const on = (ts: OrgTimestamp | null) =>
-		!!ts?.active && !!ts.time && timestampDates(ts, date, date).length > 0;
+	// Work under way with Effort left: offered on each day from its start on.
+	const underway = vault.agenda().filter((item) => {
+		if (!item.todo || vault.isDone(item.todo, item.file) || !keep(item)) return false;
+		if (!effortOf(item)) return false;
+		return !!item.scheduled?.time || sessionsFor(item).length > 0;
+	});
 
-	for (const item of items) {
-		const key = taskKey(item);
-		const file = vault.file(item.file);
-		const found: Omit<PlanBlock, 'col' | 'cols' | 'item' | 'key'>[] = [];
-		const lone = (time: string) => {
-			const effort = effortOf(item);
-			// A lone time lasts its Effort (no more than the rest of the day), else the default.
-			const start = toMinutes(time);
-			return Math.min(24 * 60 - 1, start + (effort && effort > 0 ? effort : DEFAULT_MINUTES));
-		};
-		for (const source of ['SCHEDULED', 'DEADLINE'] as const) {
-			const ts = source === 'SCHEDULED' ? item.scheduled : item.deadline;
-			if (!ts || !on(ts)) continue;
-			found.push({
-				source,
-				start: toMinutes(ts.time!),
-				end: ts.endTime ? toMinutes(ts.endTime) : lone(ts.time!),
-				ranged: !!ts.endTime,
-			});
-			break;
-		}
-		const sessions = file ? sessionsOf(file.source, item.pos, file.index.keywords) : [];
-		for (const s of sessions) {
-			if (!on(s.timestamp)) continue;
-			found.push({
-				source: 'session',
-				session: { from: s.from, to: s.to },
-				start: toMinutes(s.timestamp.time!),
-				end: s.timestamp.endTime ? toMinutes(s.timestamp.endTime) : lone(s.timestamp.time!),
-				ranged: !!s.timestamp.endTime,
-			});
-		}
-		const written = new Set(sessions.map((s) => s.timestamp.raw));
-		const others = file ? (appointmentsIn(file.source).get(item.pos) ?? []) : [];
-		for (const a of others) {
-			if (written.has(a.timestamp.raw) || !on(a.timestamp)) continue;
-			found.push({
-				source: 'appointment',
-				start: toMinutes(a.timestamp.time!),
-				end: a.timestamp.endTime ? toMinutes(a.timestamp.endTime) : lone(a.timestamp.time!),
-				ranged: !!a.timestamp.endTime,
-			});
-		}
-		if (!found.length) {
-			if (item.todo) {
-				unplanned.push(item);
-				track(item);
-			} else allDay.push(item);
-			continue;
-		}
-		if (item.todo) {
-			const p = track(item);
-			// Effort left to plan: it stays in the tray too.
-			if (p.effort && p.planned < p.effort) unplanned.push(item);
-		}
-		found.forEach((f, n) =>
-			raw.push({
-				...f,
-				item,
-				key: `${key}\u0000${f.source}\u0000${f.session?.from ?? n}`,
-				end: Math.max(f.end, f.start + SNAP),
-			}),
-		);
-	}
+	return dates.map((date) => {
+		const items = agenda.get(date) ?? [];
+		const raw: Omit<PlanBlock, 'col' | 'cols'>[] = [];
+		const unplanned: AgendaItem[] = [];
+		const allDay: AgendaItem[] = [];
+		const used = new Set<string>();
+		const on = (ts: OrgTimestamp | null) =>
+			!!ts?.active && !!ts.time && timestampDates(ts, date, date).length > 0;
 
-	// Work under way on other days, with Effort left to plan: in the tray here too.
-	if (date >= today) {
-		const seen = new Set([...unplanned, ...raw.map((b) => b.item)].map(taskKey));
-		for (const item of vault.agenda()) {
+		for (const item of items) {
 			const key = taskKey(item);
-			if (seen.has(key) || !item.todo || vault.isDone(item.todo, item.file) || !keep(item))
-				continue;
-			if (item.scheduled && item.scheduled.date > date) continue;
-			const effort = effortOf(item);
-			if (!effort) continue;
+			used.add(key);
 			const file = vault.file(item.file);
-			const started =
-				!!item.scheduled?.time ||
-				(file ? sessionsOf(file.source, item.pos, file.index.keywords).length > 0 : false);
-			if (!started) continue;
-			const p = track(item);
-			if (p.planned < effort) unplanned.push(item);
+			const found: Omit<PlanBlock, 'col' | 'cols' | 'item' | 'key'>[] = [];
+			const lone = (time: string) => {
+				const effort = effortOf(item);
+				// A lone time lasts its Effort (no more than the rest of the day), else the default.
+				const start = toMinutes(time);
+				return Math.min(24 * 60 - 1, start + (effort && effort > 0 ? effort : DEFAULT_MINUTES));
+			};
+			for (const source of ['SCHEDULED', 'DEADLINE'] as const) {
+				const ts = source === 'SCHEDULED' ? item.scheduled : item.deadline;
+				if (!ts || !on(ts)) continue;
+				found.push({
+					source,
+					start: toMinutes(ts.time!),
+					end: ts.endTime ? toMinutes(ts.endTime) : lone(ts.time!),
+					ranged: !!ts.endTime,
+				});
+				break;
+			}
+			const sessions = sessionsFor(item);
+			for (const s of sessions) {
+				if (!on(s.timestamp)) continue;
+				found.push({
+					source: 'session',
+					session: { from: s.from, to: s.to },
+					start: toMinutes(s.timestamp.time!),
+					end: s.timestamp.endTime ? toMinutes(s.timestamp.endTime) : lone(s.timestamp.time!),
+					ranged: !!s.timestamp.endTime,
+				});
+			}
+			const written = new Set(sessions.map((s) => s.timestamp.raw));
+			const others = file ? (appointmentsOf(file.path, file.source).get(item.pos) ?? []) : [];
+			for (const a of others) {
+				if (written.has(a.timestamp.raw) || !on(a.timestamp)) continue;
+				found.push({
+					source: 'appointment',
+					start: toMinutes(a.timestamp.time!),
+					end: a.timestamp.endTime ? toMinutes(a.timestamp.endTime) : lone(a.timestamp.time!),
+					ranged: !!a.timestamp.endTime,
+				});
+			}
+			if (!found.length) {
+				if (item.todo) {
+					unplanned.push(item);
+					track(item);
+				} else allDay.push(item);
+				continue;
+			}
+			if (item.todo) {
+				const p = track(item);
+				// Effort left to plan: it stays in the tray too.
+				if (p.effort && p.planned < p.effort) unplanned.push(item);
+			}
+			found.forEach((f, n) =>
+				raw.push({
+					...f,
+					item,
+					key: `${key}\u0000${f.source}\u0000${f.session?.from ?? n}`,
+					end: Math.max(f.end, f.start + SNAP),
+				}),
+			);
 		}
-	}
-	return { blocks: layoutBlocks(raw), unplanned, allDay, progress };
+
+		// Work under way on other days, with Effort left to plan: in the tray here too.
+		if (date >= today) {
+			for (const item of underway) {
+				const key = taskKey(item);
+				if (used.has(key)) continue;
+				if (item.scheduled && item.scheduled.date > date) continue;
+				const p = track(item);
+				if (p.effort && p.planned < p.effort) {
+					unplanned.push(item);
+					used.add(key);
+				}
+			}
+		}
+		return { blocks: layoutBlocks(raw), unplanned, allDay, progress };
+	});
 }
 
 /** The longest session "Plan the rest" makes. */

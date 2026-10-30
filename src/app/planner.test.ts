@@ -6,6 +6,7 @@ import {
 	fromMinutes,
 	hours,
 	layoutBlocks,
+	planDays,
 	planTotals,
 	snap,
 	taskKey,
@@ -127,6 +128,16 @@ describe('day planner', () => {
 		expect(dayPlan(vault, '2026-10-31', '2026-10-29').unplanned.map((i) => i.title)).toEqual([
 			'Write the report',
 		]);
+		// Several days at once read the same as one at a time.
+		const days = ['2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31'];
+		const strip = (p: ReturnType<typeof dayPlan>) => ({
+			blocks: p.blocks,
+			unplanned: p.unplanned,
+			allDay: p.allDay,
+		});
+		expect(planDays(vault, days, '2026-10-29').map(strip)).toEqual(
+			days.map((d) => strip(dayPlan(vault, d, '2026-10-29'))),
+		);
 		// Effort in other units: 2d of an 8-hour day.
 		const twoDays = dayPlan(vault, '2026-10-29', '2026-10-29', undefined, { effortOf: () => 960 });
 		expect(twoDays.progress.get(taskKey(item))?.effort).toBe(960);

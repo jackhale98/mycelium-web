@@ -47,8 +47,7 @@ export function groupAgenda(
 		const due = item.deadline ?? item.scheduled;
 		// Habits are shown on today's agenda only (org-habit-show-habits-only-for-today),
 		// however late: their graph shows how late.
-		const source = item.scheduled ? vault.file(item.file)?.source : undefined;
-		if (source && isHabit(source, item.pos, vault.file(item.file)!.index.keywords)) {
+		if (item.scheduled && itemIsHabit(vault, item)) {
 			if (item.scheduled!.date <= today) groups.today.push(item);
 			continue;
 		}
@@ -87,9 +86,28 @@ export function weekStart(date: string): string {
 	return addDays(date, -back);
 }
 
+/** Which headings are habits, per file, re-read only when the file changes. */
+const habitCache = new Map<string, { source: string; byPos: Map<number, boolean> }>();
+/** `isHabit` for an agenda item, remembered until its file changes (the agenda asks a lot). */
+export function itemIsHabit(vault: Vault, item: AgendaItem): boolean {
+	const file = vault.file(item.file);
+	if (!file) return false;
+	let hit = habitCache.get(file.path);
+	if (!hit || hit.source !== file.source) {
+		hit = { source: file.source, byPos: new Map() };
+		habitCache.set(file.path, hit);
+	}
+	let habit = hit.byPos.get(item.pos);
+	if (habit === undefined) {
+		habit = isHabit(file.source, item.pos, file.index.keywords);
+		hit.byPos.set(item.pos, habit);
+	}
+	return habit;
+}
+
 /** Appointments per file, re-read only when the file changes. */
 const appointmentCache = new Map<string, { source: string; found: Map<number, Appointment[]> }>();
-function appointmentsOf(path: string, source: string): Map<number, Appointment[]> {
+export function appointmentsOf(path: string, source: string): Map<number, Appointment[]> {
 	const hit = appointmentCache.get(path);
 	if (hit && hit.source === source) return hit.found;
 	const found = appointmentsIn(source);
@@ -127,8 +145,7 @@ export function agendaDays(
 	for (const item of vault.agenda()) {
 		if (!keep(item) || vault.isDone(item.todo, item.file)) continue;
 		// Habits show on today only (org-habit-show-habits-only-for-today).
-		const source = item.scheduled ? vault.file(item.file)?.source : undefined;
-		const habit = !!source && isHabit(source, item.pos, vault.file(item.file)!.index.keywords);
+		const habit = !!item.scheduled && itemIsHabit(vault, item);
 		let onToday = false;
 		for (const ts of [item.scheduled, item.deadline]) {
 			if (!ts?.active) continue;
