@@ -11,7 +11,8 @@
 /// morning, this evening), times and ranges (3pm, 3p, 3 p.m., 15:00, at 3,
 /// 3-4pm, noon), deadlines (due/by/deadline + a date), repeats (every
 /// day/2 weeks/monday/other friday/1st, biweekly, daily, weekly…, and every
-/// third Friday or last Monday as an org diary sexp) and effort (~30m,
+/// third Friday or every weekday, which org's repeaters can't say: just the
+/// next one, marked as such) and effort (~30m,
 /// ~1h30). A bare "at 3" means the afternoon (1–7) or the morning (8–11).
 /// Words that only look like dates (Tom, sat, the sun) stay words. Words in "quotes" are kept as they are. Every recognised
 /// part keeps its place in the text, so it can be shown, and undone by
@@ -22,9 +23,8 @@ import { headlineAt, setHeadlineTags, setPriority, setTodoKeyword } from './head
 import { setPlanning } from './planning';
 import { getProperty, setProperty } from './properties';
 import { applyChanges } from './text';
-import { addSession } from './sessions';
 import { makeTimestamp } from './timestamp';
-import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig, type OrgTimestamp } from './types';
+import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig } from './types';
 
 export type QuickPartKind =
 	'tag' | 'priority' | 'state' | 'date' | 'deadline' | 'time' | 'repeat' | 'effort';
@@ -55,12 +55,11 @@ export interface QuickAdd {
 	/** An org repeater cookie, e.g. `+1w`. */
 	repeater: string | null;
 	/**
-	 * A repeat no org repeater can say, as an org diary sexp (the inside of
-	 * `<…>`): `%%(diary-float t 5 3)` for every third Friday. Org's agenda
-	 * shows the entry on each day it matches; a time goes at the start of the
-	 * title (`19:00 Book club`), where org's agenda looks for it.
+	 * A repeat asked for that no org repeater can say ("the third Friday of
+	 * the month", "weekday"): only the next one is scheduled, with no repeater,
+	 * so what's written is always something org reads.
 	 */
-	diary: string | null;
+	once: string | null;
 	/** Effort in minutes. */
 	effort: number | null;
 	parts: QuickPart[];
@@ -302,15 +301,35 @@ const NTH_NUMBER: Record<string, number> = {
 	last: -1,
 };
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const NTH_NAMES: Record<number, string> = {
+	1: 'first',
+	2: 'second',
+	3: 'third',
+	4: 'fourth',
+	5: 'fifth',
+	[-1]: 'last',
+};
+
+/** The first day on or after `today` that is the `n`th (−1: last) `dow` of its month. */
+function nextNthWeekday(today: string, dow: number, n: number): string {
+	for (let d = today; ; d = addDays(d, 1)) {
+		const date = new Date(`${d}T12:00:00Z`);
+		if (date.getUTCDay() !== dow) continue;
+		const day = date.getUTCDate();
+		if (n > 0 ? Math.ceil(day / 7) === n : addDays(d, 7).slice(5, 7) !== d.slice(5, 7)) return d;
+	}
+}
+
 /**
  * A repeat phrase → an org repeater and the day it starts ("every monday",
- * "every 1st"), or a diary sexp for what no repeater can say ("every third
- * friday": `diary-float`, which org's agenda reads).
+ * "every 1st"). What no org repeater can say ("every third friday", "every
+ * weekday") gives the next day only, and `once` says what was asked.
  */
 function readRepeat(
 	phrase: string,
 	today: string,
-): { repeater?: string; date?: string; diary?: string } | null {
+): { repeater?: string; date?: string; once?: string } | null {
 	const p = phrase.toLowerCase().replace(/\s+/g, ' ').trim();
 	const simple: Record<string, string> = {
 		daily: '+1d',
@@ -321,12 +340,22 @@ function readRepeat(
 		monthly: '+1m',
 		yearly: '+1y',
 		annually: '+1y',
-		'every weekday': '+1d',
 	};
 	if (simple[p]) return { repeater: simple[p] };
+	if (p === 'every weekday') {
+		let d = today;
+		while ([0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) d = addDays(d, 1);
+		return { date: d, once: 'weekday' };
+	}
 	let m = /^(?:every|on the|the) (\w+) (\w+)(?: of (?:the|each|every) month)?$/.exec(p);
-	if (m && NTH_NUMBER[m[1]!] !== undefined && weekdayIndex(m[2]!) !== -1)
-		return { diary: `%%(diary-float t ${weekdayIndex(m[2]!)} ${NTH_NUMBER[m[1]!]})` };
+	if (m && NTH_NUMBER[m[1]!] !== undefined && weekdayIndex(m[2]!) !== -1) {
+		const dow = weekdayIndex(m[2]!);
+		const n = NTH_NUMBER[m[1]!]!;
+		return {
+			date: nextNthWeekday(today, dow, n),
+			once: `${NTH_NAMES[n]} ${DAY_NAMES[dow]} of the month`,
+		};
+	}
 	m =
 		/^(?:every (?:month )?on the|every|monthly on the) (\d{1,2})(?:st|nd|rd|th)(?: of (?:the|each|every) month)?$/.exec(
 			p,
@@ -382,7 +411,7 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 		scheduled: null,
 		deadline: null,
 		repeater: null,
-		diary: null,
+		once: null,
 		effort: null,
 		parts,
 	};
@@ -491,10 +520,10 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 		),
 		'repeat',
 		(m) => {
-			if (result.repeater || result.diary) return false;
+			if (result.repeater || result.once) return false;
 			const r = readRepeat(m[0].replace(/^on\s+/i, ''), today);
 			if (!r) return false;
-			if (r.diary) result.diary = r.diary;
+			if (r.once) result.once = r.once;
 			if (r.repeater) result.repeater = r.repeater;
 			if (r.date && !scheduledDate) scheduledDate = r.date;
 			return true;
@@ -543,12 +572,7 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 	const found =
 		(scheduledTime as { time: string; endTime: string | null } | null) ??
 		(partTime ? { time: partTime as string, endTime: null } : null);
-	let atStart = '';
-	if (result.diary) {
-		// Org's agenda takes a diary entry's time from its heading.
-		if (found) atStart = `${found.time}${found.endTime ? `-${found.endTime}` : ''} `;
-		if (scheduledDate) result.scheduled = { date: scheduledDate, time: null, endTime: null };
-	} else if (scheduledDate || found || (result.repeater && !result.deadline)) {
+	if (scheduledDate || found || (result.repeater && !result.deadline)) {
 		// A time alone is today's; a repeat alone starts today.
 		result.scheduled = {
 			date: scheduledDate ?? today,
@@ -574,13 +598,11 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 		}
 		title += text[i];
 	}
-	result.title =
-		atStart +
-		title
-			.replace(/\s+/g, ' ')
-			.replace(/\s+([,.;:!?])/g, '$1')
-			.replace(/^[\s,;:-]+|[\s,;:-]+$/g, '')
-			.trim();
+	result.title = title
+		.replace(/\s+/g, ' ')
+		.replace(/\s+([,.;:!?])/g, '$1')
+		.replace(/^[\s,;:-]+|[\s,;:-]+$/g, '')
+		.trim();
 	parts.sort((a, b) => a.from - b.from);
 	return result;
 }
@@ -615,20 +637,8 @@ export function describeQuickPart(part: QuickPart, q: QuickAdd, today: string): 
 		case 'deadline':
 			return q.deadline ? `Due ${when(q.deadline)}` : part.text;
 		case 'repeat': {
-			const f = /diary-float t (\d) (-?\d)\)/.exec(q.diary ?? '');
-			if (f) {
-				const nth = ['last', '', 'first', 'second', 'third', 'fourth', 'fifth'][Number(f[2]) + 1];
-				const dayName = [
-					'Sunday',
-					'Monday',
-					'Tuesday',
-					'Wednesday',
-					'Thursday',
-					'Friday',
-					'Saturday',
-				][Number(f[1])];
-				return `Every ${nth} ${dayName} of the month`;
-			}
+			if (q.once)
+				return `${q.scheduled ? day(q.scheduled.date) : 'Once'} only: org can't repeat every ${q.once}`;
 			const m = /^\+(\d+)([dwmy])$/.exec(q.repeater ?? '');
 			const unit = { d: 'day', w: 'week', m: 'month', y: 'year' }[m?.[2] as 'd'] ?? '';
 			return m ? `Repeats every ${m[1] === '1' ? unit : `${m[1]} ${unit}s`}` : part.text;
@@ -683,18 +693,13 @@ export function applyQuickAdd(
 		makeTimestamp({ date: w.date, time: w.time, endTime: w.endTime, repeater, active: true });
 	if (q.scheduled)
 		edit((src) => setPlanning(src, 0, 'SCHEDULED', stamp(q.scheduled!, q.repeater), config));
-	else if ((q.deadline || q.diary) && /SCHEDULED:/.test(s))
+	else if (q.deadline && /SCHEDULED:/.test(s))
 		// Due a day, with no day to start: the template's "scheduled today" goes.
 		edit((src) => setPlanning(src, 0, 'SCHEDULED', null, config));
 	if (q.deadline)
 		edit((src) =>
 			setPlanning(src, 0, 'DEADLINE', stamp(q.deadline!, q.scheduled ? null : q.repeater), config),
 		);
-	// A diary repeat goes in the entry's text, a line of its own, where org's agenda reads it.
-	if (q.diary) {
-		const raw = `<${q.diary}>`;
-		edit((src) => addSession(src, 0, { raw } as OrgTimestamp, config));
-	}
 	if (q.effort !== null && getProperty(s, 0, 'Effort', config) === null) {
 		const e = q.effort;
 		edit((src) =>

@@ -23,7 +23,7 @@
 {#if q.parts.length}
 	<ul class="chips" aria-label="Understood">
 		{#each q.parts as part (part.from)}
-			<li class={part.kind}>
+			<li class={part.kind} class:once={part.kind === 'repeat' && q.once}>
 				<Icon name={ICONS[part.kind]} size={13} /><span>{describeQuickPart(part, q, today)}</span>
 				<button
 					type="button"
@@ -62,6 +62,11 @@
 	li.repeat {
 		background: var(--next-soft);
 		color: var(--next);
+	}
+	li.repeat.once {
+		background: var(--warn-soft);
+		color: var(--warn);
+		white-space: normal;
 	}
 	li.deadline {
 		background: var(--danger-soft);

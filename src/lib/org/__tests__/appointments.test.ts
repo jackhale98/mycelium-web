@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appointmentsIn, applyQuickAdd, floatDates, parseQuickAdd } from '..';
+import { appointmentsIn, floatDates } from '..';
 
 describe('appointmentsIn', () => {
 	const src = [
@@ -64,12 +64,5 @@ describe('diary-float (every third Friday)', () => {
 		const found = appointmentsIn('* Book club\n<%%(diary-float t 5 3) 19:00-21:00>\n').get(0)!;
 		expect(found[0]!.float).toEqual({ month: null, dayname: 5, n: 3 });
 		expect([found[0]!.timestamp.time, found[0]!.timestamp.endTime]).toEqual(['19:00', '21:00']);
-	});
-
-	it('is what quick add writes for "every third friday"', () => {
-		const q = parseQuickAdd('Book club every third friday 7pm', { today: '2026-10-30' });
-		expect(applyQuickAdd('* TODO %?\n'.replace('%?', q.title), q)).toBe(
-			'* TODO 19:00 Book club\n<%%(diary-float t 5 3)>\n',
-		);
 	});
 });

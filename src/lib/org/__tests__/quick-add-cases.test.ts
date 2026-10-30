@@ -1,13 +1,13 @@
 // The quick-add grammar against phrases people type, edge cases included.
 // Today is Friday 30 October 2026. Each case: what's scheduled (or due),
-// the repeat, and the title left over. `diary` is an org diary sexp, for
-// repeats no org repeater can say ("every third Friday").
+// the repeat, and the title left over. `once` is a repeat asked for that no
+// org repeater can say ("every third Friday"): only the next one is scheduled.
 
 import { describe, expect, it } from 'vitest';
 import { parseQuickAdd } from '../quick-add';
 
 const today = '2026-10-30';
-type Want = { s?: string; d?: string; r?: string; diary?: string; title: string };
+type Want = { s?: string; d?: string; r?: string; once?: string; title: string };
 
 const CASES: [string, Want][] = [
 	// Shorthands for days.
@@ -49,9 +49,20 @@ const CASES: [string, Want][] = [
 	['Workshop mon 9-11am', { s: '2026-11-02 09:00-11:00', title: 'Workshop' }],
 	['Lunch at noon', { s: '2026-10-30 12:00', title: 'Lunch' }],
 	// Repeats.
-	['Book club every third friday', { diary: '%%(diary-float t 5 3)', title: 'Book club' }],
-	['Pay card every last friday', { diary: '%%(diary-float t 5 -1)', title: 'Pay card' }],
-	['Team sync every 2nd tuesday', { diary: '%%(diary-float t 2 2)', title: 'Team sync' }],
+	// Org has no repeater for these: the next one only, marked as such.
+	[
+		'Book club every third friday',
+		{ s: '2026-11-20', once: 'third Friday of the month', title: 'Book club' },
+	],
+	[
+		'Pay card every last friday',
+		{ s: '2026-10-30', once: 'last Friday of the month', title: 'Pay card' },
+	],
+	[
+		'Team sync every 2nd tuesday',
+		{ s: '2026-11-10', once: 'second Tuesday of the month', title: 'Team sync' },
+	],
+	['Standup every weekday', { s: '2026-10-30', once: 'weekday', title: 'Standup' }],
 	['Rent every 1st', { s: '2026-11-01', r: '+1m', title: 'Rent' }],
 	['Rent every month on the 1st', { s: '2026-11-01', r: '+1m', title: 'Rent' }],
 	['Review every other friday', { s: '2026-10-30', r: '+2w', title: 'Review' }],
@@ -60,9 +71,12 @@ const CASES: [string, Want][] = [
 	['Water plants every 3 days', { s: '2026-10-30', r: '+3d', title: 'Water plants' }],
 	[
 		'Book club every third friday 7pm',
-		{ diary: '%%(diary-float t 5 3)', title: '19:00 Book club' },
+		{ s: '2026-11-20 19:00', once: 'third Friday of the month', title: 'Book club' },
 	],
-	['Bins on the last monday of each month', { diary: '%%(diary-float t 1 -1)', title: 'Bins' }],
+	[
+		'Bins on the last monday of each month',
+		{ s: '2026-11-30', once: 'last Monday of the month', title: 'Bins' },
+	],
 	['Call Sam this evening', { s: '2026-10-30 18:00', title: 'Call Sam' }],
 	['Check in tom morning', { s: '2026-10-31 09:00', title: 'Check in' }],
 	['Pay invoice due the 13th', { d: '2026-11-13', title: 'Pay invoice' }],
@@ -87,8 +101,8 @@ describe('quick add reads what people type', () => {
 				s: when(q.scheduled),
 				d: when(q.deadline),
 				r: q.repeater ?? undefined,
-				diary: q.diary ?? undefined,
+				once: q.once ?? undefined,
 				title: q.title,
-			}).toEqual({ s: undefined, d: undefined, r: undefined, diary: undefined, ...want });
+			}).toEqual({ s: undefined, d: undefined, r: undefined, once: undefined, ...want });
 		});
 });
