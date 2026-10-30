@@ -110,16 +110,17 @@ test('the capture sheet picks templates by key and writes a task', async ({ page
 	await sheet.getByRole('radio', { name: /Note/ }).focus();
 	await page.keyboard.press('t');
 	await expect(sheet.getByRole('radio', { name: /Task/ })).toHaveAttribute('aria-checked', 'true');
-	await expect(sheet.getByText(/today's daily note → Tasks/)).toBeVisible();
+	// Tasks go to the inbox, each a top-level item to decide later.
+	await expect(sheet.getByText(/To inbox\.org/)).toBeVisible();
 	await sheet.getByRole('textbox', { name: 'Text' }).fill('Prune the apple tree');
 	await sheet.getByText('Preview').click();
-	await expect(sheet.locator('pre')).toContainText('* TODO Prune the apple tree');
-	await expect(sheet.locator('pre')).toContainText('SCHEDULED: <');
+	await expect(sheet.locator('pre')).toHaveText('* TODO Prune the apple tree');
 	await page.keyboard.press('ControlOrMeta+Enter');
 	await expect(sheet).toBeHidden();
 	await page.getByRole('status').getByRole('link', { name: 'Open' }).click();
-	const tasks = page.locator('.org-section', { hasText: 'Tasks' }).first();
-	await expect(tasks.getByText('Prune the apple tree')).toBeVisible();
+	await expect(
+		page.locator('.org-section', { hasText: 'Prune the apple tree' }).first(),
+	).toBeVisible();
 	await expectAccessible(page);
 });
 

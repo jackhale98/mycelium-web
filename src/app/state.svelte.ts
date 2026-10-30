@@ -100,6 +100,7 @@ import { fromMinutes } from './planner';
 import { demoDay, demoSources } from './demo';
 import { href } from './router.svelte';
 import { TabLink, type TabMessage } from './tabs';
+import { inboxEntries } from './inbox';
 import { slugify } from './util';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -1796,26 +1797,22 @@ class AppState {
 		return null;
 	}
 
-	/** What's in the inbox: its top-level headings that aren't done, in file order. */
+	/** What's in the inbox: its open items (see inbox.ts), in file order. */
 	get inbox(): InboxItem[] {
 		const path = this.inboxPath;
 		const file = path ? this.vault.file(path) : null;
 		if (!path || !file) return [];
 		const heads = file.index.headlines;
-		const top = Math.min(...heads.map((h) => h.level));
-		const done = file.index.keywords.doneKeywords;
-		return heads
-			.filter((h) => h.level === top && !(h.todo && done.includes(h.todo)))
-			.map((h) => {
-				const next = heads.find((o) => o.pos > h.pos)?.pos ?? file.source.length;
-				const body = file.source
-					.slice(file.source.indexOf('\n', h.pos) + 1, next)
-					.split('\n')
-					.filter((l) => !/^\s*(?:(?:SCHEDULED|DEADLINE|CLOSED):|:[\w-]+:\s*$|:END:)/i.test(l))
-					.join('\n')
-					.trim();
-				return { ...h, path, excerpt: body.length > 280 ? `${body.slice(0, 280)}…` : body };
-			});
+		return inboxEntries(heads, file.index.keywords.doneKeywords).map((h) => {
+			const next = heads.find((o) => o.pos > h.pos)?.pos ?? file.source.length;
+			const body = file.source
+				.slice(file.source.indexOf('\n', h.pos) + 1, next)
+				.split('\n')
+				.filter((l) => !/^\s*(?:(?:SCHEDULED|DEADLINE|CLOSED):|:[\w-]+:\s*$|:END:)/i.test(l))
+				.join('\n')
+				.trim();
+			return { ...h, path, excerpt: body.length > 280 ? `${body.slice(0, 280)}…` : body };
+		});
 	}
 
 	/** Keywords that mean "waiting" (Settings → Tasks, or ones named like WAIT). */

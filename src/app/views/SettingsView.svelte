@@ -239,9 +239,9 @@
 		<section class="panel stack" aria-labelledby="inbox-h">
 			<h2 id="inbox-h">Inbox and weekly review</h2>
 			<p class="hint">
-				The inbox is a file whose top-level headings are things not yet decided: <a
-					href={href.triage()}>Process the inbox</a
-				> goes through them one at a time. Point a capture template at it to collect there.
+				The inbox is a file whose top-level headings are things not yet decided (or, under a heading
+				captures are filed under, its sub-headings): <a href={href.triage()}>Process the inbox</a> goes
+				through them one at a time. The Task capture template collects there.
 			</p>
 			<label class="field"
 				><span>Inbox file</span>

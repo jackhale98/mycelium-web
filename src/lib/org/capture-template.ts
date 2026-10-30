@@ -58,8 +58,9 @@ export const DEFAULT_CAPTURE_TEMPLATES: CaptureTemplate[] = [
 		key: 't',
 		name: 'Task',
 		type: 'entry',
-		target: { kind: 'daily', heading: 'Tasks' },
-		template: '* TODO %?\nSCHEDULED: %t',
+		// The inbox, at the top level: each task one item to decide (triage, the weekly review).
+		target: { kind: 'file', path: 'inbox.org', heading: null },
+		template: '* TODO %?',
 		parse: true,
 	},
 	{

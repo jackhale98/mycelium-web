@@ -74,7 +74,7 @@
 			kind === 'node'
 				? { kind: 'node' }
 				: kind === 'file'
-					? { kind: 'file', path: 'inbox.org', heading: heading ?? 'Inbox' }
+					? { kind: 'file', path: 'inbox.org', heading }
 					: { kind: 'daily', heading };
 	}
 
@@ -86,7 +86,7 @@
 			key,
 			name: 'New template',
 			type: 'entry',
-			target: { kind: 'file', path: 'inbox.org', heading: 'Inbox' },
+			target: { kind: 'file', path: 'inbox.org', heading: null },
 			template: '* TODO %?\n%U',
 		});
 	}

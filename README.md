@@ -58,8 +58,8 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
 - **Headings at a click:** TODO state, priority, tags, and SCHEDULED/DEADLINE
   dates through the native date picker. Click any date to change it.
 - **Capture** (<kbd>⌘/Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>) with
-  org-capture-style templates: a note or task into today's daily, a journal
-  entry, or a new note. On Android and desktop Chrome, Mycelium is in the
+  org-capture-style templates: a task into the inbox, a note into today's
+  daily, a journal entry, or a new note. On Android and desktop Chrome, Mycelium is in the
   share sheet: a shared page arrives as an org link, ready to capture.
 - **Quick add in plain language:** "Call Sam tomorrow 3pm #work !A every
   week ~30m" becomes a TODO with its SCHEDULED time and repeater, tags,

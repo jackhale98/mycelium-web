@@ -583,6 +583,39 @@ test('triage the inbox: done, schedule, delete (with undo), later', async ({ pag
 	await expect(main).toContainText('* Book a table for the reading group dinner');
 });
 
+test('captured tasks go to the inbox; ones filed under a heading are the items, not the heading', async ({
+	page,
+}) => {
+	// A quick capture (the Task template) lands at the top of the inbox.
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	await page.getByRole('textbox', { name: 'Add a task' }).fill('Water the ferns');
+	await page.getByRole('textbox', { name: 'Add a task' }).press('Enter');
+	// Tasks filed under a heading, as org-capture's file+headline does.
+	await open(page, 'app#/file/inbox.org');
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.locator('.cm-content').click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText('\n* Tasks\n** TODO Repot the basil\n');
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+
+	await open(page, 'app#/triage');
+	const title = page.locator('#triage-title');
+	await expect(page.getByText('6 to go')).toBeVisible();
+	for (let i = 0; i < 4; i += 1) await page.keyboard.press('Space');
+	await expect(title).toHaveText('Water the ferns');
+	await page.keyboard.press('Space');
+	// The task under * Tasks is the item; Done marks it, not the heading.
+	await expect(title).toHaveText('Repot the basil');
+	await page.getByRole('button', { name: /^Done/ }).click();
+
+	await page.goto(page.url().replace(/#.*/, '#/changes'));
+	const main = page.locator('main');
+	await expect(main).toContainText('* TODO Water the ferns');
+	await expect(main).toContainText('** DONE Repot the basil');
+	await expect(main).not.toContainText('* DONE Tasks');
+});
+
 test('the weekly review walks its steps and remembers the day', async ({ page }) => {
 	await open(page, 'app#/');
 	await expect(page.getByRole('link', { name: /Weekly review\s*not yet/ })).toBeVisible();

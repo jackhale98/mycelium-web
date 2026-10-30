@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Processing the inbox, one thing at a time (the inbox is a file, set in
-	// Settings → Tasks; its top-level headings are what's undecided). Done,
+	// Settings → Tasks; its top-level headings are what's undecided, or the
+	// sub-headings of a heading captures are filed under: see inbox.ts). Done,
 	// Refile and Delete take a card out of the inbox; Schedule, State and
 	// Later move on to the next and leave it where it is. Keys: d s t r x e,
 	// space for later. Done and Delete can be undone from the bar.

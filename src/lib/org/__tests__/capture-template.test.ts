@@ -145,8 +145,10 @@ describe('default templates', () => {
 	});
 
 	it('Task and Journal write entries', () => {
-		expect(run('', tpl('task'), 'Prune the apple tree')).toBe(
-			'* Tasks\n** TODO Prune the apple tree\nSCHEDULED: <2026-10-20 Tue>\n',
+		// Tasks go to the inbox at the top level: each one an item to decide.
+		expect(tpl('task').target).toEqual({ kind: 'file', path: 'inbox.org', heading: null });
+		expect(run('#+title: Inbox\n', tpl('task'), 'Prune the apple tree')).toBe(
+			'#+title: Inbox\n* TODO Prune the apple tree\n',
 		);
 		expect(run('#+title: d\n', tpl('journal'), 'Long walk.', { p0: 'Morning' })).toBe(
 			'#+title: d\n* 09:12 Morning\nLong walk.\n',
