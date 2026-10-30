@@ -98,7 +98,7 @@
 	});
 </script>
 
-<div class="page">
+<div class="page settings">
 	<h1>Settings</h1>
 	<p class="lede">
 		{vault ? `For ${vault.name}.` : 'You are using the demo vault.'}
@@ -655,21 +655,59 @@
 </div>
 
 <style>
-	/* Sections as a row of tabs: wraps on desktop, scrolls sideways on phones. */
+	/* Sections as tabs, wrapping so every one shows (on phones, two rows). */
 	.tabs {
 		position: sticky;
 		top: var(--clock-h, 0px);
 		z-index: 2;
 		display: flex;
-		gap: 0.3rem;
-		margin: 0 0 1rem;
-		padding: 0.4rem 0;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0 0 1.25rem;
+		padding: 0.5rem 0;
+		border-bottom: 1px solid var(--border);
 		background: var(--bg);
-		overflow-x: auto;
-		scrollbar-width: none;
 	}
-	.tabs::-webkit-scrollbar {
-		display: none;
+	/* Each section a card that stands apart from the page and its neighbours,
+	   its title ruled off, and its settings divided from one another. */
+	.settings :global(.panel) {
+		padding: 1.5rem;
+		border-color: var(--border-strong);
+	}
+	.settings :global(.panel + .panel) {
+		margin-top: 1.75rem;
+	}
+	.settings :global(.panel > h2) {
+		margin: 0;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--border);
+		color: var(--text);
+		font-size: 1.15rem;
+		font-weight: 700;
+		letter-spacing: -0.005em;
+	}
+	.settings :global(.panel.stack) {
+		gap: 1.1rem;
+	}
+	.settings :global(.panel.stack > :not(h2, .hint, .check, .saved-note) + :not(.hint)),
+	.settings :global(.panel.stack > .hint + :is(.field, fieldset, .two, .hours, .swipe-picks)) {
+		padding-top: 1.1rem;
+		border-top: 1px solid var(--border);
+	}
+	.settings :global(.field > label),
+	.settings :global(.field > .label),
+	.settings :global(.field > span:first-child) {
+		color: var(--text);
+		font-size: 0.9rem;
+		font-weight: 650;
+	}
+	@media (max-width: 720px) {
+		.settings :global(.panel) {
+			padding: 1.15rem;
+		}
+		.tabs a {
+			padding: 0 0.75rem;
+		}
 	}
 	.tabs a {
 		flex: none;
@@ -736,16 +774,20 @@
 		color: var(--text-muted);
 		font-size: 0.82rem;
 	}
+	/* A checkbox and its words on one line; long words wrap beside the box. */
 	.check {
 		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: 0.5rem;
+		align-items: flex-start;
+		gap: 0.6rem;
 		font-size: 0.9rem;
+		line-height: 1.45;
 	}
 	.check input {
+		flex: none;
+		width: 1.1rem;
+		height: 1.1rem;
+		margin: 0.12rem 0 0;
 		accent-color: var(--accent);
-		transform: translateY(1px);
 	}
 	.var {
 		color: var(--text-faint);

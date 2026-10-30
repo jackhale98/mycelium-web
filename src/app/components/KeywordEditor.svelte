@@ -402,17 +402,23 @@
 		font-size: 0.8rem;
 	}
 	.lane ul {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
 		margin: 0.5rem 0;
 		padding: 0;
 		list-style: none;
 	}
+	/* Each keyword a small card of its own, so its controls read as one group. */
 	.state {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.4rem;
-		padding: 0.4rem 0;
-		border-bottom: 1px solid var(--border);
+		gap: 0.45rem;
+		padding: 0.65rem 0.7rem;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--surface-2);
 	}
 	.state > label {
 		min-width: 0;
