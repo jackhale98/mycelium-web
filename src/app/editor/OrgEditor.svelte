@@ -33,6 +33,13 @@
 	/** Until the editor is up, the source shows as plain text in the same place. */
 	let ready = $state(false);
 
+	let outlineCycle: ((view: EditorView) => 'overview' | 'contents' | 'all') | null = null;
+	/** S-TAB from the page's toolbar: fold the whole file, org's way. Returns the new state. */
+	export function cycleOutline(): 'overview' | 'contents' | 'all' | undefined {
+		if (!view || !outlineCycle) return undefined;
+		return outlineCycle(view);
+	}
+
 	/** The line at the top of the screen (for switching back to reading). */
 	export function topAnchor(container: HTMLElement): Anchor | null {
 		return view ? editorAnchor(view, container) : null;
@@ -129,7 +136,14 @@
 		let cancelled = false;
 		void loadEditor().then(
 			([
-				{ createEditor, syncEditor, refreshPreview, linkAtCursor },
+				{
+					createEditor,
+					syncEditor,
+					refreshPreview,
+					linkAtCursor,
+					cycleOutline: cycle,
+					startupFolds,
+				},
 				format,
 				cm,
 				list,
@@ -138,6 +152,7 @@
 			]) => {
 				if (cancelled || !host) return;
 				linkHere = linkAtCursor;
+				outlineCycle = cycle;
 				tables = table;
 				texTools = tex;
 				commands = format;
@@ -186,6 +201,8 @@
 				);
 				ready = true;
 				const v = view;
+				// Opened by itself (not from reading, or at a heading): #+STARTUP folds.
+				if (!anchor && focusAt === null) startupFolds(v);
 				// The editor measures its lines in the next frame; the swap waits for
 				// that, then happens before the browser paints: one move, no gap.
 				requestAnimationFrame(() => {

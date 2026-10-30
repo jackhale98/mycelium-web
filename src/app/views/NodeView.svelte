@@ -13,6 +13,7 @@
 	import { panes, usePane } from '../panes.svelte';
 	import { scrollToSearch } from '../org/scroll-to';
 	import { readingAnchor, restoreReading, type Anchor } from '../anchor';
+	import { folds, GLOBAL_LABEL, type Global } from '../folds.svelte';
 	import { preloadEditor } from '../editor/load';
 	import { tick } from 'svelte';
 	import Toc, { type TocEntry } from '../components/Toc.svelte';
@@ -61,6 +62,40 @@
 		const h = headlineAt(file.source, node.pos, file.index.keywords, lines);
 		return h ? [node.pos, subtreeEnd(lines, h)] : undefined;
 	});
+
+	// Folding the whole note, as org's S-TAB: overview, contents, show all.
+	const hasHeadings = $derived.by(() => {
+		void app.rev;
+		const f = node && app.vault.file(node.file);
+		if (!f || !node) return false;
+		const [lo, hi] = range ?? [0, f.source.length];
+		return (
+			f.index.headlines.some((h) => h.pos > lo && h.pos < hi) ||
+			(node.level === 0 && f.index.headlines.length > 0)
+		);
+	});
+	/** The editor's S-TAB state (it folds its own text). */
+	let editorOutline = $state<Global>('all');
+	const outlineNow = $derived(
+		pane.editing ? editorOutline : node ? folds.global(node.file) : 'all',
+	);
+	$effect(() => {
+		if (!node) return;
+		const f = app.vault.file(node.file);
+		if (f) folds.start(node.file, f.source, range);
+	});
+	$effect(() => {
+		if (!pane.editing) editorOutline = 'all';
+	});
+	function cycleOutline() {
+		if (!node) return;
+		if (pane.editing) {
+			editorOutline = editor?.cycleOutline() ?? editorOutline;
+			return;
+		}
+		const f = app.vault.file(node.file);
+		if (f) folds.cycleGlobal(node.file, f.source, range);
+	}
 
 	/** The blocks that make up this node's body. */
 	const body = $derived.by((): OrgNode[] => {
@@ -209,6 +244,22 @@
 			e.preventDefault();
 			setEditing(true);
 		}
+		// S-TAB folds the whole note, as in org, when nothing on the page has
+		// focus (from a button or link, it moves focus back as usual).
+		if (
+			e.key === 'Tab' &&
+			e.shiftKey &&
+			!e.metaKey &&
+			!e.ctrlKey &&
+			!e.altKey &&
+			hasHeadings &&
+			(target === document.body ||
+				!(target instanceof HTMLElement) ||
+				!target.closest('a, button, [tabindex]'))
+		) {
+			e.preventDefault();
+			cycleOutline();
+		}
 	}
 </script>
 
@@ -248,6 +299,16 @@
 			aria-haspopup="dialog"
 			onclick={() => (app.headingSheet = { path: n.file, pos: n.pos })}
 			><Icon name="settings" size={14} /><span class="label">Properties</span></button
+		>
+	{/if}
+	{#if hasHeadings}
+		<button
+			type="button"
+			class="btn small"
+			title={`Fold the headings: ${GLOBAL_LABEL[outlineNow].toLowerCase()} (Shift-Tab)`}
+			aria-label={`Outline: ${GLOBAL_LABEL[outlineNow]}`}
+			onclick={cycleOutline}
+			><Icon name="list" size={14} /><span class="label">{GLOBAL_LABEL[outlineNow]}</span></button
 		>
 	{/if}
 	<button

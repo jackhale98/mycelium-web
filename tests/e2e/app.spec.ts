@@ -1471,3 +1471,77 @@ test('settings are split into sections, each with its own address', async ({ pag
 	await expect(page.getByRole('heading', { name: 'Appearance' })).toHaveCount(0);
 	await expectAccessible(page);
 });
+
+test('folding as org does it: TAB and S-TAB in the editor, the chevron and Outline when reading', async ({
+	page,
+	isMobile,
+}) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editor = page.locator('.cm-content');
+	await editor.click();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText('\n* Garden\nSoil notes.\n** Beds\nRaised.\n** Paths\nGravel.');
+
+	if (!isMobile) {
+		// TAB on the heading: folded → children → subtree.
+		await editor.getByText('* Garden').click();
+		await page.keyboard.press('Home');
+		await page.keyboard.press('Tab');
+		await expect(editor.locator('.cm-org-fold')).toHaveCount(1);
+		await expect(editor).not.toContainText('Soil notes.');
+		await page.keyboard.press('Tab');
+		await expect(editor).toContainText('Soil notes.');
+		await expect(editor).toContainText('** Beds');
+		await expect(editor).not.toContainText('Raised.');
+		await page.keyboard.press('Tab');
+		await expect(editor).toContainText('Raised.');
+		await expect(editor.locator('.cm-org-fold')).toHaveCount(0);
+		// S-TAB: the whole file to its top headings, then back.
+		await page.keyboard.press('Shift+Tab');
+		await expect(editor).not.toContainText('Soil notes.');
+		await expect(editor).toContainText('* Garden');
+		await page.keyboard.press('Shift+Tab');
+		await page.keyboard.press('Shift+Tab');
+		await expect(editor).toContainText('Raised.');
+		// Folding changed nothing in the text.
+	}
+	await page.getByRole('button', { name: 'Read', exact: true }).click();
+	const body = page.locator('.node-body');
+	await expect(body).toContainText('Raised.');
+
+	// The Outline button: overview, contents, show all.
+	const outlineBtn = page.getByRole('button', { name: /^Outline: / }).filter({ visible: true });
+	await outlineBtn.click();
+	await expect(body.getByRole('heading', { name: 'Garden' })).toBeVisible();
+	await expect(body).not.toContainText('Soil notes.');
+	await expect(body).not.toContainText('Beds');
+	await outlineBtn.click();
+	await expect(body.getByRole('heading', { name: 'Beds' })).toBeVisible();
+	await expect(body).not.toContainText('Soil notes.');
+	await outlineBtn.click();
+	await expect(body).toContainText('Raised.');
+
+	// A heading's chevron: folded → children → subtree.
+	const garden = body.locator('.org-section', {
+		has: page.getByRole('heading', { name: 'Garden' }),
+	});
+	await garden.getByRole('button', { name: 'Collapse section' }).first().click();
+	await expect(body).not.toContainText('Soil notes.');
+	await garden.getByRole('button', { name: 'Expand section' }).first().click();
+	await expect(body).toContainText('Soil notes.');
+	await expect(body.getByRole('heading', { name: 'Beds' })).toBeVisible();
+	await expect(body).not.toContainText('Raised.');
+	await garden.getByRole('button', { name: 'Show all of this section' }).first().click();
+	await expect(body).toContainText('Raised.');
+
+	if (!isMobile) {
+		// S-TAB with nothing focused folds the note.
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		await page.keyboard.press('Shift+Tab');
+		await expect(body).not.toContainText('Soil notes.');
+	}
+	// The file itself is as typed.
+	await open(page, 'app#/changes');
+	await expect(page.locator('main')).toContainText('** Beds');
+});

@@ -34,3 +34,4 @@ export * from './refile';
 export * from './transclude';
 export * from './quick-add';
 export * from './sessions';
+export * from './outline';

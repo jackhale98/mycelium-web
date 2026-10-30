@@ -141,6 +141,10 @@ function shiftHeadings(state: EditorState, dispatch: Dispatch | undefined, dir: 
 export const indentItem: StateCommand = ({ state, dispatch }) =>
 	shiftItems(state, dispatch, 1) || shiftHeadings(state, dispatch, 1);
 
+/** Shift-Tab in a list: outdent the item (elsewhere, S-TAB folds). */
+export const outdentListItem: StateCommand = ({ state, dispatch }) =>
+	shiftItems(state, dispatch, -1);
+
 /** Shift-Tab / M-left: outdent a list item or promote a heading. */
 export const outdentItem: StateCommand = ({ state, dispatch }) =>
 	shiftItems(state, dispatch, -1) || shiftHeadings(state, dispatch, -1);

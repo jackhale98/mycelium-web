@@ -11,6 +11,7 @@
 	import { scrollToSearch } from '../org/scroll-to';
 	import { tick } from 'svelte';
 	import { readingAnchor, restoreReading, type Anchor } from '../anchor';
+	import { folds, GLOBAL_LABEL, type Global } from '../folds.svelte';
 
 	let { path, at = null }: { path: string; at?: string | null } = $props();
 
@@ -90,6 +91,30 @@
 		if (at && el) void tick().then(() => restoreReading(el, at));
 	}
 
+	// Folding the whole file, as org's S-TAB: overview, contents, show all.
+	const hasHeadings = $derived.by(() => {
+		void app.rev;
+		return (app.vault.file(path)?.index.headlines.length ?? 0) > 0;
+	});
+	/** The editor's S-TAB state (it folds its own text). */
+	let editorOutline = $state<Global>('all');
+	const outlineNow = $derived(pane.editing ? editorOutline : folds.global(path));
+	$effect(() => {
+		const f = app.vault.file(path);
+		if (f) folds.start(path, f.source);
+	});
+	$effect(() => {
+		if (!pane.editing) editorOutline = 'all';
+	});
+	function cycleOutline() {
+		if (pane.editing) {
+			editorOutline = editor?.cycleOutline() ?? editorOutline;
+			return;
+		}
+		const f = app.vault.file(path);
+		if (f) folds.cycleGlobal(path, f.source);
+	}
+
 	function makeNote() {
 		const id = app.makeFileNode(path);
 		if (id) router.go(href.node(id));
@@ -110,6 +135,22 @@
 			e.preventDefault();
 			setEditing(true);
 		}
+		// S-TAB folds the whole note, as in org, when nothing on the page has
+		// focus (from a button or link, it moves focus back as usual).
+		if (
+			e.key === 'Tab' &&
+			e.shiftKey &&
+			!e.metaKey &&
+			!e.ctrlKey &&
+			!e.altKey &&
+			hasHeadings &&
+			(target === document.body ||
+				!(target instanceof HTMLElement) ||
+				!target.closest('a, button, [tabindex]'))
+		) {
+			e.preventDefault();
+			cycleOutline();
+		}
 	}
 </script>
 
@@ -129,6 +170,17 @@
 						><Icon name={app.hideDone ? 'eyeOff' : 'check'} size={14} />{app.hideDone
 							? `${tally.done} done hidden`
 							: 'Hide done'}</button
+					>
+				{/if}
+				{#if hasHeadings}
+					<button
+						type="button"
+						class="btn small"
+						title={`Fold the headings: ${GLOBAL_LABEL[outlineNow].toLowerCase()} (Shift-Tab)`}
+						aria-label={`Outline: ${GLOBAL_LABEL[outlineNow]}`}
+						onclick={cycleOutline}
+						><Icon name="list" size={14} /><span class="label">{GLOBAL_LABEL[outlineNow]}</span
+						></button
 					>
 				{/if}
 				<button

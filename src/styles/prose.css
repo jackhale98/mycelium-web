@@ -244,6 +244,11 @@
 	transform: rotate(-90deg);
 }
 
+/* Its text or deeper headings folded: half-way. */
+.prose .fold-icon.partly {
+	transform: rotate(-45deg);
+}
+
 .prose .heading {
 	margin: 0;
 	font-family: var(--font-read);

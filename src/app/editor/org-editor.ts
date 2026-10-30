@@ -18,9 +18,12 @@ import {
 	continueList,
 	indentItem,
 	outdentItem,
+	outdentListItem,
 	toggleItemCheckbox,
 } from './list-commands';
 import * as table from './table-commands';
+import { cycleHeading, cycleOutlineCommand, folding } from './fold-commands';
+export { cycleOutline, startupFolds } from './fold-commands';
 import { texCompletion, texRedraw, texSupport } from './tex-editor';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
@@ -385,6 +388,18 @@ const theme = EditorView.theme({
 		fontVariantLigatures: 'none',
 	},
 	'&.cm-focused': { outline: 'none' },
+	// A folded heading's “…”: tap it to open.
+	'.cm-org-fold': {
+		margin: '0 0.3em',
+		padding: '0 0.45em',
+		border: '1px solid var(--border)',
+		borderRadius: '6px',
+		background: 'var(--surface-2)',
+		color: 'var(--text-muted)',
+		font: 'inherit',
+		lineHeight: '1.2',
+		cursor: 'pointer',
+	},
 	'.cm-scroller': { fontFamily: 'var(--font-read)', fontSize: '1.08rem', lineHeight: '1.7' },
 	'.cm-org-l-block, .cm-org-l-block-delim, .cm-org-l-drawer, .cm-org-l-meta, .cm-org-l-table, .cm-org-l-planning, .cm-org-l-comment':
 		{ fontFamily: 'var(--font-mono)', fontSize: '0.8em' },
@@ -608,8 +623,16 @@ export function createEditor(
 					{ key: 'Mod-.', run: link },
 					// Inside a table, org's table keys come first.
 					{ key: 'Enter', run: (v) => table.nextRow(v) || continueList(v) },
-					{ key: 'Tab', run: (v) => table.nextField(v) || indentItem(v) },
-					{ key: 'Shift-Tab', run: (v) => table.previousField(v) || outdentItem(v) },
+					// Org's TAB and S-TAB: in a table, its fields; on a heading, folding
+					// (Alt-arrows demote and promote); in a list, its items.
+					{
+						key: 'Tab',
+						run: (v) => table.nextField(v) || cycleHeading(v) || indentItem(v),
+					},
+					{
+						key: 'Shift-Tab',
+						run: (v) => table.previousField(v) || outdentListItem(v) || cycleOutlineCommand(v),
+					},
 					{ key: 'Alt-ArrowRight', run: (v) => table.moveColumnRight(v) || indentItem(v) },
 					{ key: 'Alt-ArrowLeft', run: (v) => table.moveColumnLeft(v) || outdentItem(v) },
 					{ key: 'Alt-ArrowUp', run: table.moveRowUp },
@@ -626,6 +649,7 @@ export function createEditor(
 					...defaultKeymap,
 					indentWithTab,
 				]),
+				folding,
 				orgHighlight(hooks),
 				mentions,
 				EditorView.domEventHandlers({

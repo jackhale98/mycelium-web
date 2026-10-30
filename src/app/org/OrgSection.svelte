@@ -13,6 +13,7 @@
 	import Inline from './OrgInline.svelte';
 	import TodoChip from './TodoChip.svelte';
 	import type { RenderContext } from './context';
+	import { folds } from '../folds.svelte';
 
 	let { section, ctx }: { section: Section; ctx: RenderContext } = $props();
 
@@ -27,6 +28,9 @@
 	);
 	const id = $derived(drawer?.children.find((p) => p.key.toUpperCase() === 'ID')?.value.trim());
 	const body = $derived(section.children.filter((c) => c !== headline) as OrgNode[]);
+	/** The heading's own text, and its child headings: they fold separately. */
+	const text = $derived(body.filter((c) => c.type !== 'section'));
+	const kids = $derived(body.filter((c) => c.type === 'section'));
 	const level = $derived(Math.min(6, Math.max(2, (headline?.level ?? 1) - ctx.levelOffset + 1)));
 	const keywords = $derived.by(() => {
 		void app.rev;
@@ -51,7 +55,14 @@
 	/** Hidden by Hide done: done, with nothing still open under it. */
 	const hidden = $derived(done && ctx.interactive && app.hideDone && !openInside);
 
-	let open = $state(true);
+	// Folding, as org's TAB cycles it (folded, children, subtree).
+	const vis = $derived(folds.at(ctx.path, headline ? startOf(headline) : 0));
+	const showText = $derived(vis === 'all' || vis === 'children');
+	const open = $derived(vis !== 'folded');
+	function cycle() {
+		const source = app.vault.file(ctx.path)?.source;
+		if (source && headline) folds.cycle(ctx.path, source, startOf(headline));
+	}
 	let editing = $state(false);
 
 	const offset = $derived(headline ? startOf(headline) : 0);
@@ -80,7 +91,7 @@
 		{#if swipe}
 			<!-- The heading and its dates swipe together, as one task. -->
 			<SwipeRow main={swipe.main} actions={swipe.actions}
-				>{@render headingRow(headline)}{#if open}{@render planningRow()}{/if}</SwipeRow
+				>{@render headingRow(headline)}{#if showText}{@render planningRow()}{/if}</SwipeRow
 			>
 		{:else}
 			{@render headingRow(headline)}
@@ -99,9 +110,12 @@
 				onclose={() => (editing = false)}
 			/>
 		{/if}
-		{#if open}
+		{#if showText}
 			{#if !swipe}{@render planningRow()}{/if}
-			<div class="section-body"><Blocks nodes={body} {ctx} /></div>
+			<div class="section-body"><Blocks nodes={text} {ctx} /></div>
+		{/if}
+		{#if open && kids.length}
+			<div class="section-body"><Blocks nodes={kids} {ctx} /></div>
 		{/if}
 	</section>
 {/if}
@@ -112,10 +126,17 @@
 			type="button"
 			class="fold"
 			aria-expanded={open}
-			aria-label={open ? 'Collapse section' : 'Expand section'}
-			onclick={() => (open = !open)}
+			aria-label={vis === 'folded'
+				? 'Expand section'
+				: vis === 'all'
+					? 'Collapse section'
+					: 'Show all of this section'}
+			title="Fold (folded, children, everything)"
+			onclick={cycle}
 		>
-			<span class="fold-icon" class:closed={!open}><Icon name="chevronDown" size={16} /></span>
+			<span class="fold-icon" class:closed={!open} class:partly={open && vis !== 'all'}
+				><Icon name="chevronDown" size={16} /></span
+			>
 		</button>
 		<svelte:element this={`h${level}`} class="heading" class:done class:task={!!h.todoKeyword}>
 			{#if h.todoKeyword}

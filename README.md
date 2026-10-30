@@ -24,6 +24,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
 - **Tabs and split view** on wide screens: ⌘/Ctrl-click a link for a new
   tab, Alt-click to open it beside; each pane reads or edits on its own, and
   each vault remembers its layout.
+- **Folding, the org way:** in the editor Tab on a heading cycles it (folded,
+  its children, everything) and Shift-Tab the whole file (overview, contents,
+  show all), as in Emacs; Alt-←/→ promote and demote. Reading, a heading's
+  chevron cycles the same way, and the Outline button (or Shift-Tab) folds
+  the whole note. `#+STARTUP: overview` or `content` sets how a note opens.
 - **Tables, the org way:** Tab, Enter and M-arrows realign and reshape tables
   exactly as `org-table-align` does; on phones, a table sheet edits cells in a
   grid (or one row at a time) and writes the table back aligned.
