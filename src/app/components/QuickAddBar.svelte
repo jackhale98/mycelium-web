@@ -9,6 +9,15 @@
 	import QuickAddChips from './QuickAddChips.svelte';
 
 	let text = $state('');
+	/** Room for the example in the hint, or just "Add a task…" (a phone). */
+	let roomy = $state(true);
+	$effect(() => {
+		const mq = window.matchMedia('(min-width: 600px)');
+		const set = () => (roomy = mq.matches);
+		set();
+		mq.addEventListener('change', set);
+		return () => mq.removeEventListener('change', set);
+	});
 	let keep = $state<string[]>([]);
 	let input: HTMLInputElement | undefined = $state();
 
@@ -41,7 +50,9 @@
 		<input
 			bind:this={input}
 			bind:value={text}
-			placeholder="Add a task… “Call Sam tomorrow 3pm #work”"
+			placeholder={roomy
+				? 'Add a task… “Call Sam tomorrow 3pm #work”'
+				: 'Add a task… “Call Sam 3pm”'}
 			autocomplete="off"
 			enterkeyhint="done"
 		/>
@@ -79,6 +90,7 @@
 	input {
 		flex: 1;
 		min-width: 0;
+		text-overflow: ellipsis;
 		padding: 0.55rem 0;
 		border: 0;
 		background: none;

@@ -230,7 +230,9 @@
 					<span class="gt">{row.time}</span><span class="rule"></span>
 				</li>
 			{:else if row.kind === 'now'}
-				<li class="now-line"><span class="gt">{row.time}</span><span class="rule">now</span></li>
+				<li class="now-line">
+					<span class="gt">{row.time}</span><span class="tag">now</span><span class="rule"></span>
+				</li>
 			{:else if row.kind === 'item'}
 				{@render itemRow(row.item, row.time)}
 			{/if}
@@ -264,12 +266,17 @@
 		color: var(--todo);
 		font-weight: 650;
 	}
+	/* "now" on its own, then the line: the line never runs through the word. */
+	.now-line .tag {
+		flex: none;
+		color: var(--todo);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
 	.now-line .rule {
 		flex: 1;
-		padding-left: 0.4rem;
 		border-top: 1.5px solid var(--todo);
-		line-height: 0;
-		text-transform: lowercase;
 	}
 	/* The habit's graph: its own line under the title, the whole row a button. */
 	.habit {
