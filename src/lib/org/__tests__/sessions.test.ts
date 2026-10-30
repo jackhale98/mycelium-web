@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { durationToMinutes, durationUnits, orgDurationUnitsLisp } from '../duration';
+import { durationToMinutes, durationUnits, effortValue, orgDurationUnitsLisp } from '../duration';
 import { addSession, removeSession, sessionsOf, setSession } from '../sessions';
 import { applyChanges } from '../text';
 import { makeTimestamp } from '../timestamp';
@@ -71,6 +71,25 @@ describe('effort units', () => {
 		expect(durationToMinutes('1d 2:30', work)).toBe(630);
 		expect(durationToMinutes('1:30', work)).toBe(90);
 		expect(durationUnits()).toMatchObject({ d: 1440, w: 10080, m: 43200, y: 525960 });
+	});
+
+	it('reads an Effort typed by hand', () => {
+		for (const [typed, org] of [
+			['1:30', '1:30'],
+			['90', '1:30'],
+			['90m', '1:30'],
+			['45 min', '0:45'],
+			['1h30', '1:30'],
+			['1h 30m', '1:30'],
+			['1.5h', '1:30'],
+			['2h', '2:00'],
+			['2d', '2d'],
+			['1d 3:00', '1d 3:00'],
+		] as const)
+			expect(effortValue(typed), typed).toBe(org);
+		expect(effortValue('')).toBeNull();
+		expect(effortValue('soon')).toBeUndefined();
+		expect(effortValue('0')).toBeUndefined();
 	});
 
 	it('writes the matching Emacs setting', () => {

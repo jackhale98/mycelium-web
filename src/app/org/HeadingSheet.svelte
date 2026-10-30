@@ -2,7 +2,7 @@
 	import { sheetGestures } from '../actions/sheet-gestures';
 	import { fitKeyboard } from '../actions/fit-keyboard';
 	import Icon from '../components/Icon.svelte';
-	import { href, router } from '../router.svelte';
+	import { router } from '../router.svelte';
 	import { app } from '../state.svelte';
 	import HeadingActions from './HeadingActions.svelte';
 	import PropertiesEditor from '../components/PropertiesEditor.svelte';
@@ -43,15 +43,19 @@
 	function openEditor() {
 		if (!target) return;
 		saveTitle();
-		const owner = app.editHeading(target.path, target.pos);
+		const to = app.editHeading(target.path, target.pos);
 		close();
-		if (owner) router.go(href.node(owner));
+		router.go(to);
 	}
 
-	function openNote() {
-		const id = h?.id ?? h?.ownerId;
+	/** Go to the heading where it is (its file, scrolled to it), reading. */
+	function goTo() {
+		if (!target) return;
+		saveTitle();
+		const to = app.headingHref(target.path, target.pos);
 		close();
-		if (id) router.go(href.node(id));
+		app.editing = false;
+		router.go(to);
 	}
 
 	/** Tap on the backdrop (outside the sheet) closes it. */
@@ -118,14 +122,12 @@
 				<PropertiesEditor path={target.path} owner={target.pos} />
 			</details>
 			<footer>
-				{#if h.ownerId}
-					<button type="button" class="btn" onclick={openEditor}
-						><Icon name="edit" size={15} />Edit in source</button
-					>
-					<button type="button" class="btn" onclick={openNote}
-						><Icon name="arrowRight" size={15} />Open note</button
-					>
-				{/if}
+				<button type="button" class="btn" onclick={goTo}
+					><Icon name="arrowRight" size={15} />{h.todo ? 'Go to task' : 'Go to heading'}</button
+				>
+				<button type="button" class="btn" onclick={openEditor}
+					><Icon name="edit" size={15} />Edit in source</button
+				>
 				<button type="button" class="btn primary" onclick={close}>Done</button>
 			</footer>
 		</div>

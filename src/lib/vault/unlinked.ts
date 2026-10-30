@@ -2,9 +2,14 @@
 /// finds them: mentions of a node's title or aliases in other files,
 /// case-insensitive, as whole words (`\b…\b`), never inside square brackets
 /// (rg's pattern consumes any balanced `[…]` first, so links, timestamps and
-/// checkboxes don't count), and never in the node's own file.
+/// checkboxes don't count), and never in the node's own file. Unlike rg, it
+/// also passes over what isn't prose, as link suggestions do: active
+/// timestamps and planning lines (or a daily note's date would be "mentioned"
+/// by every SCHEDULED and DEADLINE on that day), drawers, keyword and comment
+/// lines, code blocks, verbatim and URLs. Headlines still count.
 
 import type { RoamNode } from '$lib/org';
+import { skippedRanges } from './mentions';
 
 export interface UnlinkedRef {
 	file: string;
@@ -20,21 +25,6 @@ export interface UnlinkedRef {
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** Ranges of balanced `[…]` groups (rg's `\[([^[]]++|(?R))*\]`). */
-function bracketRanges(source: string): [number, number][] {
-	const out: [number, number][] = [];
-	const stack: number[] = [];
-	for (let i = 0; i < source.length; i += 1) {
-		const c = source[i];
-		if (c === '[') stack.push(i);
-		else if (c === ']' && stack.length) {
-			const start = stack.pop()!;
-			if (!stack.length) out.push([start, i + 1]);
-		} else if (c === '\n' && stack.length) stack.length = 0;
-	}
-	return out;
-}
 
 export function unlinkedReferences(
 	node: Pick<RoamNode, 'file' | 'title' | 'aliases'>,
@@ -56,7 +46,7 @@ export function unlinkedReferences(
 		if (file.path === node.file) continue;
 		const quick = file.source.toLowerCase();
 		if (![...lower].some((t) => quick.includes(t))) continue;
-		const brackets = bracketRanges(file.source);
+		const brackets = skippedRanges(file.source, { headlines: false });
 		let b = 0;
 		for (const m of file.source.matchAll(re)) {
 			const at = m.index;

@@ -59,6 +59,12 @@
 		app.runningClocks.find((c) => !(c.path === path && c.heading === offset)) ?? null,
 	);
 	const summary = $derived(app.clockSummary(path, offset));
+	/** The Effort as written; and whether what was last typed wasn't a duration. */
+	const effort = $derived.by(() => {
+		void app.rev;
+		return app.effortText(path, offset);
+	});
+	let effortBad = $state(false);
 	const today = localNow().date;
 
 	/** Where Archive sends the tree (org-archive-location). */
@@ -248,6 +254,39 @@
 					class="x"
 					aria-label="Remove deadline"
 					onclick={() => setDate('DEADLINE', '')}><Icon name="close" size={12} /></button
+				>
+			{/if}
+		</div>
+	</div>
+
+	<div class="row">
+		<label class="label" for={`${uid}-effort`}>Effort</label>
+		<div class="when">
+			<input
+				id={`${uid}-effort`}
+				class="input effort"
+				value={effort}
+				placeholder="1:30, 45m, 2h"
+				autocomplete="off"
+				spellcheck="false"
+				aria-invalid={effortBad}
+				aria-describedby={effortBad ? `${uid}-effort-bad` : undefined}
+				onchange={(e) => (effortBad = !app.setEffort(path, offset, e.currentTarget.value))}
+				onkeydown={(e) => {
+					if (e.key === 'Enter') {
+						e.preventDefault();
+						e.currentTarget.blur();
+					}
+				}}
+			/>
+			{#if effortBad}
+				<span class="raw bad" id={`${uid}-effort-bad`}>Not a duration: try 1:30, 45m or 2h</span>
+			{:else if effort}
+				<button
+					type="button"
+					class="x"
+					aria-label="Remove the effort estimate"
+					onclick={() => app.setEffort(path, offset, '')}><Icon name="close" size={12} /></button
 				>
 			{/if}
 		</div>
@@ -462,6 +501,19 @@
 		width: auto;
 		height: 2rem;
 		font-size: 0.82rem;
+	}
+	.effort {
+		width: 7rem;
+		height: 2rem;
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+	}
+	.effort[aria-invalid='true'] {
+		border-color: var(--danger);
+	}
+	.raw.bad {
+		color: var(--danger);
+		font-family: inherit;
 	}
 	.raw {
 		color: var(--text-muted);

@@ -58,3 +58,28 @@ export function durationToMinutes(
 	}
 	return total;
 }
+
+/**
+ * An Effort typed by hand, as org writes it: `1:30`, `90`, `90m`, `1h30`,
+ * `1.5h` and `2h` become `H:MM`; org's own day and week forms (`2d`,
+ * `1d 3:00`, `1w`) are kept as written, since what a day is depends on
+ * `org-duration-units`. Empty is `null` (no estimate); anything else is
+ * `undefined` (not a duration).
+ */
+export function effortValue(
+	input: string,
+	units: DurationUnits = UNITS,
+): string | null | undefined {
+	const s = input.trim().toLowerCase();
+	if (!s) return null;
+	let minutes: number | null = null;
+	let m = /^(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?\s*(?:(\d+)\s*(?:m|min|mins|minutes?)?)?$/.exec(s);
+	if (m) minutes = Math.round(Number(m[1]) * 60) + Number(m[2] ?? 0);
+	else if ((m = /^(\d+)\s*(?:m|min|mins|minutes?)$/.exec(s))) minutes = Number(m[1]);
+	else if (/[dwy]/.test(s))
+		return durationToMinutes(input.trim(), units) ? input.trim() : undefined;
+	else minutes = durationToMinutes(s, units);
+	if (minutes === null || !(minutes > 0)) return undefined;
+	const whole = Math.round(minutes);
+	return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}

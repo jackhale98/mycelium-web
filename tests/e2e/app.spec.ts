@@ -562,6 +562,50 @@ test('edit a heading from the agenda: date chip and heading sheet', async ({ pag
 	await expect(diff).toContainText('DEADLINE: <2026-11-05 Thu>');
 });
 
+test('the edit sheet sets an effort, and goes to the task even in a file without an ID', async ({
+	page,
+}) => {
+	await open(page, 'app#/agenda');
+	await page.getByRole('radio', { name: 'List' }).click();
+	const row = page.locator('.agenda .item', { hasText: 'Email Sam about the reading group' });
+	await row
+		.getByRole('button', { name: /Edit “Email Sam about the reading group”/ })
+		.press('Enter');
+	const sheet = page.getByRole('dialog');
+	const effort = sheet.getByRole('textbox', { name: 'Effort' });
+	// Not a duration: said so, nothing written.
+	await effort.fill('soon');
+	await effort.press('Enter');
+	await expect(sheet.getByText('Not a duration')).toBeVisible();
+	// Typed casually, written as org writes it.
+	await effort.fill('1h30');
+	await effort.press('Enter');
+	await expect(effort).toHaveValue('1:30');
+	await expect(sheet.getByText('Not a duration')).toHaveCount(0);
+
+	// inbox.org has no ID: Go to task still opens it, at the task.
+	await sheet.getByRole('button', { name: 'Go to task' }).click();
+	await expect(page).toHaveURL(/#\/file\/inbox\.org\?at=\d+/);
+	await expect(
+		page.locator('.org-section', { hasText: 'Email Sam about the reading group' }).first(),
+	).toBeInViewport();
+
+	await open(page, 'app#/changes');
+	await expect(page.locator('main')).toContainText(/:Effort: +1:30/);
+});
+
+test('the graph picks a random note to look at', async ({ page }) => {
+	await open(page, 'app#/graph');
+	await page.getByRole('button', { name: 'Random note' }).click();
+	const card = page.locator('.controls .info');
+	await expect(card).toBeVisible();
+	const first = await card.locator('strong').textContent();
+	await expect(card.getByRole('link', { name: 'Open' })).toHaveAttribute('href', /#\/node\//);
+	// Again: another note.
+	await page.getByRole('button', { name: 'Random note' }).click();
+	await expect(card.locator('strong')).not.toHaveText(first!);
+});
+
 test('graph controls are a collapsible footer on phones', async ({ page, isMobile }) => {
 	test.skip(!isMobile, 'phone layout');
 	await open(page, 'app#/graph');

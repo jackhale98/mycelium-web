@@ -417,6 +417,30 @@
 		redraw();
 	});
 
+	/**
+	 * A random note in view (as org-roam-node-random, but here): the graph
+	 * centres on it and shows its card, to open or to try another.
+	 */
+	function randomNote() {
+		if (!canvas || !zoomer || !nodes.length) return;
+		const pool = nodes.length > 1 ? nodes.filter((n) => n.id !== selected?.id) : nodes;
+		const n = pool[Math.floor(Math.random() * pool.length)]!;
+		selected = n;
+		hovered = n;
+		userMoved = true;
+		const left = size.w > 900 ? 300 : 0;
+		const bottom = narrow ? (controlsEl?.offsetHeight ?? 56) + 16 : 0;
+		const k = Math.max(transform.k, 1.6);
+		zoomer.transform(
+			select(canvas),
+			zoomIdentity
+				.translate(left + (size.w - left) / 2, (size.h - bottom) / 2)
+				.scale(k)
+				.translate(-(n.x ?? 0), -(n.y ?? 0)),
+		);
+		redraw();
+	}
+
 	function fit() {
 		if (!canvas || !zoomer || !nodes.length) return;
 		const xs = nodes.map((n) => n.x ?? 0);
@@ -450,6 +474,9 @@
 			<h1>Graph</h1>
 			<span class="stats">{graph.nodes.length} notes · {graph.links.length} links</span>
 			{#if narrow}
+				<button type="button" class="expand" aria-label="Random note" onclick={randomNote}
+					><Icon name="shuffle" size={17} /></button
+				>
 				<button
 					type="button"
 					class="expand"
@@ -462,7 +489,7 @@
 				>
 			{/if}
 		</div>
-		{#if narrow && selected}
+		{#if selected}
 			<div class="info" role="status">
 				<div class="info-text">
 					<strong>{selected.title}</strong>
@@ -532,6 +559,11 @@
 					fit();
 				}}><Icon name="monitor" size={14} />Fit</button
 			>
+			{#if !narrow}
+				<button type="button" class="btn small" onclick={randomNote}
+					><Icon name="shuffle" size={14} />Random note</button
+				>
+			{/if}
 			{#if narrow}
 				<details class="in-list">
 					<summary>Notes in view ({ranked.length})</summary>
@@ -833,6 +865,9 @@
 	}
 	.controls.narrow .title-row {
 		align-items: center;
+	}
+	.controls.narrow .stats {
+		flex: 1;
 	}
 	.controls.narrow h1 {
 		font-size: 1.15rem;

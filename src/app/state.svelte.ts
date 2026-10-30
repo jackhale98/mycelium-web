@@ -24,6 +24,7 @@ import {
 	deleteSubtree,
 	durationToMinutes,
 	durationUnits,
+	effortValue,
 	getPlanning,
 	makeTimestamp,
 	removeSession,
@@ -1996,12 +1997,34 @@ class AppState {
 	}
 
 	/** Open the note that owns a heading in the editor, with the cursor on it. */
-	editHeading(path: string, pos: number): string | null {
+	/**
+	 * Open a heading in the source editor at its line, in whichever file it
+	 * is (a note, or a file without an ID such as the inbox): where to go.
+	 */
+	editHeading(path: string, pos: number): string {
 		const owner = this.vault.file(path)?.index.headlines.find((h) => h.pos === pos)?.ownerId;
-		if (!owner) return null;
 		this.editAt = pos;
 		this.editing = true;
-		return owner;
+		return owner ? href.node(owner) : href.file(path);
+	}
+
+	/** A heading's line in its file (1-based), as an org `::42` search. */
+	lineOf(path: string, pos: number): string | null {
+		const source = this.vault.file(path)?.source;
+		if (!source) return null;
+		let line = 1;
+		for (let i = source.indexOf('\n'); i !== -1 && i < pos; i = source.indexOf('\n', i + 1))
+			line += 1;
+		return String(line);
+	}
+
+	/** Where to read a heading: its own note, or its note or file scrolled to it. */
+	headingHref(path: string, pos: number): string {
+		const h = this.vault.file(path)?.index.headlines.find((x) => x.pos === pos);
+		const own = h ? this.vault.nodes.get(h.ownerId ?? '') : undefined;
+		if (own && own.pos === pos && own.level > 0) return href.node(own.id);
+		const line = this.lineOf(path, pos);
+		return h?.ownerId ? href.node(h.ownerId, line) : href.file(path, line);
 	}
 
 	setPriority(path: string, offset: number, priority: string | null) {
@@ -2094,6 +2117,30 @@ class AppState {
 	}
 
 	/** Set (or with `null` remove) a property of a heading, or of the file (`owner` null). */
+	/** A heading's Effort as written (`1:30`, `2d`), or ''. */
+	effortText(path: string, pos: number): string {
+		const file = this.vault.file(path);
+		return file ? (getProperty(file.source, pos, 'Effort', file.index.keywords) ?? '').trim() : '';
+	}
+
+	/**
+	 * Set a heading's Effort from what was typed (`1:30`, `45m`, `2h`, `2d`), or
+	 * take it off with ''. Undoable. `false` if it isn't a duration.
+	 */
+	setEffort(path: string, pos: number, input: string): boolean {
+		const value = effortValue(input, this.effortUnits);
+		if (value === undefined) return false;
+		if (value === (this.effortText(path, pos) || null)) return true;
+		const title = this.#headingTitle(path, pos);
+		this.#undoable(
+			path,
+			value === null ? `No estimate: ${title}` : `Effort ${value}: ${title}`,
+			() => this.setPropertyValue(path, pos, 'Effort', value),
+			'clock',
+		);
+		return true;
+	}
+
 	setPropertyValue(path: string, owner: number | null, key: string, value: string | null) {
 		const kw = this.vault.file(path)?.index.keywords;
 		this.#edit(

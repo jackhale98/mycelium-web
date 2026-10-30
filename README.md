@@ -55,8 +55,11 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
 - **org-roam's note tools:** rename a note (and the links that used its old
   title), add and remove aliases and refs, edit any property, and extract a
   heading into a note of its own (`org-roam-extract-subtree`), keeping its ID.
-- **Headings at a click:** TODO state, priority, tags, and SCHEDULED/DEADLINE
-  dates through the native date picker. Click any date to change it.
+- **Headings at a click:** TODO state, priority, tags, SCHEDULED/DEADLINE
+  dates through the native date picker, and an Effort estimate (typed as
+  `1:30`, `45m` or `2h`, written as org writes it). Click any date to change
+  it; from the edit sheet, go to the heading or edit it in source, in any
+  file.
 - **Capture** (<kbd>⌘/Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>) with
   org-capture-style templates: a task into the inbox, a note into today's
   daily, a journal entry, or a new note. On Android and desktop Chrome, Mycelium is in the
@@ -90,7 +93,8 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   note) with org's filters and tag/property match strings. Appointments
   (plain active timestamps in a heading's text) show on their days; drag to
   reschedule or to change state, or use the menus.
-- **Graph** of the whole vault or the neighbourhood of a note.
+- **Graph** of the whole vault or the neighbourhood of a note, with a
+  random note to wander from.
 - **Git, not a sync service.** Edits autosave to the working tree; you review
   diffs, write commit messages, and pull/push/branch when you choose
   (auto-commit is opt-in). Pulls never overwrite uncommitted work; conflicts

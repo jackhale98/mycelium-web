@@ -40,6 +40,8 @@
 		shield:
 			'<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
 		zap: '<path d="M13 2.5 4.5 13.5H12l-1 8 8.5-11H12z"/>',
+		shuffle:
+			'<path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/>',
 		smartphone: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
 		arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 		arrowDown: '<path d="M12 4v13M6 12l6 6 6-6"/><path d="M5 21h14"/>',

@@ -44,4 +44,21 @@ describe('unlinked references', () => {
 		]);
 		expect(refs).toEqual([]);
 	});
+
+	it("a daily note isn't mentioned by the day's SCHEDULED and DEADLINE stamps", () => {
+		const day = { file: 'daily/2026-10-30.org', title: '2026-10-30', aliases: [] };
+		const src = [
+			'* TODO Pay rent',
+			'DEADLINE: <2026-10-30 Fri>',
+			'* TODO Call Sam',
+			'SCHEDULED: <2026-10-30 Fri 15:00>',
+			'Met on <2026-10-30 Fri> as agreed.',
+			'* Plans for 2026-10-30',
+			'Due 2026-10-30, in words.',
+			'',
+		].join('\n');
+		const refs = unlinkedReferences(day, [{ path: 'tasks.org', source: src }]);
+		// The heading and the plain words count; stamps never do.
+		expect(refs.map((r) => r.line)).toEqual([6, 7]);
+	});
 });

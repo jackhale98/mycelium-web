@@ -91,8 +91,8 @@ export function mentionMatcher(targets: Iterable<MentionTarget>): Matcher {
 	return { root, size };
 }
 
+const HEADLINE = /^\*+\s/;
 const LINE_SKIP = [
-	/^\*+\s/, // headline
 	/^\s*#\+/, // keyword (#+title, #+begin_…)
 	/^\s*#(?:\s|$)/, // comment
 	/^\s*:(?:\s|$)/, // fixed-width
@@ -110,8 +110,15 @@ const INLINE_SKIP = [
 	/\b[a-z][\w+.-]*:\/\/\S+/gi, // URL
 ];
 
-/** Ranges of the source that aren't prose, in order, merged. */
-export function skippedRanges(source: string): [number, number][] {
+/**
+ * Ranges of the source that aren't prose, in order, merged. Headlines count
+ * as not prose unless `headlines` is false (unlinked references keep them).
+ */
+export function skippedRanges(
+	source: string,
+	options: { headlines?: boolean } = {},
+): [number, number][] {
+	const skipHeadlines = options.headlines ?? true;
 	const out: [number, number][] = [];
 	// Whole lines.
 	let offset = 0;
@@ -143,7 +150,8 @@ export function skippedRanges(source: string): [number, number][] {
 			out.push([start, end]);
 			continue;
 		}
-		if (LINE_SKIP.some((re) => re.test(line))) out.push([start, end]);
+		if (LINE_SKIP.some((re) => re.test(line)) || (skipHeadlines && HEADLINE.test(line)))
+			out.push([start, end]);
 	}
 	// Balanced brackets: links, checkboxes, cookies, footnotes (org-roam's rule).
 	const stack: number[] = [];

@@ -5,11 +5,11 @@
 	// range, repeater and all, or a work session in its entry, with Undo in
 	// the bar; appointments written in an entry's text show but stay put.
 	// - Any screen: pick a task in the tray, then tap a time on a day (or
-	//   type a time and Plan); tap a block for a toolbar (earlier, later,
-	//   shorter, longer, day before or after, no time, edit).
-	// - With a mouse: drag a task onto a day, drag a block to move it (to
-	//   another day too, in the week), drag its bottom edge to change its end,
-	//   drag it onto the tray to take its time off.
+	//   type a time and Plan); tap a block for a toolbar (day before or
+	//   after, no time, plan the rest, edit).
+	// - Mouse, or a finger after a long press: drag a task onto a day, drag a
+	//   block to move it (to another day too, in the week), drag its bottom
+	//   edge to change its end, drag it onto the tray to take its time off.
 	// - Keyboard, on a block: ↑/↓ move 15 minutes, Shift+↑/↓ change the end,
 	//   ←/→ move a day, Enter edits, Delete takes the time off.
 	// The week shows working hours, with early and late hours folded away
@@ -829,12 +829,6 @@
 							: ''}{timeOf(b)}</span
 					>
 					{#if b.source !== 'appointment'}
-						<button type="button" class="btn small" onclick={() => nudge(b, -SNAP)}>Earlier</button>
-						<button type="button" class="btn small" onclick={() => nudge(b, SNAP)}>Later</button>
-						<button type="button" class="btn small" onclick={() => stretch(b, -SNAP)}
-							>Shorter</button
-						>
-						<button type="button" class="btn small" onclick={() => stretch(b, SNAP)}>Longer</button>
 						{#if movesDays(b)}
 							<button type="button" class="btn small" onclick={() => shiftDay(b, -1)}
 								>Day before</button
