@@ -5,10 +5,15 @@
 ///
 /// A small fixed grammar (English words), no guessing service: tags (#work),
 /// priority (!A–!C or !1–!3), a leading TODO keyword, dates (today,
-/// tomorrow, weekdays, next week, this weekend, in 3 days, nov 4, ISO), times
-/// and ranges (3pm, 15:00, 3-4pm, noon), deadlines (due/by/deadline + a
-/// date), repeats (every day/2 weeks/monday, daily, weekly…) and effort
-/// (~30m, ~1h30). Words in "quotes" are kept as they are. Every recognised
+/// tomorrow and tom/tmrw/2moro, the day after tomorrow, tonight, weekdays,
+/// next week, this weekend, end of the week/month/year, in 3 days, 3 days
+/// from now, the 13th, nov 4, 11/20, ISO), parts of the day (tomorrow
+/// morning, this evening), times and ranges (3pm, 3p, 3 p.m., 15:00, at 3,
+/// 3-4pm, noon), deadlines (due/by/deadline + a date), repeats (every
+/// day/2 weeks/monday/other friday/1st, biweekly, daily, weekly…, and every
+/// third Friday or last Monday as an org diary sexp) and effort (~30m,
+/// ~1h30). A bare "at 3" means the afternoon (1–7) or the morning (8–11).
+/// Words that only look like dates (Tom, sat, the sun) stay words. Words in "quotes" are kept as they are. Every recognised
 /// part keeps its place in the text, so it can be shown, and undone by
 /// passing its start in `keep`.
 
@@ -17,8 +22,9 @@ import { headlineAt, setHeadlineTags, setPriority, setTodoKeyword } from './head
 import { setPlanning } from './planning';
 import { getProperty, setProperty } from './properties';
 import { applyChanges } from './text';
+import { addSession } from './sessions';
 import { makeTimestamp } from './timestamp';
-import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig } from './types';
+import { DEFAULT_KEYWORD_CONFIG, type KeywordConfig, type OrgTimestamp } from './types';
 
 export type QuickPartKind =
 	'tag' | 'priority' | 'state' | 'date' | 'deadline' | 'time' | 'repeat' | 'effort';
@@ -48,6 +54,13 @@ export interface QuickAdd {
 	deadline: QuickWhen | null;
 	/** An org repeater cookie, e.g. `+1w`. */
 	repeater: string | null;
+	/**
+	 * A repeat no org repeater can say, as an org diary sexp (the inside of
+	 * `<…>`): `%%(diary-float t 5 3)` for every third Friday. Org's agenda
+	 * shows the entry on each day it matches; a time goes at the start of the
+	 * title (`19:00 Book club`), where org's agenda looks for it.
+	 */
+	diary: string | null;
 	/** Effort in minutes. */
 	effort: number | null;
 	parts: QuickPart[];
@@ -85,10 +98,18 @@ const WEEKDAY =
 const MONTH =
 	'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
 const COUNT = '(?:\\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten)';
+const TOMORROW = '(?:tomorrow|tmrw?|tomo|tom|2moro|2morrow)';
+const ORDINAL_DAY = '\\d{1,2}(?:st|nd|rd|th)';
+const NTH = '(?:first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)';
+const PART_OF_DAY = '(?:morning|afternoon|evening|night)';
 const DATE = [
 	'today',
-	'tomorrow',
-	'tmrw?',
+	'(?:the\\s+)?day\\s+after\\s+tomorrow',
+	TOMORROW,
+	'tonight|tonite',
+	`this\\s+${PART_OF_DAY}`,
+	'(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?(?:week|month|year)',
+	`${COUNT}\\s+(?:days?|weeks?|months?)\\s+from\\s+(?:now|today|tomorrow)`,
 	`(?:next|this)\\s+${WEEKDAY}`,
 	WEEKDAY,
 	'next\\s+week',
@@ -98,10 +119,12 @@ const DATE = [
 	`${MONTH}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?`,
 	`\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH}(?:\\s+\\d{4})?`,
 	'\\d{4}-\\d{2}-\\d{2}',
+	'\\d{1,2}/\\d{1,2}(?:/\\d{2}(?:\\d{2})?)?',
+	`(?:the\\s+)?${ORDINAL_DAY}`,
 ].join('|');
-const CLOCK12 = '\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)';
+const CLOCK12 = '\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?m\\.?|[ap])';
 const CLOCK24 = '\\d{1,2}:\\d{2}';
-const RANGE = `\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?\\s*(?:-|–|to)\\s*${CLOCK12}|${CLOCK24}\\s*(?:-|–|to)\\s*${CLOCK24}`;
+const RANGE = `\\d{1,2}(?::\\d{2})?\\s*(?:[ap]\\.?m\\.?)?\\s*(?:-|–|to)\\s*${CLOCK12}|${CLOCK24}\\s*(?:-|–|to)\\s*${CLOCK24}`;
 const TIME = `${RANGE}|${CLOCK12}|${CLOCK24}|noon|midnight`;
 
 /** Whole words only: not inside another word, a #tag or a number. */
@@ -109,6 +132,8 @@ const word = (body: string) => new RegExp(`(?<![\\w#:@-])(?:${body})(?![\\w])`, 
 
 /** The weekday index (0 = Sunday) a word names. */
 function weekdayIndex(text: string): number {
+	// Whole weekday words only: "month" isn't "mon".
+	if (!new RegExp(`^${WEEKDAY}$`, 'i').test(text)) return -1;
 	return WEEKDAYS.indexOf(text.slice(0, 3).toLowerCase());
 }
 
@@ -138,8 +163,34 @@ function count(text: string): number {
 /** A date phrase as `YYYY-MM-DD`, or null if it isn't one after all. */
 function readDate(phrase: string, today: string): string | null {
 	const p = phrase.toLowerCase().replace(/\s+/g, ' ').trim();
-	if (p === 'today') return today;
-	if (/^(tomorrow|tmrw?)$/.test(p)) return addDays(today, 1);
+	if (p === 'today' || /^(tonight|tonite|this (morning|afternoon|evening|night))$/.test(p))
+		return today;
+	if (/^(tomorrow|tmrw?|tomo|tom|2moro|2morrow)$/.test(p)) return addDays(today, 1);
+	if (/^(the )?day after tomorrow$/.test(p)) return addDays(today, 2);
+	let e = /^(?:the )?end of (?:the )?(week|month|year)$/.exec(p);
+	if (e) {
+		if (e[1] === 'week') return onOrAfter(today, 5);
+		if (e[1] === 'year') return `${today.slice(0, 4)}-12-31`;
+		return addDays(addMonths(today, 1).slice(0, 8) + '01', -1);
+	}
+	e = /^(\S+) (day|week|month)s? from (now|today|tomorrow)$/.exec(p);
+	if (e) {
+		const base = e[3] === 'tomorrow' ? addDays(today, 1) : today;
+		const n = count(e[1]!);
+		return e[2] === 'month' ? addMonths(base, n) : addDays(base, e[2] === 'week' ? n * 7 : n);
+	}
+	e = /^(?:the )?(\d{1,2})(?:st|nd|rd|th)$/.exec(p);
+	if (e) return nextDayOfMonth(today, Number(e[1]));
+	e = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/.exec(p);
+	if (e) {
+		// Month first, as people write it in the US; day first when it can't be a month.
+		let [month, day] = [Number(e[1]), Number(e[2])];
+		if (month > 12) [month, day] = [day, month];
+		const year = e[3] ? Number(e[3].length === 2 ? `20${e[3]}` : e[3]) : Number(today.slice(0, 4));
+		let iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+		if (!e[3] && iso < today) iso = `${year + 1}${iso.slice(4)}`;
+		return isRealDate(iso) ? iso : null;
+	}
 	if (p === 'next week') return onOrAfter(addDays(today, 1), 1);
 	if (/^(this )?weekend$/.test(p)) return weekday(today) === 6 ? today : onOrAfter(today, 6);
 	if (p === 'next month') return addMonths(today, 1).slice(0, 8) + '01';
@@ -175,6 +226,17 @@ function readDate(phrase: string, today: string): string | null {
 	return null;
 }
 
+/** The next day-of-month `day` on or after today (skipping months too short for it). */
+function nextDayOfMonth(today: string, day: number): string | null {
+	if (day < 1 || day > 31) return null;
+	for (let k = 0; k < 13; k += 1) {
+		const month = addMonths(today.slice(0, 8) + '01', k);
+		const iso = `${month.slice(0, 8)}${String(day).padStart(2, '0')}`;
+		if (isRealDate(iso) && iso >= today) return iso;
+	}
+	return null;
+}
+
 function isRealDate(iso: string): boolean {
 	const d = new Date(`${iso}T12:00:00Z`);
 	return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
@@ -182,7 +244,10 @@ function isRealDate(iso: string): boolean {
 
 /** `3pm`, `15:00`, `noon` → `HH:MM`; `fallback` gives a missing am/pm. */
 function readClock(text: string, fallback?: 'am' | 'pm'): string | null {
-	const t = text.toLowerCase().replace(/\s+/g, '');
+	const t = text
+		.toLowerCase()
+		.replace(/\s+|\./g, '')
+		.replace(/([ap])$/, '$1m');
 	if (t === 'noon') return '12:00';
 	if (t === 'midnight') return '00:00';
 	const m = /^(\d{1,2})(?::(\d{2}))?(am|pm)?$/.exec(t);
@@ -215,19 +280,65 @@ function readTime(phrase: string): { time: string; endTime: string | null } | nu
 	return time ? { time, endTime: null } : null;
 }
 
-/** A repeat phrase → an org repeater and, for "every monday", the day it starts. */
-function readRepeat(phrase: string, today: string): { repeater: string; date?: string } | null {
+/** When "tomorrow morning" and the like start. */
+const PART_TIMES: Record<string, string> = {
+	morning: '09:00',
+	afternoon: '14:00',
+	evening: '18:00',
+	night: '20:00',
+};
+
+const NTH_NUMBER: Record<string, number> = {
+	first: 1,
+	'1st': 1,
+	second: 2,
+	'2nd': 2,
+	third: 3,
+	'3rd': 3,
+	fourth: 4,
+	'4th': 4,
+	fifth: 5,
+	'5th': 5,
+	last: -1,
+};
+
+/**
+ * A repeat phrase → an org repeater and the day it starts ("every monday",
+ * "every 1st"), or a diary sexp for what no repeater can say ("every third
+ * friday": `diary-float`, which org's agenda reads).
+ */
+function readRepeat(
+	phrase: string,
+	today: string,
+): { repeater?: string; date?: string; diary?: string } | null {
 	const p = phrase.toLowerCase().replace(/\s+/g, ' ').trim();
 	const simple: Record<string, string> = {
 		daily: '+1d',
 		weekly: '+1w',
+		biweekly: '+2w',
+		fortnightly: '+2w',
+		'every fortnight': '+2w',
 		monthly: '+1m',
 		yearly: '+1y',
 		annually: '+1y',
 		'every weekday': '+1d',
 	};
 	if (simple[p]) return { repeater: simple[p] };
-	let m = /^every (other )?(?:(\S+) )?(day|week|month|year)s?$/.exec(p);
+	let m = /^(?:every|on the|the) (\w+) (\w+)(?: of (?:the|each|every) month)?$/.exec(p);
+	if (m && NTH_NUMBER[m[1]!] !== undefined && weekdayIndex(m[2]!) !== -1)
+		return { diary: `%%(diary-float t ${weekdayIndex(m[2]!)} ${NTH_NUMBER[m[1]!]})` };
+	m =
+		/^(?:every (?:month )?on the|every|monthly on the) (\d{1,2})(?:st|nd|rd|th)(?: of (?:the|each|every) month)?$/.exec(
+			p,
+		);
+	if (m) {
+		const date = nextDayOfMonth(today, Number(m[1]));
+		return date ? { repeater: '+1m', date } : null;
+	}
+	m = /^every other (\w+)$/.exec(p);
+	if (m && weekdayIndex(m[1]!) !== -1)
+		return { repeater: '+2w', date: onOrAfter(today, weekdayIndex(m[1]!)) };
+	m = /^every (other )?(?:(\S+) )?(day|week|month|year)s?$/.exec(p);
 	if (m) {
 		const n = m[1] ? 2 : m[2] ? count(m[2]) : 1;
 		return { repeater: `+${n}${m[3]![0]}` };
@@ -271,11 +382,16 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 		scheduled: null,
 		deadline: null,
 		repeater: null,
+		diary: null,
 		effort: null,
 		parts,
 	};
 	let scheduledDate: string | null = null;
 	let scheduledTime: { time: string; endTime: string | null } | null = null;
+	/** A time from a part of the day ("tomorrow evening"), if no clock time is given. */
+	let partTime: string | null = null;
+	/** A clock time right after `at` (so "sat 1pm" is a day, "I sat down" isn't). */
+	const timeFollows = (at: number) => /^\s+(?:at\s+)?\d/.test(text.slice(at));
 
 	// Quoted words are literal: claimed, kept in the title (without quotes).
 	const literal = new Set<number>();
@@ -362,40 +478,80 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 	);
 	scan(
 		word(
-			`every\\s+(?:other\\s+)?(?:${COUNT}\\s+)?(?:days?|weeks?|months?|years?)|every\\s+${WEEKDAY}|every\\s+weekday|daily|weekly|monthly|yearly|annually`,
+			[
+				`every\\s+${NTH}\\s+${WEEKDAY}(?:\\s+of\\s+(?:the|each|every)\\s+month)?`,
+				`(?:on\\s+)?the\\s+${NTH}\\s+${WEEKDAY}\\s+of\\s+(?:each|every)\\s+month`,
+				`(?:every\\s+(?:month\\s+)?on\\s+the|every|monthly\\s+on\\s+the)\\s+${ORDINAL_DAY}(?:\\s+of\\s+(?:the|each|every)\\s+month)?`,
+				`every\\s+other\\s+${WEEKDAY}`,
+				'biweekly|fortnightly|every\\s+fortnight',
+				`every\\s+(?:other\\s+)?(?:${COUNT}\\s+)?(?:days?|weeks?|months?|years?)`,
+				`every\\s+${WEEKDAY}`,
+				'every\\s+weekday|daily|weekly|monthly|yearly|annually',
+			].join('|'),
 		),
 		'repeat',
 		(m) => {
-			if (result.repeater) return false;
-			const r = readRepeat(m[0], today);
+			if (result.repeater || result.diary) return false;
+			const r = readRepeat(m[0].replace(/^on\s+/i, ''), today);
 			if (!r) return false;
-			result.repeater = r.repeater;
+			if (r.diary) result.diary = r.diary;
+			if (r.repeater) result.repeater = r.repeater;
 			if (r.date && !scheduledDate) scheduledDate = r.date;
 			return true;
 		},
 	);
-	scan(word(`(?:on\\s+)?(?:${DATE})`), 'date', (m) => {
+	scan(word(`(?:on\\s+)?(?:${DATE})(?:\\s+${PART_OF_DAY})?`), 'date', (m) => {
 		if (scheduledDate && parts.some((p) => p.kind === 'date')) return false;
-		const date = readDate(m[0].replace(/^on\s+/i, ''), today);
+		let phrase = m[0].replace(/^on\s+/i, '');
+		const part = new RegExp(`\\s+(${PART_OF_DAY})$`, 'i').exec(phrase);
+		if (part && !/^this\s/i.test(phrase)) phrase = phrase.slice(0, part.index);
+		const bare = phrase.trim();
+		// "Tom" is a name; only "tom" is tomorrow.
+		if (/^tom$/i.test(bare) && bare !== 'tom') return false;
+		// "sat", "sun" and "wed" are words too: a day only after "on" or before a time.
+		if (
+			/^(sun|sat|wed)$/i.test(bare) &&
+			!/^on\s/i.test(m[0]) &&
+			!timeFollows(m.index! + m[0].length)
+		)
+			return false;
+		const date = readDate(phrase, today);
 		if (!date) return false;
 		scheduledDate = date;
+		const partWord = part?.[1] ?? (/^(?:tonight|tonite)$/i.test(bare) ? 'night' : null);
+		if (partWord) partTime = PART_TIMES[partWord.toLowerCase()] ?? null;
 		return true;
 	});
-	scan(word(`(?:at\\s+|from\\s+)?(?:${TIME})`), 'time', (m) => {
+	scan(word(`(?:at\\s+|from\\s+)?(?:${TIME})|at\\s+\\d{1,2}`), 'time', (m) => {
 		if (scheduledTime) return false;
+		// "at 3": the afternoon for 1–7, the morning for 8–11, as people mean it.
+		const bare = /^at\s+(\d{1,2})$/i.exec(m[0]);
+		if (bare) {
+			let h = Number(bare[1]);
+			if (h >= 1 && h <= 7) h += 12;
+			if (h > 23) return false;
+			scheduledTime = { time: `${String(h).padStart(2, '0')}:00`, endTime: null };
+			return true;
+		}
 		const t = readTime(m[0].replace(/^(?:at|from)\s+/i, ''));
 		if (!t) return false;
 		scheduledTime = t;
 		return true;
 	});
 
-	if (scheduledDate || scheduledTime || (result.repeater && !result.deadline)) {
+	// Set inside the scans' callbacks, which TypeScript doesn't follow.
+	const found =
+		(scheduledTime as { time: string; endTime: string | null } | null) ??
+		(partTime ? { time: partTime as string, endTime: null } : null);
+	let atStart = '';
+	if (result.diary) {
+		// Org's agenda takes a diary entry's time from its heading.
+		if (found) atStart = `${found.time}${found.endTime ? `-${found.endTime}` : ''} `;
+		if (scheduledDate) result.scheduled = { date: scheduledDate, time: null, endTime: null };
+	} else if (scheduledDate || found || (result.repeater && !result.deadline)) {
 		// A time alone is today's; a repeat alone starts today.
-		const date = scheduledDate ?? today;
-		// Set inside the scans' callbacks, which TypeScript doesn't follow.
-		const found = scheduledTime as { time: string; endTime: string | null } | null;
 		result.scheduled = {
-			date,
+			date: scheduledDate ?? today,
 			time: found?.time ?? null,
 			endTime: found?.endTime ?? null,
 		};
@@ -418,11 +574,13 @@ export function parseQuickAdd(text: string, options: QuickAddOptions): QuickAdd 
 		}
 		title += text[i];
 	}
-	result.title = title
-		.replace(/\s+/g, ' ')
-		.replace(/\s+([,.;:!?])/g, '$1')
-		.replace(/^[\s,;:-]+|[\s,;:-]+$/g, '')
-		.trim();
+	result.title =
+		atStart +
+		title
+			.replace(/\s+/g, ' ')
+			.replace(/\s+([,.;:!?])/g, '$1')
+			.replace(/^[\s,;:-]+|[\s,;:-]+$/g, '')
+			.trim();
 	parts.sort((a, b) => a.from - b.from);
 	return result;
 }
@@ -457,6 +615,20 @@ export function describeQuickPart(part: QuickPart, q: QuickAdd, today: string): 
 		case 'deadline':
 			return q.deadline ? `Due ${when(q.deadline)}` : part.text;
 		case 'repeat': {
+			const f = /diary-float t (\d) (-?\d)\)/.exec(q.diary ?? '');
+			if (f) {
+				const nth = ['last', '', 'first', 'second', 'third', 'fourth', 'fifth'][Number(f[2]) + 1];
+				const dayName = [
+					'Sunday',
+					'Monday',
+					'Tuesday',
+					'Wednesday',
+					'Thursday',
+					'Friday',
+					'Saturday',
+				][Number(f[1])];
+				return `Every ${nth} ${dayName} of the month`;
+			}
 			const m = /^\+(\d+)([dwmy])$/.exec(q.repeater ?? '');
 			const unit = { d: 'day', w: 'week', m: 'month', y: 'year' }[m?.[2] as 'd'] ?? '';
 			return m ? `Repeats every ${m[1] === '1' ? unit : `${m[1]} ${unit}s`}` : part.text;
@@ -511,13 +683,18 @@ export function applyQuickAdd(
 		makeTimestamp({ date: w.date, time: w.time, endTime: w.endTime, repeater, active: true });
 	if (q.scheduled)
 		edit((src) => setPlanning(src, 0, 'SCHEDULED', stamp(q.scheduled!, q.repeater), config));
-	else if (q.deadline && /SCHEDULED:/.test(s))
+	else if ((q.deadline || q.diary) && /SCHEDULED:/.test(s))
 		// Due a day, with no day to start: the template's "scheduled today" goes.
 		edit((src) => setPlanning(src, 0, 'SCHEDULED', null, config));
 	if (q.deadline)
 		edit((src) =>
 			setPlanning(src, 0, 'DEADLINE', stamp(q.deadline!, q.scheduled ? null : q.repeater), config),
 		);
+	// A diary repeat goes in the entry's text, a line of its own, where org's agenda reads it.
+	if (q.diary) {
+		const raw = `<${q.diary}>`;
+		edit((src) => addSession(src, 0, { raw } as OrgTimestamp, config));
+	}
 	if (q.effort !== null && getProperty(s, 0, 'Effort', config) === null) {
 		const e = q.effort;
 		edit((src) =>

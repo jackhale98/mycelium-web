@@ -1,6 +1,8 @@
 import {
 	addDays,
 	appointmentsIn,
+	floatDates,
+	headingTime,
 	dayNameFor,
 	getProperties,
 	isHabit,
@@ -174,7 +176,13 @@ export function agendaDays(
 				node: (h.ownerId && vault.nodes.get(h.ownerId)) || null,
 			};
 			if (!keep(item) || vault.isDone(item.todo, item.file)) continue;
-			for (const { timestamp: ts, until } of list) {
+			for (const { timestamp: ts, until, float } of list) {
+				// A diary-float (every third Friday): each day it falls on, as org's agenda shows it.
+				if (float) {
+					const time = ts.time ?? headingTime(item.title)?.time ?? null;
+					for (const date of floatDates(float, start, end)) place(item, date, time);
+					continue;
+				}
 				if (until) {
 					const from = ts.date > start ? ts.date : start;
 					for (let d = from; d <= end && d <= until; d = addDays(d, 1))

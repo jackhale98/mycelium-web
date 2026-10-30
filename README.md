@@ -67,9 +67,13 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   share sheet: a shared page arrives as an org link, ready to capture.
 - **Quick add in plain language:** "Call Sam tomorrow 3pm #work !A every
   week ~30m" becomes a TODO with its SCHEDULED time and repeater, tags,
-  priority and Effort. What it understood shows as chips (tap × to keep
-  words as they are); it works in the agenda's "Add a task…" field and any
-  capture template set to read it.
+  priority and Effort. It reads shorthand and loose dates ("tom", "the
+  13th", "11/20", "end of month", "3 days from now", "tomorrow evening",
+  "at 3"), and repeats org can't write as a repeater ("every third Friday",
+  "the last Monday of each month") as org diary sexps, which org's agenda and
+  Mycelium's both show on the right days. What it understood shows as chips
+  (tap × to keep words as they are); it works in the agenda's "Add a task…"
+  field and any capture template set to read it.
 - **Inbox triage and weekly review:** the inbox (a file, `inbox.org` by
   default) is processed one card at a time: done, schedule, state, refile,
   delete (with undo) or later, by tap, swipe or key. The weekly review walks

@@ -1,15 +1,91 @@
 /// Appointments, as org's agenda finds them: active timestamps (`<…>`) in an
 /// entry's heading or text, besides its SCHEDULED/DEADLINE line. Skipped:
 /// the planning line, drawers (properties, LOGBOOK…), and source/example
-/// blocks. A range (`<a>--<b>`) covers every day from a to b.
+/// blocks. A range (`<a>--<b>`) covers every day from a to b. Of org's diary
+/// sexps (`<%%(…)>`), `diary-float` is read: the Nth (or last) weekday of
+/// every month, or of one, with an optional time.
 
+import { addDays } from './date';
 import { readTimestamp } from './timestamp';
 import type { OrgTimestamp } from './types';
+
+/** `(diary-float MONTH DAYNAME N)`: the Nth DAYNAME (0 = Sunday) of the month; N < 0 counts from the end. */
+export interface DiaryFloat {
+	/** 1–12, or null for every month (`t`). */
+	month: number | null;
+	dayname: number;
+	n: number;
+}
 
 export interface Appointment {
 	timestamp: OrgTimestamp;
 	/** Last day of a `<a>--<b>` range (`YYYY-MM-DD`), or null. */
 	until: string | null;
+	/** A `diary-float` sexp: its days come from `floatDates` (the timestamp has no date, only a time). */
+	float?: DiaryFloat;
+}
+
+const FLOAT =
+	/<%%\(diary-float\s+(t|\d{1,2})\s+([0-6])\s+(-?[1-5])\)(?:\s+(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?)?>/g;
+
+/**
+ * A time at the start of a heading's title (`19:00 Book club`, `9:00-10:30
+ * Standup`): where org's agenda finds a diary entry's time.
+ */
+export function headingTime(title: string): { time: string; endTime: string | null } | null {
+	const m = /^(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\b/.exec(title.trim());
+	return m ? { time: m[1]!.padStart(5, '0'), endTime: m[2]?.padStart(5, '0') ?? null } : null;
+}
+
+/** The days from `start` to `end` (`YYYY-MM-DD`) a `diary-float` falls on. */
+export function floatDates(f: DiaryFloat, start: string, end: string): string[] {
+	const out: string[] = [];
+	let y = Number(start.slice(0, 4));
+	let m = Number(start.slice(5, 7));
+	for (;;) {
+		const first = `${y}-${String(m).padStart(2, '0')}-01`;
+		if (first > end) break;
+		if (f.month === null || f.month === m) {
+			const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+			const dow1 = new Date(`${first}T12:00:00Z`).getUTCDay();
+			const firstHit = 1 + ((f.dayname - dow1 + 7) % 7);
+			const hits: number[] = [];
+			for (let d = firstHit; d <= days; d += 7) hits.push(d);
+			const day = f.n > 0 ? hits[f.n - 1] : hits[hits.length + f.n];
+			if (day) {
+				const iso = addDays(first, day - 1);
+				if (iso >= start && iso <= end) out.push(iso);
+			}
+		}
+		m += 1;
+		if (m > 12) {
+			m = 1;
+			y += 1;
+		}
+	}
+	return out;
+}
+
+function floatsIn(text: string): Appointment[] {
+	const out: Appointment[] = [];
+	for (const m of text.matchAll(FLOAT)) {
+		const time = m[4] ? m[4].padStart(5, '0') : null;
+		out.push({
+			timestamp: {
+				active: true,
+				date: '',
+				dayName: null,
+				time,
+				endTime: time && m[5] ? m[5].padStart(5, '0') : null,
+				repeater: null,
+				warning: null,
+				raw: m[0],
+			},
+			until: null,
+			float: { month: m[1] === 't' ? null : Number(m[1]), dayname: Number(m[2]), n: Number(m[3]) },
+		});
+	}
+	return out;
 }
 
 const HEADLINE = /^\*+[ \t]/;
@@ -72,7 +148,7 @@ export function appointmentsIn(source: string): Map<number, Appointment[]> {
 			}
 		}
 		if (!line.includes('<')) continue;
-		const found = stampsIn(line);
+		const found = [...stampsIn(line), ...(line.includes('<%%') ? floatsIn(line) : [])];
 		if (found.length) out.set(heading, [...(out.get(heading) ?? []), ...found]);
 	}
 	return out;

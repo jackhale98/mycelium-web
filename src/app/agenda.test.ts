@@ -170,3 +170,23 @@ describe('agendaDays', () => {
 		expect(monthGrid('2026-12')).toEqual({ start: '2026-11-30', end: '2027-01-03' });
 	});
 });
+
+describe('diary-float entries (every third Friday)', () => {
+	it('show on each day they fall on, with the time from the heading', () => {
+		const v = Vault.fromSources(
+			{
+				'club.org':
+					'* TODO 19:00 Book club\n<%%(diary-float t 5 3)>\n* TODO Tidy up\nSCHEDULED: <2026-11-20 Fri 20:00>\n',
+			},
+			DEFAULT_KEYWORD_CONFIG,
+		);
+		const days = agendaDays(v, '2026-11-16', '2026-12-31', '2026-11-16');
+		const on = days.filter((d) => d.items.length).map((d) => d.date);
+		expect(on).toEqual(['2026-11-20', '2026-12-18']);
+		// Its 19:00 (from the heading) puts it before an 8 pm task that day.
+		expect(days.find((d) => d.date === '2026-11-20')!.items.map((i) => i.title)).toEqual([
+			'19:00 Book club',
+			'Tidy up',
+		]);
+	});
+});

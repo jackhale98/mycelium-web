@@ -249,6 +249,31 @@ describe.skipIf(!hasEmacs)("Emacs' org-mode reads what we write", () => {
 		expect(out).toEqual(['id|aaa-1|Suzanne Simard', 'id|bbb-2|mycelial networks']);
 	});
 
+	it("org's agenda puts 'every third friday' on the third Friday", () => {
+		const dir = mkdtempSync(join(tmpdir(), 'org-float-'));
+		const file = join(dir, 'club.org');
+		const q = parseQuickAdd('Book club every third friday 7pm', { today, keywords: kw });
+		writeFileSync(file, `#+title: club\n\n${applyQuickAdd(`* TODO ${q.title}\n`, q, kw)}`);
+		const script = join(dir, 'agenda.el');
+		writeFileSync(
+			script,
+			`(require 'org-agenda)
+(setq org-todo-keywords '((sequence "TODO" "NEXT" "|" "DONE")))
+(setq org-agenda-files (list ${JSON.stringify(file)}) org-agenda-start-on-weekday nil org-agenda-use-time-grid nil)
+(org-agenda-list nil "2026-11-19" 3)
+(princ (buffer-substring-no-properties (point-min) (point-max)))`,
+		);
+		const out = emacs(['-l', script]);
+		const days = out.split(/\n(?=\S)/).filter((d) => /^\w+day /.test(d));
+		expect(days).toHaveLength(3);
+		expect(days[0]).not.toMatch(/Book club/);
+		expect(days[1]).toMatch(/20 November 2026/);
+		expect(days[1]).toMatch(
+			/19:00\S*\s+TODO 19:00 Book club|19:00\.+ TODO Book club|TODO 19:00 Book club/,
+		);
+		expect(days[2]).not.toMatch(/Book club/);
+	});
+
 	it("org's agenda shows each session on its day", () => {
 		const dir = mkdtempSync(join(tmpdir(), 'org-agenda-'));
 		const file = join(dir, 'work.org');

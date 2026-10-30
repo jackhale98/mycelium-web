@@ -5,6 +5,8 @@
 
 import {
 	addDays,
+	floatDates,
+	headingTime,
 	sessionsOf,
 	timestampDates,
 	type KeywordConfig,
@@ -240,12 +242,21 @@ export function planDays(
 			const written = new Set(sessions.map((s) => s.timestamp.raw));
 			const others = file ? (appointmentsOf(file.path, file.source).get(item.pos) ?? []) : [];
 			for (const a of others) {
-				if (written.has(a.timestamp.raw) || !on(a.timestamp)) continue;
+				// A diary-float's time is in the sexp, or (org's way) at the start of the title.
+				const clock = a.float
+					? a.timestamp.time
+						? { time: a.timestamp.time, endTime: a.timestamp.endTime }
+						: headingTime(item.title)
+					: { time: a.timestamp.time, endTime: a.timestamp.endTime };
+				const here = a.float
+					? !!clock && floatDates(a.float, date, date).length > 0
+					: on(a.timestamp);
+				if (written.has(a.timestamp.raw) || !here || !clock?.time) continue;
 				found.push({
 					source: 'appointment',
-					start: toMinutes(a.timestamp.time!),
-					end: a.timestamp.endTime ? toMinutes(a.timestamp.endTime) : lone(a.timestamp.time!),
-					ranged: !!a.timestamp.endTime,
+					start: toMinutes(clock.time),
+					end: clock.endTime ? toMinutes(clock.endTime) : lone(clock.time),
+					ranged: !!clock.endTime,
 				});
 			}
 			if (!found.length) {
