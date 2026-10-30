@@ -260,10 +260,15 @@ export function planDays(
 				});
 			}
 			if (!found.length) {
-				if (item.todo) {
-					unplanned.push(item);
-					track(item);
-				} else allDay.push(item);
+				if (!item.todo) {
+					allDay.push(item);
+					continue;
+				}
+				const p = track(item);
+				// Already given a time on another day (here only for its deadline,
+				// say): planned, unless some of its Effort isn't yet.
+				const timed = !!item.scheduled?.time || sessions.some((s) => !!s.timestamp.time);
+				if (!timed || (p.effort && p.planned < p.effort)) unplanned.push(item);
 				continue;
 			}
 			if (item.todo) {

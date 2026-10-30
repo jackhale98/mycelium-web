@@ -143,6 +143,34 @@ describe('day planner', () => {
 		expect(twoDays.progress.get(taskKey(item))?.effort).toBe(960);
 	});
 
+	it("doesn't offer a task to plan on its deadline day once it has a time", () => {
+		const vault = Vault.fromSources(
+			{
+				'd.org': [
+					'* TODO Generate CAD estimates',
+					'SCHEDULED: <2026-10-30 Fri 13:15-14:30> DEADLINE: <2026-11-01 Sun>',
+					'* TODO Not placed yet',
+					'DEADLINE: <2026-11-01 Sun>',
+					'* TODO Long one',
+					'SCHEDULED: <2026-10-30 Fri 09:00-10:00> DEADLINE: <2026-11-01 Sun>',
+					':PROPERTIES:',
+					':Effort:   3:00',
+					':END:',
+					'',
+				].join('\n'),
+			},
+			kw,
+		);
+		const week = ['2026-10-30', '2026-10-31', '2026-11-01'];
+		const [fri, , sun] = planDays(vault, week, '2026-10-30');
+		expect(fri!.blocks.map((b) => b.item.title).sort()).toEqual([
+			'Generate CAD estimates',
+			'Long one',
+		]);
+		// Sunday: the one with no time yet, and the one with Effort left; not the placed one.
+		expect(sun!.unplanned.map((i) => i.title).sort()).toEqual(['Long one', 'Not placed yet']);
+	});
+
 	it('fills the rest of an estimate into free working time', () => {
 		const busy: Record<string, { start: number; end: number }[]> = {
 			'2026-10-29': [{ start: 600, end: 720 }], // 10:00-12:00 taken

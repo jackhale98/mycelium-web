@@ -214,11 +214,7 @@
 	);
 </script>
 
-<div
-	class="agenda-page"
-	class:fit={mode === 'month'}
-	class:wide={mode === 'month' || mode === 'board' || mode === 'day'}
->
+<div class="agenda-page" class:fit={mode === 'month'}>
 	<header>
 		<p class="eyebrow">{longDate(today)}</p>
 		<h1>Agenda</h1>
@@ -255,7 +251,7 @@
 			>
 		</p>
 	{/if}
-	{#if mode === 'list' || mode === 'day'}<QuickAddBar />{/if}
+	{#if mode !== 'stuck'}<QuickAddBar />{/if}
 	{#if mode === 'stuck'}
 		<section class="group" aria-labelledby="ag-stuck">
 			<h2 id="ag-stuck">Stuck projects<span class="count">{stuck.items.length}</span></h2>
@@ -432,10 +428,10 @@
 	.day.past h2 {
 		color: var(--text-muted);
 	}
+	/* Every view takes the full width, so switching views never resizes the page. */
 	.agenda-page {
-		max-width: 52rem;
 		margin: 0 auto;
-		padding: 3.25rem 3rem 6rem;
+		padding: 3.25rem 2.5rem 6rem;
 	}
 	.eyebrow {
 		margin: 0 0 0.35rem;
@@ -479,16 +475,11 @@
 		letter-spacing: 0;
 	}
 	/* The month and the board use the whole width (and the month the height). */
-	.agenda-page.wide {
-		max-width: none;
-		padding-inline: 2.5rem;
-	}
 	.agenda-page.fit {
 		padding-bottom: 0;
 	}
 	@media (max-width: 720px) {
-		.agenda-page,
-		.agenda-page.wide {
+		.agenda-page {
 			padding: 1.75rem 1rem 6rem;
 		}
 		/* The month fits the screen; its day drawer holds the rest. */

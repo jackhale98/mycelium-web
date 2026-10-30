@@ -61,15 +61,42 @@ test('toggling a checkbox updates the progress cookie', async ({ page, isMobile 
 
 test('completing a task stamps CLOSED', async ({ page }) => {
 	await open(page, `app#/node/${PROJECT}`);
+	// The keyword opens a menu of every state, the current one checked.
 	await page
 		.getByRole('button', { name: /^TODO\. Change task state/ })
 		.first()
 		.click();
-	await page
-		.getByRole('button', { name: /^NEXT\. Change task state/ })
-		.last()
-		.click();
+	const menu = page.getByRole('menu', { name: 'Task state' });
+	await expect(menu.getByRole('menuitemradio', { name: 'TODO' })).toHaveAttribute(
+		'aria-checked',
+		'true',
+	);
+	await expect(menu.getByRole('menuitemradio')).toHaveText(['TODO', 'NEXT', 'DONE', 'No state']);
+	await menu.getByRole('menuitemradio', { name: 'DONE' }).click();
+	await expect(menu).toBeHidden();
 	await expect(page.getByText(/^Closed /)).toBeVisible();
+});
+
+test('the agenda keyword menu: Escape closes it unchanged, a pick sets the state', async ({
+	page,
+}) => {
+	await open(page, 'app#/agenda');
+	await page
+		.getByRole('radiogroup', { name: 'Agenda view' })
+		.getByRole('radio', { name: 'List' })
+		.click();
+	const row = page.locator('.agenda .item', { hasText: 'Plan the week' });
+	const chip = row.getByRole('button', { name: /^TODO\. Change task state/ });
+	await chip.click();
+	const menu = page.getByRole('menu', { name: 'Task state' });
+	await expect(menu.getByRole('menuitemradio', { name: 'TODO' })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(menu).toBeHidden();
+	await expect(chip).toBeVisible();
+	await chip.click();
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	await expect(row.getByRole('button', { name: /^NEXT\. Change task state/ })).toBeVisible();
 });
 
 test('search finds notes by alias', async ({ page, isMobile }) => {

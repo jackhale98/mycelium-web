@@ -40,6 +40,7 @@ test('open a folder, edit a note and see it written to disk', async ({ page }) =
 	await page.goto('app#/node/g1');
 	await expect(page.getByRole('heading', { level: 1, name: 'Garden' })).toBeVisible();
 	await page.getByRole('button', { name: /^TODO\. Change task state/ }).click();
+	await page.getByRole('menuitemradio', { name: 'DONE' }).click();
 
 	const read = () =>
 		page.evaluate(async () => {

@@ -519,8 +519,10 @@
 		align-items: center;
 		gap: 0.4rem;
 	}
+	/* The full width, like the agenda: long lines in diffs need it. */
 	.wide {
-		max-width: 56rem;
+		max-width: none;
+		padding-inline: 2.5rem;
 	}
 	.bar .row {
 		gap: 0.75rem;
