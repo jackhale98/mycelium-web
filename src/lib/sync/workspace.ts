@@ -3,7 +3,7 @@
 /// and edits offline; `sync()` exchanges changes with the service, merging
 /// edits made on other devices.
 
-import { scanFile } from '$lib/org';
+import { INDEX_VERSION, scanFile } from '$lib/org';
 import {
 	db,
 	fileKey,
@@ -164,13 +164,23 @@ export class CloudWorkspace {
 		const fresh: CachedFile[] = [];
 		for (const f of cached) {
 			if (!inVault(this.record.layout, f.path)) continue;
-			if (!f.index) {
+			if (!f.index || f.indexVersion !== INDEX_VERSION) {
 				const index = scanFile(f.path, f.source, this.record.keywords);
-				fresh.push({ ...f, index });
+				fresh.push({ ...f, index, indexVersion: INDEX_VERSION });
 				out.push({ path: f.path, source: f.source, index });
 			} else out.push({ path: f.path, source: f.source, index: f.index });
 		}
-		if (fresh.length) await db().files.bulkPut(fresh);
+		// Here the stored text is the vault's copy itself: store just the new
+		// index, and only where the text is still what was indexed (another tab
+		// may have saved since it was read).
+		if (fresh.length)
+			await db().transaction('rw', db().files, async () => {
+				for (const f of fresh) {
+					const now = await db().files.get(f.key);
+					if (now?.source === f.source)
+						await db().files.update(f.key, { index: f.index, indexVersion: INDEX_VERSION });
+				}
+			});
 		return out;
 	}
 
@@ -198,6 +208,7 @@ export class CloudWorkspace {
 						oid: '',
 						source: c.source,
 						index: c.file?.index ?? scanFile(c.path, c.source, this.record.keywords),
+						indexVersion: INDEX_VERSION,
 					});
 			}
 		});

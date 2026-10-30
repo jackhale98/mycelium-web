@@ -215,6 +215,20 @@
 				<a href={href.vaults()}>Manage vaults</a>
 			</div>
 		{/if}
+		{#if app.follower}
+			{#key app.tabRefused}
+				<div class="tab-banner" class:refused={app.tabRefused > 0} role="status">
+					<span
+						>{app.tabRefused
+							? 'Changes can’t be made here while another tab is editing this vault.'
+							: 'This vault is being edited in another tab; its changes show here as they’re saved.'}</span
+					>
+					<button type="button" class="btn small primary" onclick={() => app.editHere()}
+						>Edit here</button
+					>
+				</div>
+			{/key}
+		{/if}
 		{#if app.demo && router.route.name !== 'vaults'}
 			<div class="demo-banner" role="note">
 				<Icon name="zap" size={14} />
@@ -364,6 +378,39 @@
 	.access span {
 		flex: 1;
 		min-width: 12rem;
+	}
+	.tab-banner {
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem 0.75rem;
+		padding: 0.45rem 1rem;
+		border-bottom: 1px solid var(--border);
+		background: var(--surface-2);
+		font-size: 0.82rem;
+		font-weight: 550;
+		text-align: center;
+	}
+	.tab-banner.refused {
+		animation: tab-nudge 0.5s ease;
+		background: var(--accent-soft);
+	}
+	@keyframes tab-nudge {
+		25% {
+			transform: translateX(-4px);
+		}
+		75% {
+			transform: translateX(4px);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.tab-banner.refused {
+			animation: none;
+		}
 	}
 	.demo-banner a {
 		color: inherit;

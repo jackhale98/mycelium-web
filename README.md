@@ -102,6 +102,10 @@ Successor to the Tauri app [jackhale98/mycelium](https://github.com/jackhale98/m
   it can't read them, with no account.
 - **Works offline:** after your first visit the app opens with no connection;
   git commits wait for you to push, and cloud edits upload when you're back.
+- **Several tabs, one editor:** with a vault open in more than one tab (or the
+  installed app and a tab), the one opened last edits it and the others
+  follow along read-only, showing its changes as they're saved, until you
+  choose "Edit here", so two tabs never overwrite each other's work.
 - **Local folders** (Chrome, Edge and friends on desktop): edit an org-roam
   directory in place and commit with your own tools.
 

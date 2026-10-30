@@ -125,6 +125,8 @@ export interface CachedFile {
 	oid: string;
 	source: string;
 	index: FileIndex;
+	/** The `INDEX_VERSION` that made `index`; an index from another version is made again. */
+	indexVersion?: number;
 }
 
 /** A binary file fetched from a cloud vault (an image, an attachment), kept for offline use. */

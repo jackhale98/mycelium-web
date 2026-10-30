@@ -92,6 +92,7 @@ import { Vault } from '$lib/vault/vault';
 import { fromMinutes } from './planner';
 import { demoDay, demoSources } from './demo';
 import { href } from './router.svelte';
+import { TabLink, type TabMessage } from './tabs';
 import { slugify } from './util';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -301,7 +302,91 @@ class AppState {
 		return panes.focused.editing;
 	}
 	set editing(on: boolean) {
+		if (on && !this.#leading()) return;
 		panes.focused.editing = on;
+	}
+
+	// ------------------------------------------------------------------ other tabs
+
+	/**
+	 * Another tab is editing this vault: this one shows its changes as they're
+	 * saved, and doesn't write until "Edit here" (see tabs.ts).
+	 */
+	follower = $state(false);
+	/** When something here was refused because another tab edits the vault (for a notice). */
+	tabRefused = $state(0);
+	#tabs: TabLink | null = null;
+	#followTimer: ReturnType<typeof setTimeout> | null = null;
+	#followSince = 0;
+
+	/** May this tab write to the vault? If not, say why (a notice with "Edit here"). */
+	#leading(): boolean {
+		if (!this.follower) return true;
+		this.tabRefused = Date.now();
+		return false;
+	}
+
+	/** Tell other tabs on this vault that it changed. */
+	#announce() {
+		if (this.activeId) this.#tabs?.changed(this.activeId);
+	}
+
+	#onTab(message: TabMessage) {
+		if (message.vault !== this.activeId) return;
+		if (message.type === 'claim' && !this.follower) {
+			this.follower = true;
+			this.tabRefused = 0;
+			panes.stopEditing();
+			if (this.#cloudTimer) clearTimeout(this.#cloudTimer);
+		}
+		// Reload a moment after the last change (and at least every two seconds while
+		// they keep coming), so a burst of saves is read once.
+		if (message.type === 'changed') {
+			const now = Date.now();
+			if (!this.#followTimer) this.#followSince = now;
+			if (this.#followTimer) clearTimeout(this.#followTimer);
+			const wait = Math.max(0, Math.min(400, this.#followSince + 2000 - now));
+			this.#followTimer = setTimeout(() => {
+				this.#followTimer = null;
+				void this.#reloadFromStorage();
+			}, wait);
+		}
+	}
+
+	/** Read the open vault again from this browser's storage (what the editing tab saved). */
+	async #reloadFromStorage(options: { claim?: boolean } = {}) {
+		const id = this.activeId;
+		if (!id) return;
+		const { db } = await import('$lib/store/db');
+		const record = await db().vaults.get(id);
+		if (!record || this.activeId !== id) return;
+		this.vaults = this.vaults.map((v) => (v.id === id ? record : v));
+		let ws: Workspace | FolderWorkspace | CloudWorkspace;
+		if (record.kind === 'cloud') {
+			const [{ CloudWorkspace }, { CLOUD_CONFIG }] = await Promise.all([
+				import('$lib/sync/workspace'),
+				import('./config'),
+			]);
+			ws = CloudWorkspace.open(record, CLOUD_CONFIG);
+		} else if (record.kind === 'folder') {
+			const { FolderWorkspace } = await import('$lib/vault/folder');
+			ws = await FolderWorkspace.open(record);
+			if ((await ws.permission()) !== 'granted') return;
+		} else {
+			const { Workspace } = await import('$lib/git/workspace');
+			ws = Workspace.open(record);
+			ws.passive = !options.claim;
+		}
+		await this.#activate(ws, { quiet: true, claim: !!options.claim });
+	}
+
+	/** "Edit here": take the vault over from the other tab, reading its latest first. */
+	async editHere() {
+		if (!this.follower || !this.activeId) return;
+		// Claim first, so the other tab stops writing; then read what it saved.
+		this.#tabs?.claim(this.activeId);
+		this.follower = false;
+		await this.#reloadFromStorage({ claim: true });
 	}
 	/** Where the editor should put the cursor when it next opens (a heading's offset). */
 	editAt = $state<number | null>(null);
@@ -453,6 +538,7 @@ class AppState {
 
 	/** Restore the last-used vault (the demo by default). */
 	async init() {
+		if (typeof window !== 'undefined') this.#tabs ??= new TabLink((m) => this.#onTab(m));
 		try {
 			const { db } = await import('$lib/store/db');
 			this.vaults = await db().vaults.toArray();
@@ -774,7 +860,7 @@ class AppState {
 
 	async #activate(
 		ws: Workspace | FolderWorkspace | CloudWorkspace,
-		options: { quiet?: boolean } = {},
+		options: { quiet?: boolean; claim?: boolean } = {},
 	) {
 		// Vaults saved with the public test proxy move to this site's own worker, so
 		// their tokens no longer pass through a third party.
@@ -806,8 +892,14 @@ class AppState {
 		this.sync = { kind: 'idle' };
 		writeLocal(ACTIVE_KEY, ws.record.id);
 		this.rev += 1;
+		// Opening a vault (not just reading it again for another tab) makes this the
+		// tab that edits it.
+		if (options.claim !== false) {
+			this.follower = false;
+			this.#tabs?.claim(ws.record.id);
+		}
 		await this.refreshGit();
-		if (ws.kind === 'cloud') this.#queueCloudSync(0);
+		if (ws.kind === 'cloud' && !this.follower) this.#queueCloudSync(0);
 	}
 
 	async updateVault(patch: Partial<VaultRecord>) {
@@ -815,12 +907,13 @@ class AppState {
 		// rather than dropping the change.
 		if (!this.#ws && this.#demoReady) await this.#demoReady;
 		const ws = this.#ws;
-		if (!ws) return;
+		if (!ws || !this.#leading()) return;
 		await ws.updateRecord(patch);
 		this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
 		if (patch.keywords) await ws.clearCache();
 		if (patch.layout || patch.keywords) await this.openVault(ws.record.id);
 		if (patch.log) this.logSettings = { ...this.logSettings, ...patch.log };
+		this.#announce();
 	}
 
 	/** Save, rename or delete named agenda views for the open vault. */
@@ -872,6 +965,7 @@ class AppState {
 	 * tree in the background (and commit, if the vault auto-commits).
 	 */
 	#write(path: string, text: string | null, message: string, options: { inVault?: boolean } = {}) {
+		if (!this.#leading()) return;
 		// Files beside the notes (archives) are saved but not indexed as notes.
 		const [file] = options.inVault === false ? [] : this.vault.apply([{ path, source: text }]);
 		this.#edits += 1;
@@ -894,6 +988,7 @@ class AppState {
 			.then(async () => {
 				await ws.save([{ path, source: text, ...(file ? { file } : {}) }]);
 				if (ws.kind === 'git' && ws.record.autoCommit) await ws.commit([path], message);
+				this.#announce();
 				if (ws.kind === 'cloud') {
 					this.#cloudQuiet = 0;
 					this.cloudSync = { ...this.cloudSync, pending: ws.pending.length };
@@ -1288,7 +1383,9 @@ class AppState {
 		if (this.#demoReady) await this.#demoReady;
 		const ws = this.#ws;
 		if (!ws) throw new Error('This vault can’t store pictures here.');
+		if (!this.#leading()) throw new Error('This vault is being edited in another tab.');
 		await ws.writeBytes(path, bytes);
+		this.#announce();
 		this.rev += 1;
 		this.#scheduleStatus();
 		return imageLink(note, path);
@@ -1979,9 +2076,10 @@ class AppState {
 
 	async commit(paths: string[], message: string): Promise<boolean> {
 		const ws = this.workspace;
-		if (!ws || !message.trim() || paths.length === 0) return false;
+		if (!ws || !message.trim() || paths.length === 0 || !this.#leading()) return false;
 		await this.flush();
 		await ws.commit(paths, message.trim());
+		this.#announce();
 		await this.refreshGit();
 		this.sync = {
 			kind: 'done',
@@ -1992,9 +2090,10 @@ class AppState {
 
 	async discard(path: string) {
 		const ws = this.workspace;
-		if (!ws) return;
+		if (!ws || !this.#leading()) return;
 		await this.flush();
 		const text = await ws.discard(path);
+		this.#announce();
 		const [file] = this.vault.apply([{ path, source: text }]);
 		await ws.cache([{ path, source: text, ...(file ? { file } : {}) }]);
 		this.rev += 1;
@@ -2003,7 +2102,7 @@ class AppState {
 
 	async #run<T>(phase: string, task: (ws: Workspace) => Promise<T>): Promise<T | undefined> {
 		const ws = this.workspace;
-		if (!ws || this.sync.kind === 'busy') return undefined;
+		if (!ws || this.sync.kind === 'busy' || !this.#leading()) return undefined;
 		this.sync = { kind: 'busy', phase };
 		try {
 			await this.flush();
@@ -2021,6 +2120,7 @@ class AppState {
 			return undefined;
 		} finally {
 			if (this.sync.kind === 'busy') this.sync = { kind: 'idle' };
+			this.#announce();
 			await this.refreshGit().catch(() => undefined);
 			this.vaults = this.vaults.map((v) => (v.id === ws.record.id ? { ...ws.record } : v));
 		}
@@ -2146,6 +2246,8 @@ class AppState {
 	/** Sync the cloud vault soon (edits are batched; `0`: now). */
 	#queueCloudSync(delay: number) {
 		if (this.#cloudTimer) clearTimeout(this.#cloudTimer);
+		// The tab editing the vault syncs it; the others just follow.
+		if (this.follower) return;
 		this.#cloudTimer = setTimeout(() => {
 			this.#cloudTimer = null;
 			void this.syncCloud({ auto: true });
@@ -2167,6 +2269,10 @@ class AppState {
 	async syncCloud(options: CloudSyncOptions = {}): Promise<void> {
 		const ws = this.cloud;
 		if (!ws) return;
+		if (this.follower) {
+			if (!options.auto) this.#leading();
+			return;
+		}
 		if (this.#cloudRun) {
 			// One at a time; an edit or a click during a sync runs another after it.
 			if (!options.auto || ws.pending.length) {
@@ -2181,7 +2287,10 @@ class AppState {
 			this.cloudSync = { ...this.cloudSync, state: 'offline' };
 			return;
 		}
-		this.#cloudRun = this.#syncCloud(ws, options).finally(() => (this.#cloudRun = null));
+		this.#cloudRun = this.#syncCloud(ws, options).finally(() => {
+			this.#cloudRun = null;
+			this.#announce();
+		});
 		return this.#cloudRun;
 	}
 

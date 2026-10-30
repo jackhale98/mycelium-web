@@ -104,6 +104,12 @@ class Panes {
 	/** Tabs and split view are for wide screens; phones show one page. */
 	wide = $state(typeof matchMedia !== 'undefined' && matchMedia(WIDE).matches);
 
+	/** Every tab back to reading (the vault can't be edited here just now). */
+	stopEditing() {
+		for (const pane of [this.left, this.right])
+			for (const tab of pane?.tabs ?? []) tab.editing = false;
+	}
+
 	/** The pane you're working in: where the sidebar, palette and shortcuts go. */
 	get focused(): Pane {
 		return this.wide && this.right && this.#focusRight ? this.right : this.left;

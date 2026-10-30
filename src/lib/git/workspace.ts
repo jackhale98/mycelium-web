@@ -9,7 +9,7 @@ import './polyfill';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
-import { scanFile } from '$lib/org';
+import { INDEX_VERSION, scanFile } from '$lib/org';
 import { db, fileKey, requestPersistence, type CachedFile, type VaultRecord } from '$lib/store/db';
 import { detectKeywords, detectLayout, inVault } from '$lib/vault/layout';
 import type { VaultFile } from '$lib/vault/vault';
@@ -121,7 +121,14 @@ export class Workspace {
 		return this.#dirty;
 	}
 
+	/**
+	 * Following another tab that edits this vault: what's uncommitted is read,
+	 * never written back (that tab's list is the one that counts).
+	 */
+	passive = false;
+
 	async #saveDirty() {
+		if (this.passive) return;
 		this.record.dirty = [...this.#dirty];
 		await db().vaults.update(this.record.id, { dirty: this.record.dirty });
 	}
@@ -155,7 +162,7 @@ export class Workspace {
 				oid = head.get(path)!;
 			}
 			const hit = cached.get(path);
-			if (hit && hit.oid === oid) {
+			if (hit && hit.oid === oid && hit.indexVersion === INDEX_VERSION) {
 				out.push({ path, source: hit.source, index: hit.index });
 			} else {
 				source ??= await this.repo.readBlob(oid);
@@ -168,6 +175,7 @@ export class Workspace {
 					oid,
 					source,
 					index,
+					indexVersion: INDEX_VERSION,
 				});
 			}
 			done += 1;
@@ -226,6 +234,7 @@ export class Workspace {
 				oid: await hash(c.source),
 				source: c.source,
 				index: c.file.index,
+				indexVersion: INDEX_VERSION,
 			});
 		}
 		if (puts.length) await db().files.bulkPut(puts);

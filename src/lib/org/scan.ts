@@ -107,6 +107,14 @@ function maskVerbatim(text: string): string {
 	);
 }
 
+/**
+ * The version of what `scanFile` produces. Indexes cached in the browser are
+ * kept only while it matches, so a change to what's indexed (a new field, a
+ * fix) re-indexes everyone's notes once; the index-version test fails until
+ * it's bumped.
+ */
+export const INDEX_VERSION = 1;
+
 /** Index one org file. Produces the same `FileIndex` as `indexFileTree`. */
 export function scanFile(
 	path: string,

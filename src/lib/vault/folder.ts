@@ -2,7 +2,7 @@
 /// Access API (Chromium-based desktop browsers). Edits are written straight
 /// to the files on disk; there's no git here — commit with your own tools.
 
-import { scanFile } from '$lib/org';
+import { INDEX_VERSION, scanFile } from '$lib/org';
 import { db, fileKey, requestPersistence, type CachedFile, type VaultRecord } from '$lib/store/db';
 import { detectKeywords, detectLayout, inVault } from './layout';
 import type { VaultFile } from './vault';
@@ -130,7 +130,8 @@ export class FolderWorkspace {
 			const file = await all.get(path)!.getFile();
 			const oid = `${file.size}:${file.lastModified}`;
 			const hit = cached.get(path);
-			if (hit && hit.oid === oid) out.push({ path, source: hit.source, index: hit.index });
+			if (hit && hit.oid === oid && hit.indexVersion === INDEX_VERSION)
+				out.push({ path, source: hit.source, index: hit.index });
 			else {
 				const source = await file.text();
 				const index = scanFile(path, source, this.record.keywords);
@@ -142,6 +143,7 @@ export class FolderWorkspace {
 					oid,
 					source,
 					index,
+					indexVersion: INDEX_VERSION,
 				});
 			}
 			done += 1;
@@ -230,6 +232,7 @@ export class FolderWorkspace {
 					oid: `${file.size}:${file.lastModified}`,
 					source: c.source,
 					index: c.file.index,
+					indexVersion: INDEX_VERSION,
 				});
 			} catch {
 				await db().files.delete(key);
