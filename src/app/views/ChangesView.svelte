@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { CommitSummary } from '$lib/git/repo';
-	import { diffLines, type DiffHunk } from '$lib/git/diff';
+	import { diffLines, hunkBlocks, type DiffHunk } from '$lib/git/diff';
 	import Icon from '../components/Icon.svelte';
 	import { beginCloudSignIn } from '$lib/auth/oauth';
 	import { serviceLabel } from '$lib/sync/services';
@@ -418,11 +418,28 @@
 														title="Put just this block back as it was committed"
 														aria-label={`Revert this change${d.headings[i] ? ` (${d.headings[i]})` : ''} in ${c.path}`}
 														onclick={() => app.revertHunk(c.path, i)}
-														><Icon name="undo" size={13} />Revert</button
+														><Icon name="undo" size={13} />{hunkBlocks(hunk).some((b) => b && b > 0)
+															? 'Revert all'
+															: 'Revert'}</button
 													>
 												{/if}
 											</div>
+											{@const blocks = hunkBlocks(hunk)}
+											{@const several = c.status === 'modified' && blocks.some((b) => b && b > 0)}
 											{#each hunk.lines as line, j (j)}
+												{#if several && blocks[j] !== null && blocks[j] !== blocks[j - 1]}
+													<!-- Several changes in this block: each can go back on its own. -->
+													<div class="change-head">
+														<button
+															type="button"
+															class="btn small revert"
+															title="Put just this change back as it was committed"
+															aria-label={`Revert the change at line ${line.newNo ?? line.oldNo} in ${c.path}`}
+															onclick={() => app.revertHunk(c.path, i, blocks[j]!)}
+															><Icon name="undo" size={12} />Revert this</button
+														>
+													</div>
+												{/if}
 												<div class={`ln ${line.kind}`}>
 													<span class="no old">{line.oldNo ?? ''}</span><span class="no"
 														>{line.newNo ?? line.oldNo ?? ''}</span
@@ -702,6 +719,20 @@
 	}
 	.diff .empty {
 		padding: 0.8rem;
+	}
+	/* One change among several in a block: its own small Revert, right-aligned. */
+	.change-head {
+		display: flex;
+		justify-content: flex-end;
+		padding: 0.15rem 0.5rem;
+		border-top: 1px dashed var(--border);
+		background: var(--surface);
+	}
+	.change-head .revert {
+		min-height: 1.6rem;
+		font-family: var(--font-ui);
+		padding: 0 0.55rem;
+		font-size: 0.74rem;
 	}
 	.hunk-head {
 		display: flex;

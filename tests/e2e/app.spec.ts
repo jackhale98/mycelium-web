@@ -647,6 +647,30 @@ test('the Changes page reverts one block of a file, keeping the rest', async ({ 
 	await expect(diff).toContainText('A line at the bottom.');
 });
 
+test('the Changes page reverts one change of several close together', async ({ page }) => {
+	await open(page, `app#/node/${PROJECT}`);
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editor = page.locator('.cm-content');
+	for (const [line, add] of [
+		['Round-trip-safe org layer', ' (done)'],
+		['Graph view', ' too'],
+	] as const) {
+		await editor.getByText(line).click();
+		await page.keyboard.press('End');
+		await page.keyboard.insertText(add);
+	}
+	await page.keyboard.press('Escape');
+	await expect(editor).toHaveCount(0);
+
+	await open(page, 'app#/changes');
+	const diff = page.getByRole('region', { name: /Diff of .*mycelium_web\.org$/ });
+	await expect(diff).toContainText('org layer (done)');
+	await expect(diff.getByRole('button', { name: /^Revert this change/ })).toHaveText(/Revert all/);
+	await diff.getByRole('button', { name: /^Revert the change at line 12/ }).click();
+	await expect(diff).not.toContainText('(done)');
+	await expect(diff).toContainText('Graph view too');
+});
+
 test('the edit sheet turns a task into a habit, and back', async ({ page }) => {
 	await open(page, 'app#/agenda');
 	await page.getByRole('radio', { name: 'List' }).click();

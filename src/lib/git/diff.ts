@@ -79,12 +79,39 @@ export function diffLines(before: string, after: string, context = 3): DiffHunk[
 	}));
 }
 
+/** Changed line indexes split where unchanged lines come between. */
+function blocksOf(lines: number[]): number[][] {
+	const out: number[][] = [];
+	lines.forEach((i, n) => {
+		if (n === 0 || i !== lines[n - 1]! + 1) out.push([]);
+		out.at(-1)!.push(i);
+	});
+	return out;
+}
+
+/** For each line of a hunk, which of its changes (0, 1, …) it belongs to; null for context. */
+export function hunkBlocks(hunk: DiffHunk): (number | null)[] {
+	let n = -1;
+	return hunk.lines.map((l, i) => {
+		if (l.kind === 'context') return null;
+		if (i === 0 || hunk.lines[i - 1]!.kind === 'context') n += 1;
+		return n;
+	});
+}
+
 /**
  * `after` with one hunk's changes undone (its lines as they were in
  * `before`), the other hunks left as they are: reverting one block of a
- * changed file. `hunk` is its index in `diffLines(before, after)`.
+ * changed file. `hunk` is its index in `diffLines(before, after)`; with
+ * `block`, only that one of the hunk's changes (as `hunkBlocks` numbers them).
  */
-export function revertHunk(before: string, after: string, hunk: number, context = 3): string {
+export function revertHunk(
+	before: string,
+	after: string,
+	hunk: number,
+	context = 3,
+	block?: number,
+): string {
 	const all = allLines(before, after);
 	// The changed lines of each hunk, grouped as diffLines groups them.
 	const groups: number[][] = [];
@@ -95,7 +122,10 @@ export function revertHunk(before: string, after: string, hunk: number, context 
 		groups.at(-1)!.push(i);
 		last = i;
 	});
-	const chosen = new Set(groups[hunk] ?? []);
+	let lines = groups[hunk] ?? [];
+	// One change inside the hunk: its run of changed lines, `block` in order.
+	if (block !== undefined) lines = blocksOf(lines)[block] ?? [];
+	const chosen = new Set(lines);
 	let out = '';
 	all.forEach((line, i) => {
 		if (line.kind === 'context') out += line.raw;

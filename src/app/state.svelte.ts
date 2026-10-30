@@ -2311,14 +2311,14 @@ class AppState {
 	 * Revert one block (hunk) of a changed file to its committed text, the
 	 * rest of the file's changes kept. Undoable, like any edit.
 	 */
-	async revertHunk(path: string, hunk: number) {
+	async revertHunk(path: string, hunk: number, block?: number) {
 		const ws = this.workspace;
 		if (!ws || !this.#leading()) return;
 		await this.flush();
 		const { before, after } = await ws.diff(path);
 		if (before === null || after === null) return;
 		const { revertHunk } = await import('$lib/git/diff');
-		const next = revertHunk(before, after, hunk);
+		const next = revertHunk(before, after, hunk, 3, block);
 		if (next === after) return;
 		const label = `Reverted a change in ${this.#title(path)}`;
 		const inVault = !!this.vault.file(path);

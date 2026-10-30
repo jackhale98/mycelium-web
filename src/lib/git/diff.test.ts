@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffLines, revertHunk } from './diff';
+import { diffLines, hunkBlocks, revertHunk } from './diff';
 
 describe('diffLines', () => {
 	it('produces hunks with context and line numbers', () => {
@@ -50,5 +50,19 @@ describe('reverting one hunk', () => {
 		const b = 'a\r\nb\r\nc\r\n';
 		const a = 'a\r\nB\r\nc\r\n';
 		expect(revertHunk(b, a, 0)).toBe(b);
+	});
+
+	it('undoes one change inside a hunk, the nearby ones kept', () => {
+		const b = '* Validation\n+ costs $15k-$25k\n+ six\n+ eleven\n+ common for sterilization\n';
+		const a =
+			'* Validation\n+ costs $15k-$25\n+ six\n+ eleven\n+ common for [[id:x][sterilization]]\n';
+		const [hunk] = diffLines(b, a);
+		expect(hunkBlocks(hunk!)).toEqual([null, 0, 0, null, null, 1, 1]);
+		const first = revertHunk(b, a, 0, 3, 0);
+		expect(first).toContain('$15k-$25k');
+		expect(first).toContain('[[id:x][sterilization]]');
+		expect(revertHunk(b, a, 0, 3, 1)).toBe(
+			'* Validation\n+ costs $15k-$25\n+ six\n+ eleven\n+ common for sterilization\n',
+		);
 	});
 });
